@@ -1,0 +1,26 @@
+/* Filters */
+"filter.all" = "All";
+"filter.text" = "Text";
+"filter.image" = "Image";
+
+/* Main View */
+"search.placeholder" = "Search...";
+"empty.message" = "No records";
+"items.count" = "%d items";
+"button.clear" = "Clear";
+"button.quit" = "Quit";
+
+/* Item */
+"item.image" = "[Image]";
+
+/* Settings */
+"settings.title" = "Settings";
+"settings.general" = "General";
+"settings.launchAtLogin" = "Launch at Login";
+"settings.data" = "Data";
+"settings.records" = "Records: %d";
+"settings.about" = "About";
+"settings.shortcut" = "Shortcut: ⌘⇧V";
+"settings.language" = "Language";
+"language.zh" = "中文";
+"language.en" = "English";

@@ -1,0 +1,26 @@
+/* Filters */
+"filter.all" = "全部";
+"filter.text" = "文字";
+"filter.image" = "图片";
+
+/* Main View */
+"search.placeholder" = "搜索...";
+"empty.message" = "暂无记录";
+"items.count" = "%d 条";
+"button.clear" = "清空";
+"button.quit" = "退出";
+
+/* Item */
+"item.image" = "[图片]";
+
+/* Settings */
+"settings.title" = "设置";
+"settings.general" = "通用";
+"settings.launchAtLogin" = "开机自启动";
+"settings.data" = "数据";
+"settings.records" = "记录数: %d";
+"settings.about" = "关于";
+"settings.shortcut" = "快捷键: ⌘⇧V";
+"settings.language" = "语言";
+"language.zh" = "中文";
+"language.en" = "English";
