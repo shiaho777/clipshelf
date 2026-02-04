@@ -46,6 +46,7 @@ class ClipboardManager: ObservableObject {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
         
+        // 检查图片
         if let image = NSImage(pasteboard: pasteboard), let tiffData = image.tiffRepresentation,
            let bitmap = NSBitmapImageRep(data: tiffData),
            let pngData = bitmap.representation(using: .png, properties: [:]) {
@@ -53,6 +54,19 @@ class ClipboardManager: ObservableObject {
             return
         }
         
+        // 检查富文本
+        if let rtfData = pasteboard.data(forType: .rtf),
+           let plainText = pasteboard.string(forType: .string), !plainText.isEmpty {
+            let now = Date()
+            let interval = now.timeIntervalSince(lastAddTime)
+            if plainText == lastContent && interval < 3 { return }
+            lastContent = plainText
+            lastAddTime = now
+            addRichTextItem(content: plainText, rtfData: rtfData)
+            return
+        }
+        
+        // 检查纯文本
         if let string = pasteboard.string(forType: .string), !string.isEmpty {
             let now = Date()
             let interval = now.timeIntervalSince(lastAddTime)
@@ -78,6 +92,12 @@ class ClipboardManager: ObservableObject {
         saveItems()
     }
     
+    func addRichTextItem(content: String, rtfData: Data) {
+        items.removeAll { $0.content == content && $0.type == .richText && !$0.isPinned }
+        items.insert(ClipboardItem(content: content, rtfData: rtfData, type: .richText), at: pinnedCount)
+        saveItems()
+    }
+    
     func addImageItem(imageData: Data) {
         items.insert(ClipboardItem(imageData: imageData, type: .image), at: pinnedCount)
         saveItems()
@@ -85,11 +105,19 @@ class ClipboardManager: ObservableObject {
     
     func copyToClipboard(_ item: ClipboardItem, autoPaste: Bool = false) {
         pasteboard.clearContents()
-        if item.type == .image, let imageData = item.imageData,
-           let image = NSImage(data: imageData), let tiffData = image.tiffRepresentation {
-            pasteboard.setData(tiffData, forType: .tiff)
-            pasteboard.setData(imageData, forType: .png)
-        } else {
+        switch item.type {
+        case .image:
+            if let imageData = item.imageData,
+               let image = NSImage(data: imageData), let tiffData = image.tiffRepresentation {
+                pasteboard.setData(tiffData, forType: .tiff)
+                pasteboard.setData(imageData, forType: .png)
+            }
+        case .richText:
+            if let rtfData = item.rtfData {
+                pasteboard.setData(rtfData, forType: .rtf)
+            }
+            pasteboard.setString(item.content, forType: .string)
+        case .text:
             pasteboard.setString(item.content, forType: .string)
         }
         lastChangeCount = pasteboard.changeCount

@@ -38,3 +38,17 @@
 "snippets.content" = "内容";
 "snippets.shortcut" = "快捷键";
 "snippets.none" = "无";
+"snippets.folder" = "文件夹";
+"snippets.newFolder" = "新建文件夹";
+"snippets.noFolder" = "无文件夹";
+
+/* Item Types */
+"item.richtext" = "[富文本]";
+
+/* HotKey */
+"hotkey.main" = "主快捷键";
+"hotkey.recording" = "录制中...";
+
+/* Data */
+"data.export" = "导出";
+"data.import" = "导入";

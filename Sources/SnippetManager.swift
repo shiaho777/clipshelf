@@ -2,17 +2,31 @@ import Foundation
 import AppKit
 import Carbon.HIToolbox
 
+struct SnippetFolder: Identifiable, Codable, Equatable {
+    let id: UUID
+    var name: String
+    var isExpanded: Bool
+    
+    init(id: UUID = UUID(), name: String = "", isExpanded: Bool = true) {
+        self.id = id
+        self.name = name
+        self.isExpanded = isExpanded
+    }
+}
+
 struct Snippet: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
     var content: String
-    var shortcutIndex: Int // 1-9, 0 means no shortcut
+    var shortcutIndex: Int
+    var folderId: UUID?
     
-    init(id: UUID = UUID(), name: String = "", content: String = "", shortcutIndex: Int = 0) {
+    init(id: UUID = UUID(), name: String = "", content: String = "", shortcutIndex: Int = 0, folderId: UUID? = nil) {
         self.id = id
         self.name = name
         self.content = content
         self.shortcutIndex = shortcutIndex
+        self.folderId = folderId
     }
 }
 
@@ -20,6 +34,7 @@ class SnippetManager: ObservableObject {
     static let shared = SnippetManager()
     
     @Published var snippets: [Snippet] = []
+    @Published var folders: [SnippetFolder] = []
     private var hotKeyRefs: [Int: EventHotKeyRef] = [:]
     
     private var storageURL: URL {
@@ -29,8 +44,66 @@ class SnippetManager: ObservableObject {
         return appDir.appendingPathComponent("snippets.json")
     }
     
+    private var foldersURL: URL {
+        storageURL.deletingLastPathComponent().appendingPathComponent("folders.json")
+    }
+    
     init() {
         loadSnippets()
+        loadFolders()
+    }
+    
+    func snippets(in folder: SnippetFolder?) -> [Snippet] {
+        snippets.filter { $0.folderId == folder?.id }
+    }
+    
+    func addFolder(_ folder: SnippetFolder) {
+        folders.append(folder)
+        saveFolders()
+    }
+    
+    func updateFolder(_ folder: SnippetFolder) {
+        if let index = folders.firstIndex(where: { $0.id == folder.id }) {
+            folders[index] = folder
+            saveFolders()
+        }
+    }
+    
+    func deleteFolder(_ folder: SnippetFolder) {
+        snippets.filter { $0.folderId == folder.id }.forEach { snippet in
+            var updated = snippet
+            updated.folderId = nil
+            updateSnippet(updated)
+        }
+        folders.removeAll { $0.id == folder.id }
+        saveFolders()
+    }
+    
+    func toggleFolderExpanded(_ folder: SnippetFolder) {
+        if let index = folders.firstIndex(where: { $0.id == folder.id }) {
+            folders[index].isExpanded.toggle()
+            saveFolders()
+        }
+    }
+    
+    private func saveFolders() {
+        if let encoded = try? JSONEncoder().encode(folders) {
+            try? encoded.write(to: foldersURL)
+        }
+    }
+    
+    private func loadFolders() {
+        guard let data = try? Data(contentsOf: foldersURL),
+              let decoded = try? JSONDecoder().decode([SnippetFolder].self, from: data) else { return }
+        folders = decoded
+    }
+    
+    func importData(snippets: [Snippet], folders: [SnippetFolder]) {
+        self.snippets.append(contentsOf: snippets)
+        self.folders.append(contentsOf: folders)
+        saveSnippets()
+        saveFolders()
+        registerHotKeys()
     }
     
     func registerHotKeys() {

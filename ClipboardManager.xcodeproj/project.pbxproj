@@ -13,20 +13,24 @@
 		52E8AEF82D31C2DD5C1A0BB5 /* SnippetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03912F1FDB05177BF766A7E7 /* SnippetManager.swift */; };
 		544AD7E73497224FBF1A3F31 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 8D174071C073A73E188450B1 /* AppIcon.icns */; };
 		6FBC2D5C9F82C321362DBB50 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D9A3B0F14D896FD1DEE344 /* MenuBarView.swift */; };
+		85719C7CF54EFEEBDF0F0D13 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FF141BF7064ED421747FA9 /* HotKeyManager.swift */; };
 		9894C05FE9EB12CE206B8AC7 /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF10FB1639F279297B434B8 /* LanguageManager.swift */; };
 		9D526136DE761B17CE94D0E8 /* SnippetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6DD8480375E24C4EE2A615 /* SnippetView.swift */; };
 		B836C919AC9109A297409D14 /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E694A6C5FBAFEDEF4F610BE /* ClipboardItem.swift */; };
+		E523D9998E17F3DF0A9FC8B9 /* DataExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4AFACC473D324BE3566FACF /* DataExporter.swift */; };
 		F80C2A13671BC4344C5E64D3 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 07064170A17B0669C2A27CCC /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		03912F1FDB05177BF766A7E7 /* SnippetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetManager.swift; sourceTree = "<group>"; };
+		04FF141BF7064ED421747FA9 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		38F65AA8E42A7090A5502869 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		39D9A3B0F14D896FD1DEE344 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		59FF42818B2F036ED7129552 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5AF13068BEED9C8AC6973639 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		5E694A6C5FBAFEDEF4F610BE /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		8D174071C073A73E188450B1 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		A4AFACC473D324BE3566FACF /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExporter.swift; sourceTree = "<group>"; };
 		AA6DD8480375E24C4EE2A615 /* SnippetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetView.swift; sourceTree = "<group>"; };
 		ACF10FB1639F279297B434B8 /* LanguageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageManager.swift; sourceTree = "<group>"; };
 		ADEEB9FA70B55B6E7B4D0A55 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -44,6 +48,8 @@
 				5E694A6C5FBAFEDEF4F610BE /* ClipboardItem.swift */,
 				C57B507A0D74B68B7C609F62 /* ClipboardManager.entitlements */,
 				E82E016F2F3C52F9888966DB /* ClipboardManager.swift */,
+				A4AFACC473D324BE3566FACF /* DataExporter.swift */,
+				04FF141BF7064ED421747FA9 /* HotKeyManager.swift */,
 				59FF42818B2F036ED7129552 /* Info.plist */,
 				ACF10FB1639F279297B434B8 /* LanguageManager.swift */,
 				07064170A17B0669C2A27CCC /* Localizable.strings */,
@@ -146,6 +152,8 @@
 			files = (
 				B836C919AC9109A297409D14 /* ClipboardItem.swift in Sources */,
 				4531C03FF0B3D6CE2CC01778 /* ClipboardManager.swift in Sources */,
+				E523D9998E17F3DF0A9FC8B9 /* DataExporter.swift in Sources */,
+				85719C7CF54EFEEBDF0F0D13 /* HotKeyManager.swift in Sources */,
 				9894C05FE9EB12CE206B8AC7 /* LanguageManager.swift in Sources */,
 				6FBC2D5C9F82C321362DBB50 /* MenuBarView.swift in Sources */,
 				1DDF233325BACCE834C6DE70 /* SettingsView.swift in Sources */,

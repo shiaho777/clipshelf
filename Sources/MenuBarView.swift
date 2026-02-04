@@ -9,6 +9,14 @@ enum FilterType: CaseIterable {
         case .image: return "filter.image"
         }
     }
+    
+    func matches(_ item: ClipboardItem) -> Bool {
+        switch self {
+        case .all: return true
+        case .text: return item.type == .text || item.type == .richText
+        case .image: return item.type == .image
+        }
+    }
 }
 
 struct MenuBarView: View {
@@ -24,11 +32,7 @@ struct MenuBarView: View {
     var filteredItems: [ClipboardItem] {
         _ = refreshTrigger
         let searched = clipboardManager.search(searchText)
-        switch filterType {
-        case .all: return searched
-        case .text: return searched.filter { $0.type == .text }
-        case .image: return searched.filter { $0.type == .image }
-        }
+        return searched.filter { filterType.matches($0) }
     }
     
     var body: some View {
@@ -117,7 +121,14 @@ struct ClipboardItemRow: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.displayText).lineLimit(2).font(.system(size: 12))
+                    HStack(spacing: 4) {
+                        Text(item.displayText).lineLimit(2).font(.system(size: 12))
+                        if item.type == .richText {
+                            Text("R").font(.caption2).fontWeight(.bold)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Color.blue.opacity(0.2)).cornerRadius(3)
+                        }
+                    }
                     Text(item.timeAgo).font(.caption2).foregroundColor(.secondary)
                 }
             }

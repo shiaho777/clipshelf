@@ -38,3 +38,17 @@
 "snippets.content" = "Content";
 "snippets.shortcut" = "Shortcut";
 "snippets.none" = "None";
+"snippets.folder" = "Folder";
+"snippets.newFolder" = "New Folder";
+"snippets.noFolder" = "No Folder";
+
+/* Item Types */
+"item.richtext" = "[Rich Text]";
+
+/* HotKey */
+"hotkey.main" = "Main Shortcut";
+"hotkey.recording" = "Recording...";
+
+/* Data */
+"data.export" = "Export";
+"data.import" = "Import";
