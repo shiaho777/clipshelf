@@ -1,6 +1,29 @@
 import Foundation
 import AppKit
 
+private let timeFormatter: RelativeDateTimeFormatter = {
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .abbreviated
+    return f
+}()
+
+class ImageCache {
+    static let shared = ImageCache()
+    private var cache = NSCache<NSString, NSImage>()
+    
+    init() { cache.countLimit = 50 }
+    
+    func image(for id: UUID, data: Data?) -> NSImage? {
+        let key = id.uuidString as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        guard let data = data, let img = NSImage(data: data) else { return nil }
+        cache.setObject(img, forKey: key)
+        return img
+    }
+    
+    func remove(_ id: UUID) { cache.removeObject(forKey: id.uuidString as NSString) }
+}
+
 struct ClipboardItem: Identifiable, Codable, Equatable {
     let id: UUID
     let content: String
@@ -29,11 +52,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         content.count > 50 ? String(content.prefix(50)) + "..." : content
     }
     
-    var image: NSImage? { imageData.flatMap { NSImage(data: $0) } }
+    var cachedImage: NSImage? { ImageCache.shared.image(for: id, data: imageData) }
     
-    var timeAgo: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: timestamp, relativeTo: Date())
-    }
+    var timeAgo: String { timeFormatter.localizedString(for: timestamp, relativeTo: Date()) }
 }

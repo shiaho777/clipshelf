@@ -82,7 +82,7 @@ struct MenuBarView: View {
             Divider()
             
             HStack {
-                Text(lang.l("items.count", filteredItems.count)).font(.caption).foregroundColor(.secondary)
+                Text(lang.l("items.count", clipboardManager.items.count)).font(.caption).foregroundColor(.secondary)
                 Spacer()
                 Button(action: onOpenSettings) { Image(systemName: "gearshape") }.buttonStyle(.plain)
                 Button(lang.l("button.clear")) { clipboardManager.clearAll() }.buttonStyle(.plain).foregroundColor(.red)
@@ -108,7 +108,7 @@ struct ClipboardItemRow: View {
                 Image(systemName: "pin.fill").font(.caption).foregroundColor(.orange)
             }
             
-            if item.type == .image, let nsImage = item.image {
+            if item.type == .image, let nsImage = item.cachedImage {
                 Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 200, maxHeight: 60).cornerRadius(4)
                 VStack(alignment: .leading, spacing: 2) {
@@ -140,8 +140,8 @@ struct ClipboardItemRow: View {
         .contentShape(Rectangle())
         .onTapGesture { onCopy() }
         .onDrag {
-            if item.type == .image, let imageData = item.imageData, let image = NSImage(data: imageData) {
-                return NSItemProvider(object: image)
+            if item.type == .image, let img = item.cachedImage {
+                return NSItemProvider(object: img)
             }
             return NSItemProvider(object: item.content as NSString)
         }
