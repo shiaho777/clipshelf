@@ -6,9 +6,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     let clipboardManager = ClipboardManager()
+    let snippetManager = SnippetManager.shared
     var hotKeyRef: EventHotKeyRef?
     var previousApp: NSRunningApplication?
     var settingsWindow: NSWindow?
+    var snippetsWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -30,22 +32,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         
         registerGlobalHotKey()
+        registerSnippetHotKeys()
     }
     
     func openSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
             settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 350, height: 300),
+                contentRect: NSRect(x: 0, y: 0, width: 350, height: 320),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
-            settingsWindow?.contentViewController = NSHostingController(rootView: SettingsView(clipboardManager: clipboardManager))
+            settingsWindow?.contentViewController = NSHostingController(rootView: SettingsView(clipboardManager: clipboardManager, onOpenSnippets: { [weak self] in
+                self?.openSnippets()
+            }))
             settingsWindow?.center()
         }
         settingsWindow?.title = LanguageManager.shared.l("settings.title")
         settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func openSnippets() {
+        if snippetsWindow == nil {
+            snippetsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 400, height: 350),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            snippetsWindow?.contentViewController = NSHostingController(rootView: SnippetListView())
+            snippetsWindow?.center()
+        }
+        snippetsWindow?.title = LanguageManager.shared.l("snippets.title")
+        snippetsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
     
@@ -61,16 +82,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         eventType.eventClass = OSType(kEventClassKeyboard)
         eventType.eventKind = UInt32(kEventHotKeyPressed)
         
-        let handler: EventHandlerUPP = { _, _, userData -> OSStatus in
-            guard let userData = userData else { return OSStatus(eventNotHandledErr) }
+        let handler: EventHandlerUPP = { _, event, userData -> OSStatus in
+            guard let userData = userData, let event = event else { return OSStatus(eventNotHandledErr) }
             let appDelegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-            DispatchQueue.main.async { appDelegate.togglePopover() }
+            
+            var hotKeyID = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
+            
+            let sig = hotKeyID.signature
+            let id = hotKeyID.id
+            
+            DispatchQueue.main.async {
+                if sig == OSType("CBMG".fourCharCodeValue) {
+                    appDelegate.togglePopover()
+                } else if sig == OSType("SNIP".fourCharCodeValue) {
+                    appDelegate.snippetManager.pasteSnippet(index: Int(id))
+                }
+            }
             return noErr
         }
         
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         InstallEventHandler(GetApplicationEventTarget(), handler, 1, &eventType, selfPtr, nil)
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+    }
+    
+    func registerSnippetHotKeys() {
+        snippetManager.registerHotKeys()
     }
     
     @objc func togglePopover() {
@@ -92,13 +130,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-extension String {
-    var fourCharCodeValue: FourCharCode {
-        var result: FourCharCode = 0
-        for char in self.utf8.prefix(4) { result = (result << 8) + FourCharCode(char) }
-        return result
-    }
-}
 
 let app = NSApplication.shared
 let delegate = AppDelegate()

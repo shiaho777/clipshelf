@@ -9,6 +9,8 @@
 "items.count" = "%d items";
 "button.clear" = "Clear";
 "button.quit" = "Quit";
+"button.cancel" = "Cancel";
+"button.save" = "Save";
 
 /* Item */
 "item.image" = "[Image]";
@@ -24,3 +26,15 @@
 "settings.language" = "Language";
 "language.zh" = "中文";
 "language.en" = "English";
+
+/* Snippets */
+"snippets.title" = "Snippets";
+"snippets.desc" = "Quick paste with ⌘+1~9";
+"snippets.manage" = "Manage";
+"snippets.empty" = "No snippets yet";
+"snippets.add" = "Add Snippet";
+"snippets.edit" = "Edit Snippet";
+"snippets.name" = "Name";
+"snippets.content" = "Content";
+"snippets.shortcut" = "Shortcut";
+"snippets.none" = "None";

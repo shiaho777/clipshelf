@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var clipboardManager: ClipboardManager
     @ObservedObject var lang = LanguageManager.shared
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    var onOpenSnippets: () -> Void = {}
     
     var body: some View {
         Form {
@@ -14,6 +15,13 @@ struct SettingsView: View {
                 Picker(lang.l("settings.language"), selection: $lang.language) {
                     Text(lang.l("language.zh")).tag("zh")
                     Text(lang.l("language.en")).tag("en")
+                }
+            }
+            Section(lang.l("snippets.title")) {
+                HStack {
+                    Text(lang.l("snippets.desc"))
+                    Spacer()
+                    Button(lang.l("snippets.manage")) { onOpenSnippets() }
                 }
             }
             Section(lang.l("settings.data")) {
@@ -29,7 +37,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 350, height: 280)
+        .frame(width: 350, height: 320)
     }
     
     private func setLaunchAtLogin(_ enabled: Bool) {

@@ -9,6 +9,8 @@
 "items.count" = "%d 条";
 "button.clear" = "清空";
 "button.quit" = "退出";
+"button.cancel" = "取消";
+"button.save" = "保存";
 
 /* Item */
 "item.image" = "[图片]";
@@ -24,3 +26,15 @@
 "settings.language" = "语言";
 "language.zh" = "中文";
 "language.en" = "English";
+
+/* Snippets */
+"snippets.title" = "片段管理";
+"snippets.desc" = "使用 ⌘+1~9 快速粘贴";
+"snippets.manage" = "管理";
+"snippets.empty" = "暂无片段";
+"snippets.add" = "添加片段";
+"snippets.edit" = "编辑片段";
+"snippets.name" = "名称";
+"snippets.content" = "内容";
+"snippets.shortcut" = "快捷键";
+"snippets.none" = "无";
