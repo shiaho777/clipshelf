@@ -9,6 +9,11 @@
 
 ---
 
+<p align="center">
+  <img src="assets/screenshot-panel.png" width="720" alt="ClipShelf 主面板">
+</p>
+
+
 ## 它做什么
 
 ClipShelf 保存可搜索的剪贴板历史，并在入库前可选地运行规则。从历史粘贴时，可按当前目标应用调整格式。

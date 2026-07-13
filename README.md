@@ -15,6 +15,11 @@
 
 ---
 
+<p align="center">
+  <img src="assets/screenshot-panel.png" width="720" alt="ClipShelf panel">
+</p>
+
+
 ## What it does
 
 ClipShelf keeps a searchable history of what you copy, and applies optional rules before items are stored. When you paste from history, it can adjust formatting for the app you are pasting into.
