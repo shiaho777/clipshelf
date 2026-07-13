@@ -5,50 +5,235 @@
 
 /* Main View */
 "search.placeholder" = "Search...";
+"search.noResults" = "No matching results";
+"search.clearSearch" = "Clear Search";
+"search.results" = "%d found";
 "empty.message" = "No records";
 "items.count" = "%d items";
 "button.clear" = "Clear";
 "button.quit" = "Quit";
 "button.cancel" = "Cancel";
-"button.save" = "Save";
 
 /* Item */
 "item.image" = "[Image]";
+"item.richtext" = "[Rich Text]";
+"chars" = "chars";
 
 /* Settings */
 "settings.title" = "Settings";
-"settings.general" = "General";
-"settings.launchAtLogin" = "Launch at Login";
-"settings.data" = "Data";
-"settings.records" = "Records: %d";
-"settings.about" = "About";
-"settings.shortcut" = "Shortcut: ⌘⇧V";
 "settings.language" = "Language";
-"language.zh" = "中文";
-"language.en" = "English";
-
-/* Snippets */
-"snippets.title" = "Snippets";
-"snippets.desc" = "Quick paste with ⌘+1~9";
-"snippets.manage" = "Manage";
-"snippets.empty" = "No snippets yet";
-"snippets.add" = "Add Snippet";
-"snippets.edit" = "Edit Snippet";
-"snippets.name" = "Name";
-"snippets.content" = "Content";
-"snippets.shortcut" = "Shortcut";
-"snippets.none" = "None";
-"snippets.folder" = "Folder";
-"snippets.newFolder" = "New Folder";
-"snippets.noFolder" = "No Folder";
-
-/* Item Types */
-"item.richtext" = "[Rich Text]";
+"settings.launchAtLogin" = "Launch at Login";
+"settings.launchAtLoginFailed" = "Failed to update launch-at-login permission";
+"settings.maxHistory" = "History Limit";
+"settings.hotWindow" = "Memory Hot Window";
+"settings.hotWindow.description" = "Recent items kept in memory for instant UI. Older items stay searchable via full-text index.";
+"settings.autoCleanup" = "Auto Cleanup";
+"settings.cleanup.never" = "Never";
+"settings.cleanup.1day" = "1 Day";
+"settings.cleanup.3days" = "3 Days";
+"settings.cleanup.7days" = "7 Days";
+"settings.cleanup.30days" = "30 Days";
+"settings.clearAll" = "Clear All History";
+"settings.clearAllConfirm" = "Clear all unpinned clipboard history?";
+"settings.version" = "Version";
+"settings.tab.general" = "General";
+"settings.tab.rules" = "Rules";
+"settings.tab.sync" = "Sync";
+"settings.tab.about" = "About";
 
 /* HotKey */
 "hotkey.main" = "Main Shortcut";
 "hotkey.recording" = "Recording...";
 
-/* Data */
-"data.export" = "Export";
-"data.import" = "Import";
+/* Preview */
+"preview.title" = "Preview";
+
+/* Actions */
+"action.copy" = "Copy";
+"action.paste" = "Paste";
+"action.pastePlain" = "Paste as Plain Text";
+"action.openURL" = "Open Link";
+"action.openFinder" = "Show in Finder";
+"action.preview" = "Preview";
+"action.pin" = "Pin";
+"action.unpin" = "Unpin";
+"action.delete" = "Delete";
+"action.colorCopy" = "Click to cycle format and copy";
+"action.transform" = "Transform";
+"status.item.normalDescription" = "Clipboard";
+
+/* Transforms */
+"transform.uppercase" = "UPPERCASE";
+"transform.lowercase" = "lowercase";
+"transform.capitalize" = "Capitalize";
+"transform.trimWhitespace" = "Trim Whitespace";
+"transform.removeBlankLines" = "Remove Blank Lines";
+"transform.urlEncode" = "URL Encode";
+"transform.urlDecode" = "URL Decode";
+"transform.jsonFormat" = "Format JSON";
+"transform.base64Encode" = "Base64 Encode";
+"transform.base64Decode" = "Base64 Decode";
+
+/* Multi-select */
+"multiselect.title" = "Multi-select";
+"multiselect.count" = "%d selected";
+"multiselect.merge" = "Merge & Paste";
+
+/* Settings - Export/Import */
+"settings.export" = "Export Backup";
+"settings.import" = "Import Backup";
+"settings.exportSuccess" = "Export successful";
+"settings.importSuccess" = "Import successful";
+
+/* Settings - iCloud */
+"settings.icloudSync" = "iCloud Sync";
+"settings.lastSync" = "Last synced";
+
+/* Rules */
+"rules.title" = "Rules";
+"rules.addRule" = "Add Rule";
+"rules.name" = "Rule Name";
+"rules.trigger" = "Trigger";
+"rules.trigger.always" = "All content";
+"rules.trigger.matches" = "Matches: %@";
+"rules.trigger.app" = "App: %@";
+"rules.trigger.type" = "Type: %@";
+"rules.trigger.regexLabel" = "Content matches regex";
+"rules.trigger.appLabel" = "Source app";
+"rules.trigger.regexPlaceholder" = "Regular expression...";
+"rules.trigger.appPlaceholder" = "Bundle ID (e.g. com.apple.Safari)";
+"rules.actions" = "Actions";
+"rules.action.stripURLTracking" = "Strip URL Tracking";
+"rules.action.trimWhitespace" = "Trim Whitespace";
+"rules.action.autoPin" = "Auto Pin";
+"rules.action.discard" = "Discard (don't save)";
+"rules.action.replaceRegex" = "Regex Replace";
+"rules.regex.pattern" = "Pattern";
+"rules.regex.replacement" = "Replacement";
+"rules.save" = "Save";
+"rules.export" = "Export Rules";
+"rules.import" = "Import Rules";
+"rule.Strip URL Tracking" = "Strip URL Tracking";
+"rule.Detect Sensitive Content" = "Detect Sensitive Content";
+"rule.Trim Trailing Whitespace" = "Trim Trailing Whitespace";
+
+/* Smart Paste */
+"settings.smartPaste" = "Smart Paste";
+"settings.smartPaste.description" = "Auto-format when pasting to specific apps";
+
+/* Edit */
+"action.edit" = "Edit";
+"edit.title" = "Edit";
+"edit.saveAndPaste" = "Save & Paste";
+
+/* Paste Queue */
+"multiselect.queue" = "Queue Paste";
+"hotkey.queue" = "Queue Paste Shortcut";
+
+/* Script Rules */
+"rules.action.customScript" = "Custom Script";
+"rules.script.formatJSON" = "Format JSON";
+"rules.script.extractEmails" = "Extract Emails";
+
+/* Snippets */
+"snippets.title" = "Snippets";
+"snippets.add" = "Add Snippet";
+"snippets.edit" = "Edit Snippet";
+"snippets.save" = "Save";
+"snippets.empty" = "No snippets yet";
+"snippets.field.title" = "Title";
+"snippets.field.shortcut" = "Shortcut (e.g. /email)";
+"snippets.field.category" = "Category";
+"settings.snippetExpansion" = "Snippet Text Expansion";
+"settings.snippetExpansion.description" = "Auto-expand snippet shortcuts as you type (e.g. /email → content)";
+
+/* Onboarding */
+"onboarding.step1.title" = "Clipboard History";
+"onboarding.step1.desc" = "Everything you copy is automatically saved. Text, images, rich text — all searchable.";
+"onboarding.step2.title" = "Instant Search";
+"onboarding.step2.desc" = "Type to fuzzy-search your history. Use app: or type: prefixes for advanced filtering.";
+"onboarding.step3.title" = "Keyboard First";
+"onboarding.step3.desc" = "Press 1-9 to quick-paste, arrows to navigate, Tab to cycle filters, Space to preview.";
+"onboarding.next" = "Next";
+"onboarding.done" = "Get Started";
+
+/* List */
+"list.loadMore" = "%d more";
+"list.loadMorePage" = "Load more";
+
+/* Rules Test */
+"rules.test.title" = "Test Rules";
+"rules.test.placeholder" = "Enter test text...";
+"rules.test.run" = "Run Test";
+"rules.test.outcome" = "Outcome:";
+"rules.test.matched" = "Matched";
+"rules.test.noMatch" = "No rules matched";
+
+/* Biometric */
+"biometric.unlockSensitive" = "Unlock sensitive clipboard item";
+
+/* Settings - History */
+"settings.maxHistory.unlimited" = "Unlimited";
+
+/* Rules - App Picker */
+"rules.trigger.chooseApp" = "Choose from running apps";
+
+/* Rules - Error */
+"rules.error.title" = "Operation Failed";
+
+/* Snippet Expansion - Accessibility */
+"snippet.accessibilityRequired" = "Requires Accessibility permission";
+"snippet.openPrivacy" = "Open Settings";
+
+/* Sync Tab */
+"settings.exportFormat" = "Export Format";
+"settings.exportFormat.zip" = "ZIP Backup (.clipbackup)";
+"settings.exportFormat.csv" = "CSV (.csv)";
+"settings.exportFormat.md" = "Markdown (.md)";
+"settings.importMaccy" = "Import from Maccy";
+"settings.importAlfred" = "Import from Alfred";
+
+/* Multi-select */
+"multiselect.compare" = "Compare";
+
+/* About Tab */
+"about.platform" = "Platform";
+"about.platformValue" = "macOS 13.0+ · Apple Silicon & Intel";
+"about.itemsStored" = "Items stored";
+"about.links" = "Links";
+"about.starGitHub" = "Star on GitHub";
+"about.changelog" = "Changelog";
+"about.contributing" = "Contributing";
+"about.reportBug" = "Report a Bug";
+
+/* Queue */
+"queue.title" = "Paste Queue";
+"queue.clear" = "Clear Queue";
+"queue.remaining" = "%d pending";
+"queue.testRules" = "Test Rules";
+"queue.stackMode" = "Stack";
+"queue.stackMode.help" = "Stack Mode: auto-enqueue every copy for sequential paste";
+"queue.stackModeClearConfirm" = "Stack Mode has pending items. Clear and exit?";
+"queue.clearAndExit" = "Clear & Exit";
+"preview.imageFailed" = "Image could not be loaded";
+
+/* Quick Paste */
+"quickpaste.title" = "Quick Paste";
+"hotkey.quickPaste" = "Quick Paste Shortcut";
+
+/* Filters */
+"filter.currentApp" = "Filter by current app";
+
+/* Item */
+"item.screenshot" = "Screenshot";
+
+/* Diff Viewer */
+"diff.title" = "Compare";
+"diff.copy" = "Copy Diff";
+
+/* Rules Test - Execution Trace */
+"rules.test.trace" = "Execution Trace · %d steps";
+
+/* Sensitive item lock */
+"item.sensitive.title" = "Sensitive";
+"item.sensitive.unlockHint" = "Tap to unlock with Touch ID";

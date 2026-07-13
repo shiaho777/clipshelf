@@ -5,7 +5,7 @@
     <key>CFBundleName</key>
     <string>ClipboardManager</string>
     <key>CFBundleIdentifier</key>
-    <string>com.yourname.ClipboardManager</string>
+    <string>com.nicebro.ClipboardManager</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -24,5 +24,20 @@
     <string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>ClipboardManager 需要此权限来自动粘贴内容</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>ClipboardManager 需要辅助功能权限来模拟粘贴快捷键</string>
+    <key>SUFeedURL</key>
+    <string>https://github.com/nicebro/ClipboardManager/releases/latest/download/appcast.xml</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.nicebro.ClipboardManager</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>clipboardmanager</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

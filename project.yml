@@ -1,6 +1,6 @@
 name: ClipboardManager
 options:
-  bundleIdPrefix: com.yourname
+  bundleIdPrefix: com.nicebro
   deploymentTarget:
     macOS: "13.0"
   xcodeVersion: "15.0"
@@ -11,9 +11,13 @@ targets:
     platform: macOS
     sources:
       - Sources
+    dependencies:
+      - sdk: JavaScriptCore.framework
+      - sdk: libsqlite3.tbd
+      - sdk: AppIntents.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourname.ClipboardManager
+        PRODUCT_BUNDLE_IDENTIFIER: com.nicebro.ClipboardManager
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Sources/Info.plist
@@ -21,8 +25,21 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "13.0"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
-        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_HARDENED_RUNTIME: YES
     entitlements:
       path: Sources/ClipboardManager.entitlements
       properties:
         com.apple.security.app-sandbox: false
+
+  ClipboardManagerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+    dependencies:
+      - target: ClipboardManager
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        GENERATE_INFOPLIST_FILE: YES

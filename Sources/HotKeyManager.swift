@@ -2,12 +2,25 @@ import Foundation
 import AppKit
 import Carbon.HIToolbox
 import SwiftUI
+import os
+
+extension String {
+    var fourCharCodeValue: FourCharCode {
+        var result: FourCharCode = 0
+        for char in utf16.prefix(4) {
+            result = (result << 8) + FourCharCode(char)
+        }
+        return result
+    }
+}
 
 struct HotKeyConfig: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
     
     static let defaultMain = HotKeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | shiftKey)) // ⌘⇧V
+    static let defaultQueue = HotKeyConfig(keyCode: 0x0B, modifiers: UInt32(cmdKey | shiftKey)) // ⌘⇧B
+    static let defaultQuickPaste = HotKeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | optionKey)) // ⌘⌥V
     
     var displayString: String {
         var parts: [String] = []
@@ -37,38 +50,88 @@ struct HotKeyConfig: Codable, Equatable {
 
 class HotKeyManager: ObservableObject {
     static let shared = HotKeyManager()
+    static let mainHotKeySignature = OSType("CBMG".fourCharCodeValue)
+    static let mainHotKeyID: UInt32 = 1
+    static let queueHotKeySignature = OSType("CBMQ".fourCharCodeValue)
+    static let queueHotKeyID: UInt32 = 2
+    static let quickPasteHotKeySignature = OSType("CBQP".fourCharCodeValue)
+    static let quickPasteHotKeyID: UInt32 = 3
     
     @Published var mainHotKey: HotKeyConfig = .defaultMain {
-        didSet { saveConfig(); reregisterMainHotKey() }
+        didSet {
+            guard oldValue != mainHotKey else { return }
+            saveConfig()
+            reregisterMainHotKey()
+        }
     }
+    @Published var queueHotKey: HotKeyConfig = .defaultQueue {
+        didSet {
+            guard oldValue != queueHotKey else { return }
+            saveConfig()
+            reregisterQueueHotKey()
+        }
+    }
+    @Published var quickPasteHotKey: HotKeyConfig = .defaultQuickPaste {
+        didSet {
+            guard oldValue != quickPasteHotKey else { return }
+            saveConfig()
+            reregisterQuickPasteHotKey()
+        }
+    }
+    @Published private(set) var isMainHotKeyRegistered = true
+    @Published private(set) var isQueueHotKeyRegistered = true
+    @Published private(set) var isQuickPasteHotKeyRegistered = true
     
     private var mainHotKeyRef: EventHotKeyRef?
+    private var queueHotKeyRef: EventHotKeyRef?
+    private var quickPasteHotKeyRef: EventHotKeyRef?
     var onMainHotKey: (() -> Void)?
-    
-    private var configURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appDir = appSupport.appendingPathComponent("ClipboardManager")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        return appDir.appendingPathComponent("hotkeys.json")
-    }
-    
-    init() {
+    var onQueueHotKey: (() -> Void)?
+    var onQuickPasteHotKey: (() -> Void)?
+    private let hotKeyStore: HotKeyStore
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "HotKey")
+
+    init(storageDirectory: URL? = nil, hotKeyStore: HotKeyStore? = nil) {
+        let resolvedStorageDirectory: URL
+        if let storageDirectory {
+            resolvedStorageDirectory = storageDirectory
+        } else {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            resolvedStorageDirectory = appSupport.appendingPathComponent("ClipboardManager")
+        }
+        self.hotKeyStore = hotKeyStore ?? JSONHotKeyStore(storageDirectory: resolvedStorageDirectory)
         loadConfig()
     }
     
     private func loadConfig() {
-        if let data = try? Data(contentsOf: configURL),
-           let config = try? JSONDecoder().decode(HotKeyConfig.self, from: data) {
-            mainHotKey = config
+        do {
+            if let config = try hotKeyStore.loadMainHotKey() {
+                mainHotKey = config
+            }
+            if let config = try hotKeyStore.loadQueueHotKey() {
+                queueHotKey = config
+            }
+            if let config = try hotKeyStore.loadQuickPasteHotKey() {
+                quickPasteHotKey = config
+            }
+        } catch {
+            logger.error("Failed to load hotkey config: \(error.localizedDescription)")
         }
     }
     
-    func registerMainHotKey() {
+    @discardableResult
+    func registerMainHotKey() -> Bool {
         var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = OSType("CBMG".fourCharCodeValue)
-        hotKeyID.id = 1
+        hotKeyID.signature = Self.mainHotKeySignature
+        hotKeyID.id = Self.mainHotKeyID
         
-        RegisterEventHotKey(mainHotKey.keyCode, mainHotKey.modifiers, hotKeyID, GetApplicationEventTarget(), 0, &mainHotKeyRef)
+        let status = RegisterEventHotKey(mainHotKey.keyCode, mainHotKey.modifiers, hotKeyID, GetApplicationEventTarget(), 0, &mainHotKeyRef)
+        let success = (status == noErr) && mainHotKeyRef != nil
+        isMainHotKeyRegistered = success
+        if !success {
+            logger.error("Failed to register main hotkey (status: \(status, privacy: .public), keyCode: \(self.mainHotKey.keyCode), modifiers: \(self.mainHotKey.modifiers))")
+        }
+        return success
     }
     
     func reregisterMainHotKey() {
@@ -79,21 +142,72 @@ class HotKeyManager: ObservableObject {
         registerMainHotKey()
     }
     
+    @discardableResult
+    func registerQueueHotKey() -> Bool {
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = Self.queueHotKeySignature
+        hotKeyID.id = Self.queueHotKeyID
+        
+        let status = RegisterEventHotKey(queueHotKey.keyCode, queueHotKey.modifiers, hotKeyID, GetApplicationEventTarget(), 0, &queueHotKeyRef)
+        let success = (status == noErr) && queueHotKeyRef != nil
+        isQueueHotKeyRegistered = success
+        if !success {
+            logger.error("Failed to register queue hotkey (status: \(status, privacy: .public))")
+        }
+        return success
+    }
+    
+    func reregisterQueueHotKey() {
+        if let ref = queueHotKeyRef {
+            UnregisterEventHotKey(ref)
+            queueHotKeyRef = nil
+        }
+        registerQueueHotKey()
+    }
+
+    @discardableResult
+    func registerQuickPasteHotKey() -> Bool {
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = Self.quickPasteHotKeySignature
+        hotKeyID.id = Self.quickPasteHotKeyID
+
+        let status = RegisterEventHotKey(quickPasteHotKey.keyCode, quickPasteHotKey.modifiers, hotKeyID, GetApplicationEventTarget(), 0, &quickPasteHotKeyRef)
+        let success = (status == noErr) && quickPasteHotKeyRef != nil
+        isQuickPasteHotKeyRegistered = success
+        if !success {
+            logger.error("Failed to register quick-paste hotkey (status: \(status, privacy: .public))")
+        }
+        return success
+    }
+
+    func reregisterQuickPasteHotKey() {
+        if let ref = quickPasteHotKeyRef {
+            UnregisterEventHotKey(ref)
+            quickPasteHotKeyRef = nil
+        }
+        registerQuickPasteHotKey()
+    }
+    
     private func saveConfig() {
-        if let data = try? JSONEncoder().encode(mainHotKey) {
-            try? data.write(to: configURL)
+        do {
+            _ = try hotKeyStore.saveMainHotKey(mainHotKey)
+            _ = try hotKeyStore.saveQueueHotKey(queueHotKey)
+            _ = try hotKeyStore.saveQuickPasteHotKey(quickPasteHotKey)
+        } catch {
+            logger.error("Failed to save hotkey config: \(error.localizedDescription)")
         }
     }
 }
 
 struct HotKeyRecorderView: View {
     @Binding var hotKey: HotKeyConfig
+    var label: String = "hotkey.main"
     @State private var isRecording = false
     @ObservedObject var lang = LanguageManager.shared
     
     var body: some View {
         HStack {
-            Text(lang.l("hotkey.main"))
+            Text(lang.l(label))
             Spacer()
             Button(action: { isRecording.toggle() }) {
                 Text(isRecording ? lang.l("hotkey.recording") : hotKey.displayString)

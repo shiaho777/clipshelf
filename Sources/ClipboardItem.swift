@@ -1,41 +1,68 @@
 import Foundation
 import AppKit
+import CryptoKit
 
-private let timeFormatter: RelativeDateTimeFormatter = {
-    let f = RelativeDateTimeFormatter()
-    f.unitsStyle = .abbreviated
-    return f
-}()
+private final class FilePathCacheBox: NSObject {
+    let paths: [String]
 
-class ImageCache {
-    static let shared = ImageCache()
-    private var cache = NSCache<NSString, NSImage>()
-    
-    init() { cache.countLimit = 50 }
-    
-    func image(for id: UUID, data: Data?) -> NSImage? {
-        let key = id.uuidString as NSString
-        if let cached = cache.object(forKey: key) { return cached }
-        guard let data = data, let img = NSImage(data: data) else { return nil }
-        cache.setObject(img, forKey: key)
-        return img
+    init(_ paths: [String]) {
+        self.paths = paths
     }
-    
-    func remove(_ id: UUID) { cache.removeObject(forKey: id.uuidString as NSString) }
+}
+
+private enum ClipboardFilePathCache {
+    private static let cache: NSCache<NSString, FilePathCacheBox> = {
+        let cache = NSCache<NSString, FilePathCacheBox>()
+        cache.countLimit = 4_096
+        return cache
+    }()
+
+    static func paths(for content: String) -> [String] {
+        let key = content as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached.paths
+        }
+        let paths = parse(content)
+        cache.setObject(FilePathCacheBox(paths), forKey: key)
+        return paths
+    }
+
+    private static func parse(_ content: String) -> [String] {
+        if content.first == "[",
+           let data = content.data(using: .utf8),
+           let paths = try? JSONDecoder().decode([String].self, from: data) {
+            return paths
+        }
+        return content.components(separatedBy: "\n").filter { !$0.isEmpty }
+    }
 }
 
 struct ClipboardItem: Identifiable, Codable, Equatable {
     let id: UUID
-    let content: String
-    let imageData: Data?
-    let rtfData: Data?
+    var content: String
+    var imageData: Data?
+    var rtfData: Data?
     let type: ItemType
     let timestamp: Date
     var isPinned: Bool
+    var useCount: Int
+    var imageHash: String?
+    var imageFileName: String?
+    var ocrText: String?
+    var sourceBundleID: String?
+    var sourceAppName: String?
+    var isSensitive: Bool
+    var expiresAt: Date?
+    /// True for system screenshots and screen recordings captured via `⌘⇧3/4/5`.
+    var isScreenshot: Bool
     
-    enum ItemType: String, Codable { case text, image, richText }
+    enum ItemType: String, Codable { case text, image, richText, fileURL }
     
-    init(id: UUID = UUID(), content: String = "", imageData: Data? = nil, rtfData: Data? = nil, type: ItemType = .text, timestamp: Date = Date(), isPinned: Bool = false) {
+    enum CodingKeys: String, CodingKey {
+        case id, content, imageData, rtfData, type, timestamp, isPinned, useCount, imageHash, imageFileName, ocrText, sourceBundleID, sourceAppName, isSensitive, expiresAt, isScreenshot
+    }
+    
+    init(id: UUID = UUID(), content: String = "", imageData: Data? = nil, rtfData: Data? = nil, type: ItemType = .text, timestamp: Date = Date(), isPinned: Bool = false, useCount: Int = 0, imageHash: String? = nil, imageFileName: String? = nil, ocrText: String? = nil, sourceBundleID: String? = nil, sourceAppName: String? = nil, isSensitive: Bool = false, expiresAt: Date? = nil, isScreenshot: Bool = false) {
         self.id = id
         self.content = content
         self.imageData = imageData
@@ -43,21 +70,86 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         self.type = type
         self.timestamp = timestamp
         self.isPinned = isPinned
+        self.useCount = useCount
+        self.imageHash = imageHash
+        self.imageFileName = imageFileName
+        self.ocrText = ocrText
+        self.sourceBundleID = sourceBundleID
+        self.sourceAppName = sourceAppName
+        self.isSensitive = isSensitive
+        self.expiresAt = expiresAt
+        self.isScreenshot = isScreenshot
     }
     
-    var displayContent: String {
-        switch type {
-        case .image: return "item.image".localized
-        case .richText: return "item.richtext".localized
-        case .text: return content.count > 50 ? String(content.prefix(50)) + "..." : content
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        rtfData = try container.decodeIfPresent(Data.self, forKey: .rtfData)
+        type = try container.decode(ItemType.self, forKey: .type)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        useCount = try container.decodeIfPresent(Int.self, forKey: .useCount) ?? 0
+        imageHash = try container.decodeIfPresent(String.self, forKey: .imageHash)
+        imageFileName = try container.decodeIfPresent(String.self, forKey: .imageFileName)
+        ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText)
+        sourceBundleID = try container.decodeIfPresent(String.self, forKey: .sourceBundleID)
+        sourceAppName = try container.decodeIfPresent(String.self, forKey: .sourceAppName)
+        isSensitive = try container.decodeIfPresent(Bool.self, forKey: .isSensitive) ?? false
+        expiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt)
+        isScreenshot = try container.decodeIfPresent(Bool.self, forKey: .isScreenshot) ?? false
+        if imageFileName == nil {
+            imageData = try container.decodeIfPresent(Data.self, forKey: .imageData)
+        } else {
+            imageData = nil
         }
     }
     
-    var displayText: String {
-        content.count > 50 ? String(content.prefix(50)) + "..." : content
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(content, forKey: .content)
+        try container.encodeIfPresent(rtfData, forKey: .rtfData)
+        try container.encode(type, forKey: .type)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(isPinned, forKey: .isPinned)
+        try container.encode(useCount, forKey: .useCount)
+        try container.encodeIfPresent(imageHash, forKey: .imageHash)
+        try container.encodeIfPresent(imageFileName, forKey: .imageFileName)
+        try container.encodeIfPresent(ocrText, forKey: .ocrText)
+        try container.encodeIfPresent(sourceBundleID, forKey: .sourceBundleID)
+        try container.encodeIfPresent(sourceAppName, forKey: .sourceAppName)
+        if isSensitive { try container.encode(isSensitive, forKey: .isSensitive) }
+        try container.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        if isScreenshot { try container.encode(isScreenshot, forKey: .isScreenshot) }
     }
     
-    var cachedImage: NSImage? { ImageCache.shared.image(for: id, data: imageData) }
+    var displayText: String {
+        let prefix = content.prefix(50)
+        return prefix.endIndex == content.endIndex ? content : String(prefix) + "..."
+    }
     
-    var timeAgo: String { timeFormatter.localizedString(for: timestamp, relativeTo: Date()) }
+    var detection: ContentDetectionResult {
+        (type == .image || type == .fileURL) ? .empty : ContentDetector.analyze(content)
+    }
+
+    var filePaths: [String] {
+        guard type == .fileURL else { return [] }
+        return ClipboardFilePathCache.paths(for: content)
+    }
+    
+    static func == (lhs: ClipboardItem, rhs: ClipboardItem) -> Bool {
+        lhs.id == rhs.id && lhs.content == rhs.content && lhs.imageData == rhs.imageData &&
+        lhs.rtfData == rhs.rtfData && lhs.type == rhs.type && lhs.timestamp == rhs.timestamp &&
+        lhs.isPinned == rhs.isPinned && lhs.useCount == rhs.useCount && lhs.imageHash == rhs.imageHash &&
+        lhs.imageFileName == rhs.imageFileName && lhs.ocrText == rhs.ocrText &&
+        lhs.sourceBundleID == rhs.sourceBundleID && lhs.sourceAppName == rhs.sourceAppName &&
+        lhs.isSensitive == rhs.isSensitive && lhs.expiresAt == rhs.expiresAt &&
+        lhs.isScreenshot == rhs.isScreenshot
+    }
+    
+    static func hash(for data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
+    }
 }
