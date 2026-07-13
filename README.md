@@ -47,21 +47,19 @@ It is a local utility. No account is required. History stays on this Mac.
 
 ## Install
 
-Download `ClipShelf-x.y.z.dmg` from the latest [GitHub Release](https://github.com/shiaho777/clipshelf/releases/latest).
+Download the DMG from the latest [GitHub Release](https://github.com/shiaho777/clipshelf/releases/latest).
 
-1. Open the DMG and drag **ClipShelf** into **Applications**
-2. If macOS says the app is **damaged**, open **Terminal** and run:
+1. Open the DMG and drag **ClipShelf** to **Applications**
+2. Launch ClipShelf
+
+If macOS says the app is **damaged**, run in Terminal:
 
 ```bash
 xattr -cr /Applications/ClipShelf.app
 ```
 
-3. Launch ClipShelf from Applications
-4. If still blocked: right-click ClipShelf → **Open** → **Open**
+Then open it again. Requires macOS 13+.
 
-Requires macOS 13 or later.
-
-Optional: you can also download **修复ClipShelf已损坏.command** from the same release page, move it out of Downloads, then double-click it (after installing the app).
 
 ## Usage
 
@@ -72,11 +70,12 @@ Optional: you can also download **修复ClipShelf已损坏.command** from the sa
 
 ## Privacy
 
-- History is stored locally under `~/Library/Application Support/ClipShelf/`
-- On first launch after rename, data is moved from the legacy `ClipboardManager` folder when needed
+- History stays on this Mac (`~/Library/Application Support/ClipShelf/`)
+- No account, no cloud sync, no telemetry
 - Password managers are excluded by default
-- Sensitive items can auto-expire
-- No telemetry
+
+If Gatekeeper blocks or marks the app as damaged, that is a local quarantine flag from the download, not remote access. Clear it with the `xattr` command above.
+
 
 ## Development
 

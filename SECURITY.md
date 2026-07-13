@@ -6,6 +6,17 @@
 |---------|-------------------|
 | 1.x     | ✅ Active support  |
 
+
+## Local builds and Gatekeeper
+
+Unsigned or ad-hoc builds may be reported as damaged after download. This is a local quarantine attribute:
+
+```bash
+xattr -cr /Applications/ClipShelf.app
+```
+
+ClipShelf does not phone home; clearing quarantine only affects the local file flags.
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, **please do NOT open a public issue**.
