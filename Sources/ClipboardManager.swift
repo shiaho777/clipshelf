@@ -640,6 +640,28 @@ class ClipboardManager: ObservableObject {
         saveItems()
         noteHistoryMutation()
     }
+
+    func moveItem(id: UUID, before destinationID: UUID) {
+        reorderItem(id: id, relativeTo: destinationID, placeBefore: true)
+    }
+
+    func moveItem(id: UUID, after destinationID: UUID) {
+        reorderItem(id: id, relativeTo: destinationID, placeBefore: false)
+    }
+
+    private func reorderItem(id: UUID, relativeTo destinationID: UUID, placeBefore: Bool) {
+        guard let next = ClipboardHistoryOrdering.movingItem(
+            id: id,
+            toDestinationID: destinationID,
+            in: items,
+            placeBefore: placeBefore
+        ), next.map(\.id) != items.map(\.id) else { return }
+        items = next
+        recomputePinnedCount()
+        rebuildItemIndexes()
+        saveItems()
+        noteHistoryMutation()
+    }
     
     func clearAll() {
         let plan = ClipboardHistoryMaintenance.planClearUnpinned(items: items)

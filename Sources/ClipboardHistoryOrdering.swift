@@ -139,5 +139,32 @@ enum ClipboardHistoryOrdering {
         let pc = min(max(0, pinnedCount), itemCount)
         return max(0, maxHistoryCount - pc)
     }
-}
 
+    static func movingItem(
+        id: UUID,
+        toDestinationID destinationID: UUID,
+        in items: [ClipboardItem],
+        placeBefore: Bool
+    ) -> [ClipboardItem]? {
+        guard id != destinationID,
+              let from = items.firstIndex(where: { $0.id == id }),
+              items.contains(where: { $0.id == destinationID })
+        else { return nil }
+
+        var next = items
+        let item = next.remove(at: from)
+        guard let dest = next.firstIndex(where: { $0.id == destinationID }) else { return nil }
+        let insertAt = placeBefore ? dest : min(dest + 1, next.count)
+
+        if item.isPinned {
+            let pinnedCount = next.reduce(0) { $0 + ($1.isPinned ? 1 : 0) }
+            let clamped = min(max(0, insertAt), pinnedCount)
+            next.insert(item, at: clamped)
+        } else {
+            let firstUnpinned = next.firstIndex(where: { !$0.isPinned }) ?? next.count
+            let clamped = min(max(firstUnpinned, insertAt), next.count)
+            next.insert(item, at: clamped)
+        }
+        return next
+    }
+}

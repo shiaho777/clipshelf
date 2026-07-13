@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import UniformTypeIdentifiers
 
 struct ClipboardItemRow: View {
     let item: ClipboardItem
@@ -27,6 +28,8 @@ struct ClipboardItemRow: View {
     var isUnlocked: Bool = false
     var onUnlock: (() -> Void)? = nil
     var onHoverChange: ((Bool) -> Void)? = nil
+    var onReorder: ((UUID, Bool) -> Void)? = nil
+    var filePaths: [String] = []
     @State private var loadedImage: NSImage?
     @State private var isCode: Bool = false
     @State private var isHovered: Bool = false
@@ -319,10 +322,12 @@ struct ClipboardItemRow: View {
             } // end sensitive else
         }
         .onDrag {
-            if item.type == .image, let img = loadedImage ?? image {
-                return NSItemProvider(object: img)
-            }
-            return NSItemProvider(object: item.content as NSString)
+            makeDragProvider()
+        } preview: {
+            dragPreview
+        }
+        .onDrop(of: [.text, .plainText, .utf8PlainText, .image, .fileURL], isTargeted: nil) { providers in
+            handleDrop(providers)
         }
         .task(id: item.id) {
             // Cache code detection asynchronously to avoid blocking body rendering.
@@ -351,6 +356,136 @@ struct ClipboardItemRow: View {
         .accessibilityLabel(accessibilityDescription)
         .accessibilityHint(item.isPinned ? LanguageManager.shared.l("action.unpin") : LanguageManager.shared.l("action.pin"))
         .accessibilityIdentifier("clipboardItem-\(item.id.uuidString)")
+    }
+
+
+    private var dragPreview: some View {
+        HStack(spacing: 8) {
+            if item.type == .image, let nsImage = loadedImage ?? image {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: "doc.on.clipboard")
+                    .foregroundStyle(.secondary)
+            }
+            Text(item.type == .image ? (item.ocrText ?? "Image") : String(item.content.prefix(48)))
+                .font(.system(size: 11))
+                .lineLimit(1)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
+        .frame(width: 180)
+    }
+
+    private func makeDragProvider() -> NSItemProvider {
+        if item.isSensitive && !isUnlocked {
+            return NSItemProvider(object: "" as NSString)
+        }
+        switch item.type {
+        case .image:
+            if let img = loadedImage ?? image {
+                let provider = NSItemProvider(object: img)
+                if !item.content.isEmpty {
+                    provider.registerDataRepresentation(forTypeIdentifier: UTType.utf8PlainText.identifier, visibility: .all) { completion in
+                        completion(item.content.data(using: .utf8), nil)
+                        return nil
+                    }
+                }
+                provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
+                    completion(item.id.uuidString.data(using: .utf8), nil)
+                    return nil
+                }
+                return provider
+            }
+            let provider = NSItemProvider(object: (item.ocrText ?? item.content) as NSString)
+            provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
+                completion(item.id.uuidString.data(using: .utf8), nil)
+                return nil
+            }
+            return provider
+        case .fileURL:
+            let paths = filePaths.isEmpty ? item.filePaths : filePaths
+            if let first = paths.first {
+                let url = URL(fileURLWithPath: first)
+                let provider = NSItemProvider(contentsOf: url) ?? NSItemProvider()
+                for path in paths.dropFirst() {
+                    let extra = URL(fileURLWithPath: path)
+                    provider.registerFileRepresentation(
+                        forTypeIdentifier: UTType.fileURL.identifier,
+                        fileOptions: [],
+                        visibility: .all
+                    ) { completion in
+                        completion(extra, false, nil)
+                        return nil
+                    }
+                }
+                provider.registerDataRepresentation(forTypeIdentifier: UTType.utf8PlainText.identifier, visibility: .all) { completion in
+                    completion(paths.joined(separator: "\n").data(using: .utf8), nil)
+                    return nil
+                }
+                // Encode source id for internal reordering
+                provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
+                    completion(item.id.uuidString.data(using: .utf8), nil)
+                    return nil
+                }
+                return provider
+            }
+            return NSItemProvider(object: item.content as NSString)
+        case .richText:
+            let provider = NSItemProvider(object: item.content as NSString)
+            if let rtf = item.rtfData {
+                provider.registerDataRepresentation(forTypeIdentifier: UTType.rtf.identifier, visibility: .all) { completion in
+                    completion(rtf, nil)
+                    return nil
+                }
+            }
+            provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
+                completion(item.id.uuidString.data(using: .utf8), nil)
+                return nil
+            }
+            return provider
+        case .text:
+            let provider = NSItemProvider(object: item.content as NSString)
+            provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
+                completion(item.id.uuidString.data(using: .utf8), nil)
+                return nil
+            }
+            return provider
+        }
+    }
+
+    private static let reorderTypeID = "com.nicebro.clipshelf.item-id"
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        // Prefer internal reorder payload
+        if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(Self.reorderTypeID) }) {
+            provider.loadDataRepresentation(forTypeIdentifier: Self.reorderTypeID) { data, _ in
+                guard let data,
+                      let raw = String(data: data, encoding: .utf8),
+                      let sourceID = UUID(uuidString: raw)
+                else { return }
+                DispatchQueue.main.async {
+                    // Drop onto this row: place source before current item.
+                    self.onReorder?(sourceID, true)
+                }
+            }
+            return true
+        }
+        // Also accept plain text provider that carries uuid only for own-process fallback
+        if let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) {
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let raw = object as? String,
+                      let sourceID = UUID(uuidString: raw)
+                else { return }
+                DispatchQueue.main.async {
+                    self.onReorder?(sourceID, true)
+                }
+            }
+        }
+        return onReorder != nil
     }
 
     private var accessibilityDescription: String {

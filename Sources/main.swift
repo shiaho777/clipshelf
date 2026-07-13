@@ -55,7 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
@@ -265,6 +265,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self, self.panel.isVisible else { return }
+            // Keep the panel open during an active drag session so users can
+            // drop clipboard items into other apps.
+            if NSEvent.pressedMouseButtons != 0 { return }
             if !NSMouseInRect(NSEvent.mouseLocation, self.panel.frame, false) {
                 self.hidePanel()
             }

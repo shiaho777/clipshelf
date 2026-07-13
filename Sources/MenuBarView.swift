@@ -318,7 +318,17 @@ struct MenuBarView: View {
                 } else if hoveredItemId == item.id {
                     hoveredItemId = nil
                 }
-            }
+            },
+            onReorder: { sourceID, placeBefore in
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                    if placeBefore {
+                        clipboardManager.moveItem(id: sourceID, before: item.id)
+                    } else {
+                        clipboardManager.moveItem(id: sourceID, after: item.id)
+                    }
+                }
+            },
+            filePaths: item.filePaths
         )
         .id(item.id)
     }
