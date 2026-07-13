@@ -342,8 +342,8 @@ struct SettingsView: View {
 
     private func importFromMaccy() {
         let panel = NSOpenPanel()
-        panel.title = "Select Maccy Database"
-        panel.message = "Typical location: ~/Library/Containers/org.p0deje.Maccy/"
+        panel.title = lang.l("settings.importMaccy.panelTitle")
+        panel.message = lang.l("settings.importMaccy.panelMessage")
         panel.allowedContentTypes = [.init(filenameExtension: "sqlite") ?? .data]
         panel.canChooseFiles = true; panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -357,8 +357,8 @@ struct SettingsView: View {
 
     private func importFromAlfred() {
         let panel = NSOpenPanel()
-        panel.title = "Select Alfred Clipboard Database"
-        panel.message = "Typical location: ~/Library/Application Support/Alfred/Databases/"
+        panel.title = lang.l("settings.importAlfred.panelTitle")
+        panel.message = lang.l("settings.importAlfred.panelMessage")
         panel.allowedContentTypes = [.init(filenameExtension: "alfdb") ?? .data]
         panel.canChooseFiles = true; panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }

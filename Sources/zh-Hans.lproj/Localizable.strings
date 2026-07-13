@@ -238,3 +238,20 @@
 "language.choose.title" = "选择语言";
 "language.choose.subtitle" = "请选择界面语言后继续";
 "language.switch" = "语言";
+
+/* Accessibility */
+"a11y.type.text" = "文本";
+"a11y.type.richText" = "富文本";
+"a11y.type.image" = "图片";
+"a11y.type.file" = "文件";
+"a11y.pinned" = "已置顶";
+"a11y.sensitive" = "敏感";
+
+/* Snippets */
+"snippets.variables" = "变量：{{date}} · {{time}} · {{datetime}} · {{clipboard}} · {{random:8}} · {{cursor}}";
+
+/* Import panels */
+"settings.importMaccy.panelTitle" = "选择 Maccy 数据库";
+"settings.importMaccy.panelMessage" = "常见位置：~/Library/Containers/org.p0deje.Maccy/";
+"settings.importAlfred.panelTitle" = "选择 Alfred 剪贴板数据库";
+"settings.importAlfred.panelMessage" = "常见位置：~/Library/Application Support/Alfred/Databases/";

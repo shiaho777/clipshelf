@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct DiffViewerSheet: View {
+    @ObservedObject private var lang = LanguageManager.shared
     let itemA: ClipboardItem
     let itemB: ClipboardItem
     @Environment(\.popupWindowDismiss) private var dismissPopup
@@ -20,7 +21,7 @@ struct DiffViewerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             // ── Header ──────────────────────────────────────────
-            SheetHeader(LanguageManager.shared.l("diff.title"), onClose: { dismissPopup() })
+            SheetHeader(lang.l("diff.title"), onClose: { dismissPopup() })
 
             // ── Diff lines ──────────────────────────────────────
             ScrollView {
@@ -44,7 +45,7 @@ struct DiffViewerSheet: View {
                         .foregroundColor(.red.opacity(0.85))
                 }
                 Spacer()
-                Button(LanguageManager.shared.l("diff.copy")) { copyDiffToClipboard() }
+                Button(lang.l("diff.copy")) { copyDiffToClipboard() }
                     .font(.system(size: DesignSystem.FontSize.caption, weight: .medium))
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)

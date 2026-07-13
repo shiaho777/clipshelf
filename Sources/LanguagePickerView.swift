@@ -95,7 +95,7 @@ struct LanguageSwitcherButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("Language / 语言")
+        .help(lang.l("language.switch"))
         .popover(isPresented: $showPicker, arrowEdge: .bottom) {
             LanguagePickerView(
                 title: nil,

@@ -160,7 +160,7 @@ struct SnippetEditSheet: View {
                         .font(.system(size: 13))
                         .frame(minHeight: 80)
                         .standardEditorSurface()
-                    Text("Variables: {{date}} · {{time}} · {{datetime}} · {{clipboard}} · {{random:8}} · {{cursor}}")
+                    Text(lang.l("snippets.variables"))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)

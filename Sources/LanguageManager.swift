@@ -25,6 +25,7 @@ class LanguageManager: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Language")
 
     @Published private(set) var hasSelectedLanguage: Bool
+    @Published private(set) var revision: UInt64 = 0
     @Published var language: String {
         didSet {
             let normalized = Self.normalizedLanguage(language)
@@ -33,6 +34,7 @@ class LanguageManager: ObservableObject {
                 return
             }
             guard oldValue != language else { return }
+            revision &+= 1
             do {
                 _ = try preferencesStore.saveLanguage(language)
             } catch {
@@ -84,6 +86,7 @@ class LanguageManager: ObservableObject {
         }
         if !hasSelectedLanguage {
             hasSelectedLanguage = true
+            revision &+= 1
         }
     }
 

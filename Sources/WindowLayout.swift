@@ -506,7 +506,8 @@ struct SearchField: View {
     }
 
     @Binding var text: String
-    var placeholder: String = LanguageManager.shared.l("search.placeholder")
+    @ObservedObject private var lang = LanguageManager.shared
+    var placeholder: String? = nil
     var size: Size = .regular
     var reduceMotion: Bool = false
     var focus: FocusState<Bool>.Binding?
@@ -518,10 +519,10 @@ struct SearchField: View {
                 .foregroundStyle(.tertiary)
             Group {
                 if let focus {
-                    TextField(placeholder, text: $text)
+                    TextField(placeholder ?? lang.l("search.placeholder"), text: $text)
                         .focused(focus)
                 } else {
-                    TextField(placeholder, text: $text)
+                    TextField(placeholder ?? lang.l("search.placeholder"), text: $text)
                 }
             }
             .textFieldStyle(.plain)

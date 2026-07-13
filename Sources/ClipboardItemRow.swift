@@ -38,6 +38,7 @@ struct ClipboardItemRow: View {
     // every row subscribing to language changes — language only changes at app
     // startup or via Settings, not during scrolling.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var lang = LanguageManager.shared
     /// Whether this sensitive item has been unlocked in the current panel session.
     /// Managed by the parent view (MenuBarView) via `unlockedItemIDs` so the state
     /// survives LazyVStack row recycling when the user scrolls.
@@ -80,10 +81,10 @@ struct ClipboardItemRow: View {
                         .font(.system(size: 12))
                         .foregroundColor(.orange.opacity(0.7))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(LanguageManager.shared.l("item.sensitive.title"))
+                        Text(lang.l("item.sensitive.title"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
-                        Text(LanguageManager.shared.l("item.sensitive.unlockHint"))
+                        Text(lang.l("item.sensitive.unlockHint"))
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }
@@ -109,12 +110,12 @@ struct ClipboardItemRow: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
-                        Text(LanguageManager.shared.l("item.image"))
+                        Text(lang.l("item.image"))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                         if item.isScreenshot {
                             TagBadge(
-                                LanguageManager.shared.l("item.screenshot"),
+                                lang.l("item.screenshot"),
                                 systemImage: "camera.viewfinder",
                                 color: .blue
                             )
@@ -136,7 +137,7 @@ struct ClipboardItemRow: View {
                             TagBadge("+\(paths.count - 1)", color: .orange, fontSize: 9)
                         }
                         if item.isScreenshot {
-                            TagBadge(LanguageManager.shared.l("item.screenshot"), color: .blue)
+                            TagBadge(lang.l("item.screenshot"), color: .blue)
                         }
                     }
                     TimeAgoText(date: item.timestamp)
@@ -179,7 +180,7 @@ struct ClipboardItemRow: View {
                         rowActionButton(icon: "arrow.up.right.square", color: .blue.opacity(0.7)) {
                             if let url = detection.url { NSWorkspace.shared.open(url) }
                         }
-                        .help(LanguageManager.shared.l("action.openURL"))
+                        .help(lang.l("action.openURL"))
                     }
                         if detection.isFilePath {
                             rowActionButton(icon: "folder", color: .orange.opacity(0.7)) {
@@ -187,7 +188,7 @@ struct ClipboardItemRow: View {
                                     NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
                                 }
                             }
-                            .help(LanguageManager.shared.l("action.openFinder"))
+                            .help(lang.l("action.openFinder"))
                         }
                         if item.type == .fileURL {
                             rowActionButton(icon: "folder", color: .orange.opacity(0.7)) {
@@ -195,14 +196,14 @@ struct ClipboardItemRow: View {
                                     NSWorkspace.shared.selectFile(first, inFileViewerRootedAtPath: "")
                                 }
                             }
-                            .help(LanguageManager.shared.l("action.openFinder"))
+                            .help(lang.l("action.openFinder"))
                         }
                         if item.type != .image && item.type != .fileURL {
                             rowActionButton(icon: "pencil", color: .accentColor.opacity(0.7)) { onEdit?() }
-                                .help(LanguageManager.shared.l("action.edit"))
+                                .help(lang.l("action.edit"))
                         }
                     rowActionButton(icon: "eye", color: .secondary.opacity(0.7)) { onPreview?() }
-                        .help(LanguageManager.shared.l("action.preview"))
+                        .help(lang.l("action.preview"))
                     rowActionButton(icon: item.isPinned ? "pin.slash.fill" : "pin", color: .orange.opacity(0.7), action: onPin)
                     rowActionButton(icon: "trash", color: .red.opacity(0.6), action: onDelete)
                 }
@@ -255,7 +256,7 @@ struct ClipboardItemRow: View {
                 Task { @MainActor in
                     do {
                         try await BiometricAuthService.shared.authenticate(
-                            reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                            reason: lang.l("biometric.unlockSensitive")
                         )
                         onUnlock?()
                     } catch {
@@ -278,26 +279,26 @@ struct ClipboardItemRow: View {
                     Task { @MainActor in
                         do {
                             try await BiometricAuthService.shared.authenticate(
-                                reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                                reason: lang.l("biometric.unlockSensitive")
                             )
                             onUnlock?()
                         } catch {}
                     }
                 } label: {
-                    Label(LanguageManager.shared.l("biometric.unlockSensitive"), systemImage: "lock.open")
+                    Label(lang.l("biometric.unlockSensitive"), systemImage: "lock.open")
                 }
             } else {
             Button { onCopy(false) } label: {
-                Label(LanguageManager.shared.l("action.copy"), systemImage: "doc.on.doc")
+                Label(lang.l("action.copy"), systemImage: "doc.on.doc")
             }
             Button { onCopy(true) } label: {
-                Label(LanguageManager.shared.l("action.pastePlain"), systemImage: "textformat")
+                Label(lang.l("action.pastePlain"), systemImage: "textformat")
             }
             if detection.isURL {
                 Button {
                     if let url = detection.url { NSWorkspace.shared.open(url) }
                 } label: {
-                    Label(LanguageManager.shared.l("action.openURL"), systemImage: "arrow.up.right.square")
+                    Label(lang.l("action.openURL"), systemImage: "arrow.up.right.square")
                 }
             }
             if detection.isFilePath {
@@ -306,7 +307,7 @@ struct ClipboardItemRow: View {
                         NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
                     }
                 } label: {
-                    Label(LanguageManager.shared.l("action.openFinder"), systemImage: "folder")
+                    Label(lang.l("action.openFinder"), systemImage: "folder")
                 }
             }
             if item.type == .fileURL {
@@ -315,24 +316,24 @@ struct ClipboardItemRow: View {
                         NSWorkspace.shared.selectFile(first, inFileViewerRootedAtPath: "")
                     }
                 } label: {
-                    Label(LanguageManager.shared.l("action.openFinder"), systemImage: "folder")
+                    Label(lang.l("action.openFinder"), systemImage: "folder")
                 }
             }
             Button { onPreview?() } label: {
-                Label(LanguageManager.shared.l("action.preview"), systemImage: "eye")
+                Label(lang.l("action.preview"), systemImage: "eye")
             }
             if item.type != .image && item.type != .fileURL {
                 Button { onEdit?() } label: {
-                    Label(LanguageManager.shared.l("action.edit"), systemImage: "pencil")
+                    Label(lang.l("action.edit"), systemImage: "pencil")
                 }
             }
             Button { onPin() } label: {
-                Label(item.isPinned ? LanguageManager.shared.l("action.unpin") : LanguageManager.shared.l("action.pin"), systemImage: item.isPinned ? "pin.slash" : "pin")
+                Label(item.isPinned ? lang.l("action.unpin") : lang.l("action.pin"), systemImage: item.isPinned ? "pin.slash" : "pin")
             }
             if item.type != .image && item.type != .fileURL {
-                Menu(LanguageManager.shared.l("action.transform")) {
+                Menu(lang.l("action.transform")) {
                     ForEach(TextTransform.allCases, id: \.self) { transform in
-                        Button(LanguageManager.shared.l(transform.localizationKey)) {
+                        Button(lang.l(transform.localizationKey)) {
                             if let result = transform.apply(item.content) {
                                 onTransform?(result)
                             }
@@ -342,7 +343,7 @@ struct ClipboardItemRow: View {
             }
             Divider()
             Button(role: .destructive) { onDelete() } label: {
-                Label(LanguageManager.shared.l("action.delete"), systemImage: "trash")
+                Label(lang.l("action.delete"), systemImage: "trash")
             }
             } // end sensitive else
         }
@@ -380,7 +381,7 @@ struct ClipboardItemRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
-        .accessibilityHint(item.isPinned ? LanguageManager.shared.l("action.unpin") : LanguageManager.shared.l("action.pin"))
+        .accessibilityHint(item.isPinned ? lang.l("action.unpin") : lang.l("action.pin"))
         .accessibilityIdentifier("clipboardItem-\(item.id.uuidString)")
     }
 
@@ -397,7 +398,7 @@ struct ClipboardItemRow: View {
                 Image(systemName: "doc.on.clipboard")
                     .foregroundStyle(.secondary)
             }
-            Text(item.type == .image ? (item.ocrText ?? "Image") : String(item.content.prefix(48)))
+            Text(item.type == .image ? (item.ocrText ?? lang.l("item.image")) : String(item.content.prefix(48)))
                 .font(.system(size: 11))
                 .lineLimit(1)
         }
@@ -649,15 +650,17 @@ struct ClipboardItemRow: View {
     private var accessibilityDescription: String {
         let typeDesc: String
         switch item.type {
-        case .text: typeDesc = "Text"
-        case .richText: typeDesc = "Rich text"
-        case .image: typeDesc = "Image"
-        case .fileURL: typeDesc = "File"
+        case .text: typeDesc = lang.l("a11y.type.text")
+        case .richText: typeDesc = lang.l("a11y.type.richText")
+        case .image: typeDesc = lang.l("a11y.type.image")
+        case .fileURL: typeDesc = lang.l("a11y.type.file")
         }
-        let pinned = item.isPinned ? ", pinned" : ""
-        let sensitive = item.isSensitive ? ", sensitive" : ""
-        let content = item.type == .image ? (item.ocrText ?? "image") : item.displayText
-        return "\(typeDesc)\(pinned)\(sensitive): \(content)"
+        var extras: [String] = []
+        if item.isPinned { extras.append(lang.l("a11y.pinned")) }
+        if item.isSensitive { extras.append(lang.l("a11y.sensitive")) }
+        let suffix = extras.isEmpty ? "" : ", " + extras.joined(separator: ", ")
+        let content = item.type == .image ? (item.ocrText ?? lang.l("item.image")) : item.displayText
+        return "\(typeDesc)\(suffix): \(content)"
     }
 
     private func highlightedDisplayText(_ text: String) -> Text {
@@ -718,6 +721,7 @@ struct ColorSwatchView: View {
     let detection: ContentDetectionResult
     @State private var currentFormat: ColorFormat = .hex
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var lang = LanguageManager.shared
     
     var body: some View {
         let formatString = detection.colorString(format: currentFormat) ?? ""
@@ -746,7 +750,7 @@ struct ColorSwatchView: View {
             }
         }
         .buttonStyle(.plain)
-        .help(LanguageManager.shared.l("action.colorCopy"))
+        .help(lang.l("action.colorCopy"))
     }
 }
 
@@ -768,16 +772,18 @@ class TimeTickPublisher {
 /// tiny label — not the entire parent view or list.
 struct TimeAgoText: View {
     let date: Date
+    @ObservedObject private var lang = LanguageManager.shared
     @State private var now = Date()
 
-    private static let formatter: RelativeDateTimeFormatter = {
+    private static func makeFormatter(language: String) -> RelativeDateTimeFormatter {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
+        f.locale = Locale(identifier: language == "zh" ? "zh-Hans" : "en_US")
         return f
-    }()
+    }
 
     var body: some View {
-        Text(Self.formatter.localizedString(for: date, relativeTo: now))
+        Text(Self.makeFormatter(language: lang.language).localizedString(for: date, relativeTo: now))
             .font(.system(size: 10))
             .foregroundStyle(.tertiary)
             .onReceive(TimeTickPublisher.shared.publisher) { newNow in

@@ -38,6 +38,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         clipboardManager = ClipboardManager()
+        LanguageManager.shared.$language
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.settingsWindow?.title = LanguageManager.shared.l("settings.title")
+            }
+            .store(in: &cancellables)
         pasteQueue = PasteQueue.shared
         snippetManager = SnippetManager()
         checkAccessibilityPermission()

@@ -238,3 +238,20 @@
 "language.choose.title" = "Choose Language";
 "language.choose.subtitle" = "Select a language to continue";
 "language.switch" = "Language";
+
+/* Accessibility */
+"a11y.type.text" = "Text";
+"a11y.type.richText" = "Rich text";
+"a11y.type.image" = "Image";
+"a11y.type.file" = "File";
+"a11y.pinned" = "pinned";
+"a11y.sensitive" = "sensitive";
+
+/* Snippets */
+"snippets.variables" = "Variables: {{date}} · {{time}} · {{datetime}} · {{clipboard}} · {{random:8}} · {{cursor}}";
+
+/* Import panels */
+"settings.importMaccy.panelTitle" = "Select Maccy Database";
+"settings.importMaccy.panelMessage" = "Typical location: ~/Library/Containers/org.p0deje.Maccy/";
+"settings.importAlfred.panelTitle" = "Select Alfred Clipboard Database";
+"settings.importAlfred.panelMessage" = "Typical location: ~/Library/Application Support/Alfred/Databases/";

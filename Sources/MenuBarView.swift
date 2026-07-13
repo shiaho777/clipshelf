@@ -332,7 +332,7 @@ struct MenuBarView: View {
             },
             filePaths: item.filePaths
         )
-        .id(item.id)
+        .id("\(item.id.uuidString)-\(lang.revision)")
     }
 
     @ViewBuilder
