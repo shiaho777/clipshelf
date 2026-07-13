@@ -442,16 +442,50 @@ struct ClipboardItemRow: View {
     }
 
     private func makeImageDragProvider() -> NSItemProvider {
+        let fileURL = imageFileURLForDrag()
         let resolvedImage = loadedImage ?? image ?? loadImageForDrag()
+        let provider: NSItemProvider
+
+        // Prefer a concrete image object so rich-text / image destinations can accept it.
+        // Also attach PNG/TIFF data and a real image-file representation for apps that
+        // only accept filesystem images (Finder, Mail, many chat clients).
         if let img = resolvedImage {
-            let provider = NSItemProvider(object: img)
-            if let tiff = img.tiffRepresentation {
-                let tiffData = tiff
-                provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
-                    completion(tiffData, nil)
+            provider = NSItemProvider(object: img)
+            registerImageDataRepresentations(for: img, fileURL: fileURL, on: provider)
+        } else if let fileURL {
+            let typeIdentifier = imageTypeIdentifier(for: fileURL)
+            provider = NSItemProvider()
+            registerImageFileRepresentation(fileURL: fileURL, typeIdentifier: typeIdentifier, on: provider)
+            if let data = try? Data(contentsOf: fileURL), !data.isEmpty {
+                let payload = data
+                provider.registerDataRepresentation(forTypeIdentifier: typeIdentifier, visibility: .all) { completion in
+                    completion(payload, nil)
                     return nil
                 }
-                if let rep = NSBitmapImageRep(data: tiff),
+            }
+        } else {
+            return NSItemProvider()
+        }
+
+        if let fileURL {
+            let typeIdentifier = imageTypeIdentifier(for: fileURL)
+            registerImageFileRepresentation(fileURL: fileURL, typeIdentifier: typeIdentifier, on: provider)
+        }
+        return provider
+    }
+
+    private func registerImageDataRepresentations(for img: NSImage, fileURL: URL?, on provider: NSItemProvider) {
+        if let fileURL, let fileData = try? Data(contentsOf: fileURL), !fileData.isEmpty {
+            let typeIdentifier = imageTypeIdentifier(for: fileURL)
+            let payload = fileData
+            provider.registerDataRepresentation(forTypeIdentifier: typeIdentifier, visibility: .all) { completion in
+                completion(payload, nil)
+                return nil
+            }
+            if typeIdentifier != UTType.png.identifier {
+                // Many destinations still prefer PNG even when the source is JPEG/HEIC.
+                if let tiff = img.tiffRepresentation,
+                   let rep = NSBitmapImageRep(data: tiff),
                    let png = rep.representation(using: .png, properties: [:]) {
                     let pngData = png
                     provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
@@ -460,29 +494,41 @@ struct ClipboardItemRow: View {
                     }
                 }
             }
-            return provider
+            return
         }
 
-        // Fall back to a real image file only when we cannot materialize NSImage.
-        // Use the file's content UTI (png/jpeg/...), never public.file-url — that
-        // identifier crashes NSItemProvider's in-place file load path.
-        if let fileURL = imageFileURLForDrag() {
-            let typeIdentifier = UTType(filenameExtension: fileURL.pathExtension)?.identifier
-                ?? UTType.png.identifier
-            let provider = NSItemProvider()
-            let stableURL = fileURL
-            provider.registerFileRepresentation(
-                forTypeIdentifier: typeIdentifier,
-                fileOptions: [],
-                visibility: .all
-            ) { completion in
-                completion(stableURL, false, nil)
+        if let tiff = img.tiffRepresentation {
+            let tiffData = tiff
+            provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
+                completion(tiffData, nil)
                 return nil
             }
-            return provider
+            if let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                let pngData = png
+                provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
+                    completion(pngData, nil)
+                    return nil
+                }
+            }
         }
+    }
 
-        return NSItemProvider()
+    private func registerImageFileRepresentation(fileURL: URL, typeIdentifier: String, on provider: NSItemProvider) {
+        let stableURL = fileURL
+        provider.registerFileRepresentation(
+            forTypeIdentifier: typeIdentifier,
+            fileOptions: [],
+            visibility: .all
+        ) { completion in
+            // Coordinated copies are safer for sandboxed receivers than in-place loads.
+            completion(stableURL, true, nil)
+            return nil
+        }
+    }
+
+    private func imageTypeIdentifier(for fileURL: URL) -> String {
+        UTType(filenameExtension: fileURL.pathExtension)?.identifier ?? UTType.png.identifier
     }
 
     private func makeFileURLDragProvider() -> NSItemProvider {
