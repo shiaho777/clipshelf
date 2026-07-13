@@ -426,30 +426,24 @@ struct ClipboardItemRow: View {
                 }
             }
         case .image:
-            if let img = loadedImage ?? image {
+            let resolvedImage = loadedImage ?? image ?? loadImageForDrag()
+            if let img = resolvedImage {
                 provider = NSItemProvider(object: img)
-                if let tiff = img.tiffRepresentation {
-                    provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
-                        completion(tiff, nil)
-                        return nil
-                    }
-                    if let rep = NSBitmapImageRep(data: tiff),
-                       let png = rep.representation(using: .png, properties: [:]) {
-                        provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
-                            completion(png, nil)
-                            return nil
-                        }
-                    }
-                }
-                let fallback = item.ocrText ?? item.content
-                if !fallback.isEmpty {
-                    registerTextRepresentations(fallback, on: provider)
-                }
+                registerImageRepresentations(img, on: provider)
             } else {
-                let fallback = item.ocrText ?? item.content
-                provider = NSItemProvider(object: (fallback.isEmpty ? "Image" : fallback) as NSString)
-                if !fallback.isEmpty {
-                    registerTextRepresentations(fallback, on: provider)
+                provider = NSItemProvider()
+            }
+            if let fileURL = imageFileURLForDrag() {
+                provider.registerFileRepresentation(
+                    forTypeIdentifier: UTType.fileURL.identifier,
+                    fileOptions: [],
+                    visibility: .all
+                ) { completion in
+                    completion(fileURL, false, nil)
+                    return nil
+                }
+                if provider.suggestedName == nil {
+                    provider.suggestedName = fileURL.lastPathComponent
                 }
             }
         case .fileURL:
@@ -511,6 +505,53 @@ struct ClipboardItemRow: View {
             completion(text.data(using: .utf8), nil)
             return nil
         }
+    }
+
+
+    private func registerImageRepresentations(_ img: NSImage, on provider: NSItemProvider) {
+        if let tiff = img.tiffRepresentation {
+            provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
+                completion(tiff, nil)
+                return nil
+            }
+            if let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
+                    completion(png, nil)
+                    return nil
+                }
+            }
+        }
+    }
+
+    private func loadImageForDrag() -> NSImage? {
+        if let imageURL, let data = try? Data(contentsOf: imageURL), let img = NSImage(data: data) {
+            return img
+        }
+        if let fileName = item.imageFileName {
+            let url = AppStoragePaths.defaultStorageDirectory()
+                .appendingPathComponent("images", isDirectory: true)
+                .appendingPathComponent(fileName)
+            if let data = try? Data(contentsOf: url), let img = NSImage(data: data) {
+                return img
+            }
+        }
+        return nil
+    }
+
+    private func imageFileURLForDrag() -> URL? {
+        if let imageURL, FileManager.default.fileExists(atPath: imageURL.path) {
+            return imageURL
+        }
+        if let fileName = item.imageFileName {
+            let url = AppStoragePaths.defaultStorageDirectory()
+                .appendingPathComponent("images", isDirectory: true)
+                .appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
     }
 
     private static let reorderTypeID = "com.nicebro.clipshelf.item-id"
