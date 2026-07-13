@@ -13,7 +13,7 @@
 
 ClipShelf 保存可搜索的剪贴板历史，并在入库前可选地运行规则。从历史粘贴时，可按当前目标应用调整格式。
 
-本地工具，无需账号。只有在你开启 iCloud 同步或自动更新时才会访问网络。
+本地工具，无需账号。历史只保存在本机。
 
 ## 功能
 
@@ -66,9 +66,6 @@ xcodebuild -scheme ClipShelf -configuration Release build
 4. 按提示授予辅助功能权限（用于模拟粘贴）
 
 
-### iCloud 同步
-
-可选。需要使用已启用 CloudKit 容器 `iCloud.com.nicebro.ClipShelf` 的开发者团队签名构建。详见 [docs/cloudkit/SETUP.md](docs/cloudkit/SETUP.md).
 
 ## 隐私
 

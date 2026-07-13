@@ -23,7 +23,6 @@ targets:
       - sdk: JavaScriptCore.framework
       - sdk: libsqlite3.tbd
       - sdk: AppIntents.framework
-      - sdk: CloudKit.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nicebro.ClipShelf

@@ -5,7 +5,6 @@ struct SettingsView: View {
     @ObservedObject var snippetManager: SnippetManager
     @ObservedObject var lang = LanguageManager.shared
     @ObservedObject var hotKeyManager = HotKeyManager.shared
-    @ObservedObject var cloudSync = CloudSyncService.shared
     @StateObject private var settingsVM = SettingsViewModel()
     @State private var selectedTab = 0
     @State private var showClearConfirm = false
@@ -33,8 +32,8 @@ struct SettingsView: View {
             rulesTab
                 .tabItem { Label(lang.l("settings.tab.rules"), systemImage: "list.bullet.rectangle") }
                 .tag(1)
-            syncTab
-                .tabItem { Label(lang.l("settings.tab.sync"), systemImage: "arrow.triangle.2.circlepath") }
+            dataTab
+                .tabItem { Label(lang.l("settings.tab.data"), systemImage: "externaldrive") }
                 .tag(2)
             aboutTab
                 .tabItem { Label(lang.l("settings.tab.about"), systemImage: "info.circle") }
@@ -151,56 +150,8 @@ struct SettingsView: View {
 
     // MARK: - Sync Tab
 
-    private var syncTab: some View {
+    private var dataTab: some View {
         Form {
-            Section {
-                Toggle(lang.l("settings.icloudSync"), isOn: $cloudSync.isSyncEnabled)
-                if cloudSync.isSyncEnabled {
-                    HStack {
-                        Text(lang.l("settings.icloud.status"))
-                        Spacer()
-                        Text(cloudSync.readiness.isReady
-                             ? lang.l("settings.icloud.status.ready")
-                             : lang.l("settings.icloud.status.unavailable"))
-                            .foregroundColor(cloudSync.readiness.isReady ? .secondary : .orange)
-                    }
-                    .font(.caption)
-                    if let container = cloudSync.resolvedContainerIdentifier {
-                        HStack {
-                            Text(lang.l("settings.icloud.container"))
-                            Spacer()
-                            Text(container)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        .font(.caption2)
-                    }
-                }
-                if let date = cloudSync.lastSyncDate {
-                    HStack {
-                        Text(lang.l("settings.lastSync"))
-                        Spacer()
-                        Text(date, style: .relative)
-                            .foregroundColor(.secondary)
-                    }
-                    .font(.caption)
-                }
-                if let error = cloudSync.syncError, !error.isEmpty {
-                    Text(error).foregroundColor(.red).font(.caption)
-                }
-                if cloudSync.isSyncEnabled {
-                    Button(lang.l("settings.icloud.retry")) {
-                        Task { await cloudSync.refreshReadiness() }
-                    }
-                }
-            } header: {
-                Text(lang.l("settings.icloud.section"))
-            } footer: {
-                Text(lang.l("settings.icloud.footer"))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
             Section {
                 Picker(lang.l("settings.exportFormat"), selection: $exportFormat) {
                     Text(lang.l("settings.exportFormat.zip")).tag(0)

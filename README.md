@@ -19,7 +19,7 @@
 
 ClipShelf keeps a searchable history of what you copy, and applies optional rules before items are stored. When you paste from history, it can adjust formatting for the app you are pasting into.
 
-It is a local utility. No account is required. Network access is only used if you turn on iCloud sync or auto-update.
+It is a local utility. No account is required. History stays on this Mac.
 
 ## Features
 
@@ -72,9 +72,6 @@ xcodebuild -scheme ClipShelf -configuration Release build
 4. Grant Accessibility when prompted (needed to simulate paste)
 
 
-### iCloud sync
-
-Optional. Requires an Apple Developer team-signed build with CloudKit container `iCloud.com.nicebro.ClipShelf`. See [docs/cloudkit/SETUP.md](docs/cloudkit/SETUP.md).
 
 ## Privacy
 

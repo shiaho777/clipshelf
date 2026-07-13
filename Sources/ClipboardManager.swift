@@ -79,7 +79,6 @@ class ClipboardManager: ObservableObject {
     // Extracted sub-managers (facade pattern)
     let imageManager: ClipboardImageManager
     private let prefs: ClipboardPreferencesManager
-    private let syncCoordinator: ClipboardSyncCoordinator
     private var ingestPipeline: ClipboardIngestPipeline!
     private var captureDispatcher: ClipboardCaptureDispatcher!
     private var isInitializing = true
@@ -111,7 +110,6 @@ class ClipboardManager: ObservableObject {
     
     private var cachedPinnedCount: Int = 0
     private var pinnedCount: Int { cachedPinnedCount }
-    private var cloudDeleteObserver: NSObjectProtocol?
 
     private func rebuildItemIndexes() {
         historyIndex.rebuild(from: &items)
@@ -243,7 +241,6 @@ class ClipboardManager: ObservableObject {
 
     private func persistDeletedIDsIncrementally(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
-        scheduleCloudDelete(ids: ids)
         persistence.delete(ids: ids)
     }
 
@@ -283,9 +280,6 @@ class ClipboardManager: ObservableObject {
 
         self.imageManager = ClipboardImageManager(imageStore: resolvedImageStore, ocrService: resolvedOCR)
         self.prefs = ClipboardPreferencesManager(preferencesStore: resolvedPreferencesStore)
-        self.syncCoordinator = ClipboardSyncCoordinator(enableCloudSync: startRuntimeServices)
-        CloudSyncService.shared.imageStore = resolvedImageStore
-
         self.monitor = ClipboardMonitor()
         self.persistence = ClipboardPersistenceCoordinator(
             historyStore: self.historyStore,
@@ -313,7 +307,6 @@ class ClipboardManager: ObservableObject {
         scheduleDeferredStartupMaintenance()
         configureCapturePipeline()
         configureRuntimeCallbacks(startRuntimeServices: startRuntimeServices)
-        configureCloudDeleteObserver()
     }
 
     private func configureOCRQueue() {
@@ -328,7 +321,6 @@ class ClipboardManager: ObservableObject {
                 self.items[idx].ocrText = ocrText
                 self.updateIndexedItem(self.items[idx], at: idx)
                 self.persistItemIncrementally(self.items[idx])
-                self.scheduleCloudUpload(item: self.items[idx])
             }
         )
     }
@@ -408,9 +400,6 @@ class ClipboardManager: ObservableObject {
         monitor.onCapture = { [weak self] content in
             self?.handleCapturedContent(content)
         }
-        syncCoordinator.onItemsFetched = { [weak self] fetchedItems in
-            self?.handleFetchedSyncItems(fetchedItems)
-        }
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
         }
@@ -420,31 +409,10 @@ class ClipboardManager: ObservableObject {
         }
     }
 
-    private func configureCloudDeleteObserver() {
-        cloudDeleteObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("ClipboardCloudDeleteItems"),
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            Task { @MainActor [weak self] in
-                guard let self,
-                      let ids = notification.userInfo?["ids"] as? [UUID],
-                      !ids.isEmpty else { return }
-                let idSet = Set(ids)
-                let removedItems = self.deleteItemsFromMemory(ids: idSet)
-                self.deleteImageFiles(for: removedItems)
-                self.saveItems(immediately: true)
-                self.noteHistoryMutation()
-            }
-        }
-    }
     
     deinit {
         monitor.stop()
         cleanupTimer?.invalidate()
-        if let obs = cloudDeleteObserver {
-            NotificationCenter.default.removeObserver(obs)
-        }
     }
     
     // MARK: - Monitor Callback
@@ -556,7 +524,6 @@ class ClipboardManager: ObservableObject {
         }
         trimToLimit()
         persistItemIncrementally(item)
-        scheduleCloudUpload(item: item)
         if enqueueOCR {
             self.enqueueOCR(for: item.id)
         }
@@ -673,7 +640,6 @@ class ClipboardManager: ObservableObject {
         items = result.items
         cachedPinnedCount = result.pinnedCount
         rebuildItemIndexes()
-        scheduleCloudUpload(item: result.updated)
         saveItems()
         noteHistoryMutation()
     }
@@ -694,7 +660,6 @@ class ClipboardManager: ObservableObject {
             if deleted.isEmpty && !plan.removedIDs.isEmpty {
                 persistDeletedIDsIncrementally(plan.removedIDs)
             } else if !deleted.isEmpty {
-                scheduleCloudDelete(ids: deleted)
             }
         } catch {
             logger.error("Failed to clear unpinned history: \(error.localizedDescription)")
@@ -723,7 +688,6 @@ class ClipboardManager: ObservableObject {
         items[index].content = newContent
         updateIndexedItem(items[index], at: index)
         persistItemIncrementally(items[index])
-        scheduleCloudUpload(item: items[index])
     }
     
     // MARK: - Refresh
@@ -915,7 +879,6 @@ class ClipboardManager: ObservableObject {
             if !additional.isEmpty {
                 deletedIDTombstones.formUnion(additional)
                 totalStoredCount = max(0, totalStoredCount - additional.count)
-                scheduleCloudDelete(ids: additional)
             }
         } catch {
             logger.error("Failed to delete expired cold items: \(error.localizedDescription)")
@@ -933,7 +896,6 @@ class ClipboardManager: ObservableObject {
                 if !additional.isEmpty {
                     deletedIDTombstones.formUnion(additional)
                     totalStoredCount = max(0, totalStoredCount - additional.count)
-                    scheduleCloudDelete(ids: additional)
                 }
             } catch {
                 logger.error("Failed to delete old cold items: \(error.localizedDescription)")
@@ -947,16 +909,7 @@ class ClipboardManager: ObservableObject {
         if let v = prefs.loadSmartPasteEnabled() { smartPasteEnabled = v }
     }
     
-    // MARK: - Cloud Sync (delegated to syncCoordinator)
-    
-    private func handleFetchedSyncItems(_ fetchedItems: [ClipboardItem]) {
-        let newItems = fetchedItems.filter { itemByID[$0.id] == nil }
-        guard !newItems.isEmpty else { return }
-        mergeFetchedSyncItems(newItems)
-        recomputePinnedCount()
-        rebuildItemIndexes()
-        saveItems()
-    }
+    // MARK: - History Merge
 
     func mergeFetchedSyncItems(_ newItems: [ClipboardItem]) {
         guard !newItems.isEmpty else { return }
@@ -969,14 +922,6 @@ class ClipboardManager: ObservableObject {
         noteHistoryMutation()
     }
 
-    private func scheduleCloudUpload(item: ClipboardItem) {
-        syncCoordinator.scheduleUpload(item: item)
-    }
-
-    private func scheduleCloudDelete(ids: Set<UUID>) {
-        syncCoordinator.scheduleDeletes(ids: ids)
-    }
-    
     // MARK: - Rules
     
     private func loadRules() {

@@ -37,7 +37,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let defaultPanelSize = NSSize(width: WindowLayout.mainPanelSize.width, height: WindowLayout.mainPanelSize.height)
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.registerForRemoteNotifications()
         clipboardManager = ClipboardManager()
         pasteQueue = PasteQueue.shared
         snippetManager = SnippetManager()
@@ -432,13 +431,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
-        guard CloudSyncService.shared.isSyncEnabled else { return }
-        Task { @MainActor in
-            _ = await CloudSyncService.shared.fetchChanges()
-            CloudSyncService.shared.triggerSync()
-        }
-    }
 
     func applicationWillTerminate(_ notification: Notification) {
         if panel.isVisible { savePanelSize(panel.frame.size) }

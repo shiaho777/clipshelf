@@ -48,16 +48,10 @@ The following password manager apps are excluded from clipboard monitoring by de
 
 Users can add additional excluded apps in Settings.
 
-### iCloud Sync
-
-- iCloud sync is **opt-in** (disabled by default)
-- Only text and rich text items are synced; images remain local
-- Sync uses CloudKit private database (only accessible to the user's iCloud account)
-- Sensitive items are never synced
 
 ### Network
 
-- ClipShelf makes **zero network calls** unless iCloud sync is explicitly enabled
+- ClipShelf keeps clipboard history local; no account or cloud sync is required
 - No telemetry, no analytics, no crash reporting
 - OCR is performed entirely on-device using Apple Vision framework
 
