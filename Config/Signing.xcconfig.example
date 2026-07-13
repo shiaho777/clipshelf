@@ -1,0 +1,3 @@
+// Copy to Config/Signing.xcconfig and set your Team ID.
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+CODE_SIGN_STYLE = Automatic

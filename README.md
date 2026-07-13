@@ -71,6 +71,11 @@ xcodebuild -scheme ClipShelf -configuration Release build
 3. Press `⌘⇧V` to open the panel, search, and paste
 4. Grant Accessibility when prompted (needed to simulate paste)
 
+
+### iCloud sync
+
+Optional. Requires an Apple Developer team-signed build with CloudKit container `iCloud.com.nicebro.ClipShelf`. See [docs/cloudkit/SETUP.md](docs/cloudkit/SETUP.md).
+
 ## Privacy
 
 - History is stored locally under `~/Library/Application Support/ClipShelf/`

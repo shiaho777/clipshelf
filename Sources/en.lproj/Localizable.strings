@@ -87,6 +87,23 @@
 
 /* Settings - iCloud */
 "settings.icloudSync" = "iCloud Sync";
+
+/* iCloud Sync status */
+"settings.icloud.section" = "iCloud";
+"settings.icloud.footer" = "Syncs clipboard history through your private CloudKit database. Requires a signed build with the ClipShelf iCloud container and an iCloud account on this Mac.";
+"settings.icloud.status" = "Status";
+"settings.icloud.status.ready" = "Ready";
+"settings.icloud.status.unavailable" = "Unavailable";
+"settings.icloud.status.checking" = "Checking iCloud…";
+"settings.icloud.container" = "Container";
+"settings.icloud.retry" = "Check Again";
+"settings.icloud.error.missingEntitlement" = "CloudKit is not enabled for this build. Open the project in Xcode, select the ClipShelf target, enable Signing with your Apple Developer team, then confirm iCloud → CloudKit and container iCloud.com.nicebro.ClipShelf.";
+"settings.icloud.error.noAccount" = "No iCloud account on this Mac. Sign in with your Apple ID in System Settings → Apple ID → iCloud.";
+"settings.icloud.error.restricted" = "iCloud access is restricted on this Mac.";
+"settings.icloud.error.couldNotDetermine" = "Could not determine iCloud account status. Try again in a moment.";
+"settings.icloud.error.temporarilyUnavailable" = "iCloud is temporarily unavailable. Try again later.";
+"settings.icloud.error.unknown" = "iCloud is unavailable right now.";
+
 "settings.lastSync" = "Last synced";
 
 /* Rules */

@@ -7,17 +7,44 @@ protocol CloudSyncDelegate: AnyObject {
     func cloudSync(_ service: CloudSyncService, didFetchItems items: [ClipboardItem])
 }
 
+enum CloudSyncReadiness: Equatable {
+    case ready
+    case checking
+    case missingEntitlement
+    case accountUnavailable(String)
+    case restricted
+    case couldNotDetermine
+    case temporarilyUnavailable
+    case unknown(String)
+
+    var isReady: Bool {
+        if case .ready = self { return true }
+        return false
+    }
+}
+
 final class CloudSyncService: ObservableObject {
+    static let defaultContainerIdentifier = "iCloud.com.nicebro.ClipShelf"
+
     weak var delegate: CloudSyncDelegate?
     @Published var isSyncEnabled = false {
         didSet {
             guard oldValue != isSyncEnabled else { return }
             UserDefaults.standard.set(isSyncEnabled, forKey: "iCloudSyncEnabled")
-            if isSyncEnabled { triggerSync() }
+            if isSyncEnabled {
+                Task { @MainActor in
+                    await self.prepareAndSync()
+                }
+            } else {
+                syncError = nil
+                readiness = .checking
+            }
         }
     }
     @Published private(set) var lastSyncDate: Date?
     @Published private(set) var syncError: String?
+    @Published private(set) var readiness: CloudSyncReadiness = .checking
+    @Published private(set) var resolvedContainerIdentifier: String?
 
     private var container: CKContainer?
     private var database: CKDatabase? { container?.privateCloudDatabase }
@@ -25,40 +52,141 @@ final class CloudSyncService: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "CloudSync")
     private var serverChangeToken: CKServerChangeToken?
     private let changeTokenKey = "cloudSyncChangeToken"
-    private let containerIdentifier: String?
+    private let preferredContainerIdentifier: String?
+    private var zoneEnsureTask: Task<Bool, Never>?
 
     static let shared = CloudSyncService()
 
     init(containerIdentifier: String? = nil) {
-        self.containerIdentifier = containerIdentifier
+        self.preferredContainerIdentifier = containerIdentifier
         _isSyncEnabled = Published(initialValue: UserDefaults.standard.bool(forKey: "iCloudSyncEnabled"))
         loadChangeToken()
+        if isSyncEnabled {
+            Task { @MainActor in
+                await self.refreshReadiness()
+            }
+        } else {
+            readiness = .checking
+        }
     }
-    
+
+    var statusSummary: String {
+        switch readiness {
+        case .ready:
+            return ""
+        case .checking:
+            return "settings.icloud.status.checking".localized
+        case .missingEntitlement:
+            return "settings.icloud.error.missingEntitlement".localized
+        case .accountUnavailable(let detail):
+            return detail
+        case .restricted:
+            return "settings.icloud.error.restricted".localized
+        case .couldNotDetermine:
+            return "settings.icloud.error.couldNotDetermine".localized
+        case .temporarilyUnavailable:
+            return "settings.icloud.error.temporarilyUnavailable".localized
+        case .unknown(let message):
+            return message
+        }
+    }
+
+    @MainActor
+    func refreshReadiness() async {
+        readiness = .checking
+        syncError = nil
+
+        let identifiers = availableContainerIdentifiers()
+        guard let containerID = selectContainerIdentifier(from: identifiers) else {
+            readiness = .missingEntitlement
+            resolvedContainerIdentifier = nil
+            container = nil
+            failSync("settings.icloud.error.missingEntitlement".localized)
+            return
+        }
+
+        resolvedContainerIdentifier = containerID
+        let ckContainer = CKContainer(identifier: containerID)
+        container = ckContainer
+
+        do {
+            let status = try await ckContainer.accountStatus()
+            switch status {
+            case .available:
+                readiness = .ready
+                syncError = nil
+            case .noAccount:
+                readiness = .accountUnavailable("settings.icloud.error.noAccount".localized)
+                failSync("settings.icloud.error.noAccount".localized)
+            case .restricted:
+                readiness = .restricted
+                failSync("settings.icloud.error.restricted".localized)
+            case .couldNotDetermine:
+                readiness = .couldNotDetermine
+                failSync("settings.icloud.error.couldNotDetermine".localized)
+            case .temporarilyUnavailable:
+                readiness = .temporarilyUnavailable
+                failSync("settings.icloud.error.temporarilyUnavailable".localized)
+            @unknown default:
+                readiness = .unknown("settings.icloud.error.unknown".localized)
+                failSync("settings.icloud.error.unknown".localized)
+            }
+        } catch {
+            readiness = .unknown(error.localizedDescription)
+            failSync(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func prepareAndSync() async {
+        await refreshReadiness()
+        guard readiness.isReady else { return }
+        _ = await ensureCustomZone()
+        triggerSync()
+    }
+
+    private func selectContainerIdentifier(from identifiers: [String]) -> String? {
+        if let preferred = preferredContainerIdentifier, identifiers.contains(preferred) {
+            return preferred
+        }
+        if identifiers.contains(Self.defaultContainerIdentifier) {
+            return Self.defaultContainerIdentifier
+        }
+        return identifiers.first
+    }
+
+    private func availableContainerIdentifiers() -> [String] {
+        entitlementContainerIdentifiers()
+    }
+
     private func resolveContainer() -> CKContainer? {
         if let c = container { return c }
-        let allowedIdentifiers = entitlementContainerIdentifiers()
-        let id = containerIdentifier ?? allowedIdentifiers.first
-        guard let id, allowedIdentifiers.contains(id) else {
-            failSync("CloudKit container entitlement is missing")
+        let identifiers = availableContainerIdentifiers()
+        guard let id = selectContainerIdentifier(from: identifiers) else {
+            failSync("settings.icloud.error.missingEntitlement".localized)
+            Task { @MainActor in self.readiness = .missingEntitlement }
             return nil
         }
+        resolvedContainerIdentifier = id
         let c = CKContainer(identifier: id)
         container = c
         return c
     }
 
     private func entitlementContainerIdentifiers() -> [String] {
-        guard let task = SecTaskCreateFromSelf(nil),
-              let value = SecTaskCopyValueForEntitlement(
-                task,
-                "com.apple.developer.icloud-container-identifiers" as CFString,
-                nil
-              ) else {
+        guard let task = SecTaskCreateFromSelf(nil) else { return [] }
+        var error: Unmanaged<CFError>?
+        guard let value = SecTaskCopyValueForEntitlement(
+            task,
+            "com.apple.developer.icloud-container-identifiers" as CFString,
+            &error
+        ) else {
             return []
         }
-        return value as? [String] ?? []
+        if let arr = value as? [String] { return arr }
+        return []
     }
+
 
     private func failSync(_ message: String) {
         logger.error("\(message)")
@@ -71,6 +199,48 @@ final class CloudSyncService: ObservableObject {
         }
     }
 
+    @MainActor
+    private func ensureCustomZone() async -> Bool {
+        if let existing = zoneEnsureTask {
+            return await existing.value
+        }
+        let task = Task<Bool, Never> { [weak self] in
+            guard let self else { return false }
+            guard let db = self.resolveContainer()?.privateCloudDatabase else { return false }
+            let zone = CKRecordZone(zoneID: self.zoneID)
+            do {
+                _ = try await db.save(zone)
+                return true
+            } catch let error as CKError where error.code == .serverRejectedRequest || error.code == .zoneNotFound {
+                // zone may already exist or needs creation via modify
+            } catch {
+                // continue with modify path
+            }
+            return await withCheckedContinuation { continuation in
+                let op = CKModifyRecordZonesOperation(recordZonesToSave: [zone])
+                op.modifyRecordZonesResultBlock = { result in
+                    switch result {
+                    case .success:
+                        continuation.resume(returning: true)
+                    case .failure(let error):
+                        if let ckError = error as? CKError, ckError.code == .serverRejectedRequest {
+                            continuation.resume(returning: true)
+                            return
+                        }
+                        self.logger.error("Failed to create zone: \(error.localizedDescription)")
+                        DispatchQueue.main.async { self.syncError = error.localizedDescription }
+                        continuation.resume(returning: false)
+                    }
+                }
+                db.add(op)
+            }
+        }
+        zoneEnsureTask = task
+        let ok = await task.value
+        zoneEnsureTask = nil
+        return ok
+    }
+
     // MARK: - Upload
 
     /// Image store used to resolve image file URLs for CKAsset upload.
@@ -78,23 +248,15 @@ final class CloudSyncService: ObservableObject {
 
     func uploadItems(_ items: [ClipboardItem]) {
         guard isSyncEnabled else { return }
-        // Sync all item types (text, richText, and image)
         guard !items.isEmpty else { return }
 
-        // Ensure custom zone exists
-        guard let db = resolveContainer()?.privateCloudDatabase else { return }
-        let zone = CKRecordZone(zoneID: zoneID)
-        let modifyZonesOp = CKModifyRecordZonesOperation(recordZonesToSave: [zone])
-        modifyZonesOp.modifyRecordZonesResultBlock = { [weak self] result in
-            switch result {
-            case .success:
-                self?.saveRecords(for: items)
-            case .failure(let error):
-                self?.logger.error("Failed to create zone: \(error.localizedDescription)")
-                DispatchQueue.main.async { self?.syncError = error.localizedDescription }
-            }
+        Task { @MainActor in
+            await self.refreshReadiness()
+            guard self.readiness.isReady else { return }
+            let zoneOK = await self.ensureCustomZone()
+            guard zoneOK else { return }
+            self.saveRecords(for: items)
         }
-        db.add(modifyZonesOp)
     }
 
     private func saveRecords(for items: [ClipboardItem]) {
@@ -169,6 +331,7 @@ final class CloudSyncService: ObservableObject {
         config.previousServerChangeToken = serverChangeToken
 
         guard let db = resolveContainer()?.privateCloudDatabase else {
+            failSync("settings.icloud.error.missingEntitlement".localized)
             completion([])
             return
         }

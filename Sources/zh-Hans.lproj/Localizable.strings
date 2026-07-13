@@ -87,6 +87,23 @@
 
 /* Settings - iCloud */
 "settings.icloudSync" = "iCloud 同步";
+
+/* iCloud Sync status */
+"settings.icloud.section" = "iCloud";
+"settings.icloud.footer" = "通过你的私人 CloudKit 数据库同步剪贴板历史。需要用已启用 ClipShelf iCloud 容器的签名构建，且本机已登录 iCloud。";
+"settings.icloud.status" = "状态";
+"settings.icloud.status.ready" = "可用";
+"settings.icloud.status.unavailable" = "不可用";
+"settings.icloud.status.checking" = "正在检查 iCloud…";
+"settings.icloud.container" = "容器";
+"settings.icloud.retry" = "重新检查";
+"settings.icloud.error.missingEntitlement" = "当前构建未启用 CloudKit。请用 Xcode 打开项目，为 ClipShelf target 选择你的 Apple 开发者团队签名，并确认 iCloud → CloudKit 与容器 iCloud.com.nicebro.ClipShelf。";
+"settings.icloud.error.noAccount" = "本机未登录 iCloud。请在 系统设置 → Apple ID → iCloud 中登录。";
+"settings.icloud.error.restricted" = "本机 iCloud 访问受限。";
+"settings.icloud.error.couldNotDetermine" = "无法确认 iCloud 账户状态，请稍后重试。";
+"settings.icloud.error.temporarilyUnavailable" = "iCloud 暂时不可用，请稍后再试。";
+"settings.icloud.error.unknown" = "iCloud 当前不可用。";
+
 "settings.lastSync" = "上次同步";
 
 /* Rules */

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- CloudKit/iCloud: container `iCloud.com.nicebro.ClipShelf`, entitlement wiring, account readiness checks, actionable Sync UI errors, setup docs
 - Renamed product to **ClipShelf** (bundle id `com.nicebro.ClipShelf`, app `ClipShelf.app`)
 - Storage directory is now `~/Library/Application Support/ClipShelf/`
 - URL scheme is now `clipshelf://`

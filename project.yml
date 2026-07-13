@@ -5,6 +5,14 @@ options:
     macOS: "13.0"
   xcodeVersion: "15.0"
 
+settings:
+  base:
+    DEVELOPMENT_TEAM: ${CLIPSHELF_DEVELOPMENT_TEAM}
+
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+
 targets:
   ClipShelf:
     type: application
@@ -15,6 +23,7 @@ targets:
       - sdk: JavaScriptCore.framework
       - sdk: libsqlite3.tbd
       - sdk: AppIntents.framework
+      - sdk: CloudKit.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nicebro.ClipShelf
@@ -22,15 +31,13 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Sources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/ClipShelf.entitlements
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "13.0"
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: YES
     entitlements:
       path: Sources/ClipShelf.entitlements
-      properties:
-        com.apple.security.app-sandbox: false
 
   ClipShelfTests:
     type: bundle.unit-test

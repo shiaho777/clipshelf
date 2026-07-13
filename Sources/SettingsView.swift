@@ -155,6 +155,28 @@ struct SettingsView: View {
         Form {
             Section {
                 Toggle(lang.l("settings.icloudSync"), isOn: $cloudSync.isSyncEnabled)
+                if cloudSync.isSyncEnabled {
+                    HStack {
+                        Text(lang.l("settings.icloud.status"))
+                        Spacer()
+                        Text(cloudSync.readiness.isReady
+                             ? lang.l("settings.icloud.status.ready")
+                             : lang.l("settings.icloud.status.unavailable"))
+                            .foregroundColor(cloudSync.readiness.isReady ? .secondary : .orange)
+                    }
+                    .font(.caption)
+                    if let container = cloudSync.resolvedContainerIdentifier {
+                        HStack {
+                            Text(lang.l("settings.icloud.container"))
+                            Spacer()
+                            Text(container)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .font(.caption2)
+                    }
+                }
                 if let date = cloudSync.lastSyncDate {
                     HStack {
                         Text(lang.l("settings.lastSync"))
@@ -164,9 +186,20 @@ struct SettingsView: View {
                     }
                     .font(.caption)
                 }
-                if let error = cloudSync.syncError {
+                if let error = cloudSync.syncError, !error.isEmpty {
                     Text(error).foregroundColor(.red).font(.caption)
                 }
+                if cloudSync.isSyncEnabled {
+                    Button(lang.l("settings.icloud.retry")) {
+                        Task { await cloudSync.refreshReadiness() }
+                    }
+                }
+            } header: {
+                Text(lang.l("settings.icloud.section"))
+            } footer: {
+                Text(lang.l("settings.icloud.footer"))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             Section {
                 Picker(lang.l("settings.exportFormat"), selection: $exportFormat) {

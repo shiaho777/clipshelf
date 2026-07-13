@@ -65,6 +65,11 @@ xcodebuild -scheme ClipShelf -configuration Release build
 3. 按 `⌘⇧V` 打开面板，搜索并粘贴
 4. 按提示授予辅助功能权限（用于模拟粘贴）
 
+
+### iCloud 同步
+
+可选。需要使用已启用 CloudKit 容器 `iCloud.com.nicebro.ClipShelf` 的开发者团队签名构建。详见 [docs/cloudkit/SETUP.md](docs/cloudkit/SETUP.md).
+
 ## 隐私
 
 - 历史保存在 `~/Library/Application Support/ClipShelf/`

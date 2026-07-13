@@ -10,6 +10,7 @@
 		00D0C63EFD23E33319D436C8 /* SpotlightIndexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBFA949C7B891F290195995 /* SpotlightIndexService.swift */; };
 		0192C5775F6C6D7340736946 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B785B879897D1A17039E691 /* HotKeyManager.swift */; };
 		02A3D78C32987B7A98E927BB /* AppStoragePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A29E5FDD62E7AC816C123D3 /* AppStoragePaths.swift */; };
+		0739FE9EEACB84898F30686D /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7D8C525EB767CE890B258C29 /* CloudKit.framework */; };
 		09DDDF56A1BDE6237DDD6FFD /* PanelSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B79C1EBD7DD4098023217E /* PanelSupport.swift */; };
 		0CC0764752889AC3DAC016C6 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C4A6B7704BC3DDB9BC138A /* OCRService.swift */; };
 		0EBD1EF2D2BC19912FDF5A3D /* PersistenceScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5D4862E65514195982337A /* PersistenceScheduler.swift */; };
@@ -77,6 +78,7 @@
 		A718926F39963A7D65BC9A11 /* SnippetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD1A0FE659B843C9BD5E7BF4 /* SnippetStore.swift */; };
 		A76D837A8D1285A74A6AC027 /* PasteAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C58D900B0FC3C5C6965FCA /* PasteAdapterTests.swift */; };
 		ABFC5C587DEEC4F434D00DC9 /* SnippetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400B29DDF90702D5AC36308A /* SnippetManager.swift */; };
+		AC9381EE1781734CDA229BFD /* CloudSyncServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00BCD4B8B55475179FB8CAC4 /* CloudSyncServiceTests.swift */; };
 		AD9661097E44344CA9A34F7F /* ClipboardContentCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0335E941B15C9A346502CD05 /* ClipboardContentCodec.swift */; };
 		ADE6B62AADF20F4F5180BEA9 /* TestMocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801E46E84AF9A335F4D0AFA0 /* TestMocks.swift */; };
 		AF005DD60592646D6A5A2ED5 /* HotKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C3076EFCF6BC0A12948F74 /* HotKeyStore.swift */; };
@@ -122,6 +124,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		00BCD4B8B55475179FB8CAC4 /* CloudSyncServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncServiceTests.swift; sourceTree = "<group>"; };
 		02C3076EFCF6BC0A12948F74 /* HotKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyStore.swift; sourceTree = "<group>"; };
 		0335E941B15C9A346502CD05 /* ClipboardContentCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardContentCodec.swift; sourceTree = "<group>"; };
 		085C26BCE9BAB0A0AC802BA9 /* StoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreTests.swift; sourceTree = "<group>"; };
@@ -172,8 +175,10 @@
 		731AA0F2B364715BB426C96D /* AppPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferencesStore.swift; sourceTree = "<group>"; };
 		746C9BFAEB9A8A51377FE3E7 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 		76594624D4118AE0CC103019 /* AppStoragePathsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoragePathsTests.swift; sourceTree = "<group>"; };
+		790567B2D8E715E343626452 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		7B1980BCC1A247B54CD5C211 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
 		7D1D7AD9097706EA82AAE537 /* ClipboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitor.swift; sourceTree = "<group>"; };
+		7D8C525EB767CE890B258C29 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		7E3B48BCA9F2D0A8CBBFBC31 /* FuzzySearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzySearch.swift; sourceTree = "<group>"; };
 		801E46E84AF9A335F4D0AFA0 /* TestMocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestMocks.swift; sourceTree = "<group>"; };
 		85867FA7076E7D1A231EF2BF /* ClipboardPersistenceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPersistenceCoordinator.swift; sourceTree = "<group>"; };
@@ -239,6 +244,7 @@
 				A003B6A38D9FB52290DCD338 /* JavaScriptCore.framework in Frameworks */,
 				1D73B6B6E5E2533FC159621A /* libsqlite3.tbd in Frameworks */,
 				BB806DC6F73C2ADB23229995 /* AppIntents.framework in Frameworks */,
+				0739FE9EEACB84898F30686D /* CloudKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -344,6 +350,7 @@
 				F91D8401188982B27B20E54E /* ClipboardMonitorTests.swift */,
 				9D2513A412E29522391C08C3 /* ClipboardRuleEngineTests.swift */,
 				D80290991CF754839EE8D5B7 /* ClipShelfTests.swift */,
+				00BCD4B8B55475179FB8CAC4 /* CloudSyncServiceTests.swift */,
 				C33F74D40DFF1E83FB0FFBAC /* ContentDetectorTests.swift */,
 				20E82627B46C269319FB8D4C /* EncryptionServiceTests.swift */,
 				A5F40E92F5BE0BD6806D3542 /* FuzzySearchTests.swift */,
@@ -381,15 +388,25 @@
 			isa = PBXGroup;
 			children = (
 				746C9BFAEB9A8A51377FE3E7 /* AppIntents.framework */,
+				7D8C525EB767CE890B258C29 /* CloudKit.framework */,
 				15AA8A177ECCAA0F3F528946 /* JavaScriptCore.framework */,
 				33283235C95917627914691A /* libsqlite3.tbd */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		B23EF185803D5B3F4DA50E8E /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				790567B2D8E715E343626452 /* Signing.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
 		DB48CEE87AFF30EEFD0AC78F = {
 			isa = PBXGroup;
 			children = (
+				B23EF185803D5B3F4DA50E8E /* Config */,
 				0BD3396FDFBEEA68FDB14A38 /* Sources */,
 				1BFEE15FE0C3DDA1660B1126 /* Tests */,
 				87FD360FA61A01C02D0194BB /* Frameworks */,
@@ -446,7 +463,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
+					66113D86B1216A9DC9D7E4E0 = {
+						DevelopmentTeam = "${CLIPSHELF_DEVELOPMENT_TEAM}";
+					};
 					BF947C669C8506D6AD979C6A = {
+						DevelopmentTeam = "${CLIPSHELF_DEVELOPMENT_TEAM}";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -498,6 +519,7 @@
 				D285CDA0663D66E9FAF116F1 /* ClipboardHistoryQueriesTests.swift in Sources */,
 				6BA6B49680B5A5D00649F812 /* ClipboardMonitorTests.swift in Sources */,
 				73F0F1A640165B029485D095 /* ClipboardRuleEngineTests.swift in Sources */,
+				AC9381EE1781734CDA229BFD /* CloudSyncServiceTests.swift in Sources */,
 				F3C39761C217FBA781DC9271 /* ContentDetectorTests.swift in Sources */,
 				5E045F6FD9993AC5663E385C /* EncryptionServiceTests.swift in Sources */,
 				2874E146FCB454D85BD8A1A6 /* FuzzySearchTests.swift in Sources */,
@@ -624,7 +646,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/ClipShelf.entitlements;
-				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -648,7 +669,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/ClipShelf.entitlements;
-				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -688,6 +708,7 @@
 		};
 		816FFB6AF8105870A7898B5A /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 790567B2D8E715E343626452 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -721,6 +742,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "${CLIPSHELF_DEVELOPMENT_TEAM}";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -744,6 +766,7 @@
 		};
 		E1C679BBBE5EA6DF4A93B40A /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 790567B2D8E715E343626452 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -777,6 +800,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "${CLIPSHELF_DEVELOPMENT_TEAM}";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
