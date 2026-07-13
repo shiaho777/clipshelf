@@ -9,7 +9,7 @@ import Sparkle
 #endif
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     nonisolated override init() { super.init() }
 
     private let statusItemController = StatusItemController()
@@ -147,21 +147,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if tab > 0 {
             UserDefaults.standard.set(tab, forKey: "_settingsRequestedTab")
         }
+
         if settingsWindow == nil {
-            settingsWindow = NSWindow(
+            let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: WindowLayout.popupSize.width, height: WindowLayout.popupSize.height),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
-            settingsWindow?.contentViewController = NSHostingController(
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            window.contentViewController = NSHostingController(
                 rootView: SettingsView(clipboardManager: clipboardManager, snippetManager: snippetManager)
             )
-            settingsWindow?.center()
+            window.center()
+            settingsWindow = window
         }
+
         settingsWindow?.title = LanguageManager.shared.l("settings.title")
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
+        settingsWindow?.delegate = nil
+        settingsWindow?.contentViewController = nil
+        settingsWindow = nil
     }
     
     func registerGlobalHotKey() {
