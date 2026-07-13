@@ -420,54 +420,16 @@ struct ClipboardItemRow: View {
             provider = NSItemProvider(object: item.content as NSString)
             registerTextRepresentations(item.content, on: provider)
             if let rtf = item.rtfData {
+                let rtfData = rtf
                 provider.registerDataRepresentation(forTypeIdentifier: UTType.rtf.identifier, visibility: .all) { completion in
-                    completion(rtf, nil)
+                    completion(rtfData, nil)
                     return nil
                 }
             }
         case .image:
-            let resolvedImage = loadedImage ?? image ?? loadImageForDrag()
-            if let img = resolvedImage {
-                provider = NSItemProvider(object: img)
-                registerImageRepresentations(img, on: provider)
-            } else {
-                provider = NSItemProvider()
-            }
-            if let fileURL = imageFileURLForDrag() {
-                provider.registerFileRepresentation(
-                    forTypeIdentifier: UTType.fileURL.identifier,
-                    fileOptions: [],
-                    visibility: .all
-                ) { completion in
-                    completion(fileURL, false, nil)
-                    return nil
-                }
-                if provider.suggestedName == nil {
-                    provider.suggestedName = fileURL.lastPathComponent
-                }
-            }
+            provider = makeImageDragProvider()
         case .fileURL:
-            let paths = filePaths.isEmpty ? item.filePaths : filePaths
-            if let first = paths.first, FileManager.default.fileExists(atPath: first) {
-                let firstURL = URL(fileURLWithPath: first)
-                provider = NSItemProvider(contentsOf: firstURL) ?? NSItemProvider(object: first as NSString)
-                for path in paths.dropFirst() where FileManager.default.fileExists(atPath: path) {
-                    let url = URL(fileURLWithPath: path)
-                    provider.registerFileRepresentation(
-                        forTypeIdentifier: UTType.fileURL.identifier,
-                        fileOptions: [],
-                        visibility: .all
-                    ) { completion in
-                        completion(url, false, nil)
-                        return nil
-                    }
-                }
-                registerTextRepresentations(paths.joined(separator: "\n"), on: provider)
-            } else {
-                let text = paths.isEmpty ? item.content : paths.joined(separator: "\n")
-                provider = NSItemProvider(object: text as NSString)
-                registerTextRepresentations(text, on: provider)
-            }
+            provider = makeFileURLDragProvider()
         }
 
         provider.suggestedName = dragSuggestedName
@@ -479,10 +441,83 @@ struct ClipboardItemRow: View {
         return provider
     }
 
+    private func makeImageDragProvider() -> NSItemProvider {
+        let resolvedImage = loadedImage ?? image ?? loadImageForDrag()
+        if let img = resolvedImage {
+            let provider = NSItemProvider(object: img)
+            if let tiff = img.tiffRepresentation {
+                let tiffData = tiff
+                provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
+                    completion(tiffData, nil)
+                    return nil
+                }
+                if let rep = NSBitmapImageRep(data: tiff),
+                   let png = rep.representation(using: .png, properties: [:]) {
+                    let pngData = png
+                    provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
+                        completion(pngData, nil)
+                        return nil
+                    }
+                }
+            }
+            return provider
+        }
+
+        // Fall back to a real image file only when we cannot materialize NSImage.
+        // Use the file's content UTI (png/jpeg/...), never public.file-url — that
+        // identifier crashes NSItemProvider's in-place file load path.
+        if let fileURL = imageFileURLForDrag() {
+            let typeIdentifier = UTType(filenameExtension: fileURL.pathExtension)?.identifier
+                ?? UTType.png.identifier
+            let provider = NSItemProvider()
+            let stableURL = fileURL
+            provider.registerFileRepresentation(
+                forTypeIdentifier: typeIdentifier,
+                fileOptions: [],
+                visibility: .all
+            ) { completion in
+                completion(stableURL, false, nil)
+                return nil
+            }
+            return provider
+        }
+
+        return NSItemProvider()
+    }
+
+    private func makeFileURLDragProvider() -> NSItemProvider {
+        let paths = filePaths.isEmpty ? item.filePaths : filePaths
+        guard let first = paths.first, FileManager.default.fileExists(atPath: first) else {
+            let text = paths.isEmpty ? item.content : paths.joined(separator: "\n")
+            let provider = NSItemProvider(object: text as NSString)
+            registerTextRepresentations(text, on: provider)
+            return provider
+        }
+
+        let firstURL = URL(fileURLWithPath: first)
+        let provider = NSItemProvider(contentsOf: firstURL) ?? NSItemProvider(object: first as NSString)
+        for path in paths.dropFirst() where FileManager.default.fileExists(atPath: path) {
+            let url = URL(fileURLWithPath: path)
+            let typeIdentifier = UTType(filenameExtension: url.pathExtension)?.identifier
+                ?? UTType.data.identifier
+            let stableURL = url
+            provider.registerFileRepresentation(
+                forTypeIdentifier: typeIdentifier,
+                fileOptions: [],
+                visibility: .all
+            ) { completion in
+                completion(stableURL, false, nil)
+                return nil
+            }
+        }
+        registerTextRepresentations(paths.joined(separator: "\n"), on: provider)
+        return provider
+    }
+
     private var dragSuggestedName: String {
         switch item.type {
         case .image:
-            return item.imageFileName ?? "ClipShelf-Image"
+            return item.imageFileName ?? "ClipShelf-Image.png"
         case .fileURL:
             return URL(fileURLWithPath: (filePaths.isEmpty ? item.filePaths : filePaths).first ?? "file").lastPathComponent
         default:
@@ -493,34 +528,14 @@ struct ClipboardItemRow: View {
     }
 
     private func registerTextRepresentations(_ text: String, on provider: NSItemProvider) {
+        let data = text.data(using: .utf8)
         provider.registerDataRepresentation(forTypeIdentifier: UTType.utf8PlainText.identifier, visibility: .all) { completion in
-            completion(text.data(using: .utf8), nil)
+            completion(data, nil)
             return nil
         }
         provider.registerDataRepresentation(forTypeIdentifier: UTType.plainText.identifier, visibility: .all) { completion in
-            completion(text.data(using: .utf8), nil)
+            completion(data, nil)
             return nil
-        }
-        provider.registerDataRepresentation(forTypeIdentifier: "public.utf8-plain-text", visibility: .all) { completion in
-            completion(text.data(using: .utf8), nil)
-            return nil
-        }
-    }
-
-
-    private func registerImageRepresentations(_ img: NSImage, on provider: NSItemProvider) {
-        if let tiff = img.tiffRepresentation {
-            provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
-                completion(tiff, nil)
-                return nil
-            }
-            if let rep = NSBitmapImageRep(data: tiff),
-               let png = rep.representation(using: .png, properties: [:]) {
-                provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
-                    completion(png, nil)
-                    return nil
-                }
-            }
         }
     }
 
