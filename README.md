@@ -47,15 +47,21 @@ It is a local utility. No account is required. History stays on this Mac.
 
 ## Install
 
-Download the DMG from the latest [GitHub Release](https://github.com/shiaho777/clipshelf/releases/latest):
+Download `ClipShelf-x.y.z.dmg` from the latest [GitHub Release](https://github.com/shiaho777/clipshelf/releases/latest).
 
-1. Open `ClipShelf-x.y.z.dmg`
-2. Drag **ClipShelf** into **Applications**
-3. If macOS says the app is **damaged**, double-click **Fix if Damaged.command** (or **修复已损坏.command**) in the DMG, then press Enter
-4. Launch ClipShelf from Applications (or Spotlight)
-5. If still blocked: right-click ClipShelf → **Open** → **Open**
+1. Open the DMG and drag **ClipShelf** into **Applications**
+2. If macOS says the app is **damaged**, open **Terminal** and run:
+
+```bash
+xattr -cr /Applications/ClipShelf.app
+```
+
+3. Launch ClipShelf from Applications
+4. If still blocked: right-click ClipShelf → **Open** → **Open**
 
 Requires macOS 13 or later.
+
+Optional: you can also download **修复ClipShelf已损坏.command** from the same release page, move it out of Downloads, then double-click it (after installing the app).
 
 ## Usage
 
