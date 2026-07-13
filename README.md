@@ -51,8 +51,9 @@ Download the DMG from the latest [GitHub Release](https://github.com/shiaho777/c
 
 1. Open `ClipShelf-x.y.z.dmg`
 2. Drag **ClipShelf** into **Applications**
-3. Launch ClipShelf from Applications (or Spotlight)
-4. If macOS blocks the app: right-click ClipShelf → **Open** → **Open**
+3. If macOS says the app is **damaged**, double-click **Fix if Damaged.command** (or **修复已损坏.command**) in the DMG, then press Enter
+4. Launch ClipShelf from Applications (or Spotlight)
+5. If still blocked: right-click ClipShelf → **Open** → **Open**
 
 Requires macOS 13 or later.
 
