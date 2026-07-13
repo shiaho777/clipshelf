@@ -22,7 +22,7 @@ final class CloudSyncService: ObservableObject {
     private var container: CKContainer?
     private var database: CKDatabase? { container?.privateCloudDatabase }
     private let zoneID = CKRecordZone.ID(zoneName: "ClipboardHistory", ownerName: CKCurrentUserDefaultName)
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "CloudSync")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "CloudSync")
     private var serverChangeToken: CKServerChangeToken?
     private let changeTokenKey = "cloudSyncChangeToken"
     private let containerIdentifier: String?

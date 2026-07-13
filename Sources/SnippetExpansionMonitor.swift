@@ -11,7 +11,7 @@ import os
 @MainActor
 final class SnippetExpansionMonitor {
     private let snippetManager: SnippetManager
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "SnippetExpansion")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SnippetExpansion")
 
     /// True when the CGEvent tap is running and snippet expansion is operational.
     private(set) var isActive: Bool = false

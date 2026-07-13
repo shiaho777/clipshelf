@@ -117,8 +117,8 @@
 "rule.Detect Sensitive Content" = "Detect Sensitive Content";
 "rule.Trim Trailing Whitespace" = "Trim Trailing Whitespace";
 
-/* Smart Paste */
-"settings.smartPaste" = "Smart Paste";
+/* App-aware Paste */
+"settings.smartPaste" = "App-aware Paste";
 "settings.smartPaste.description" = "Auto-format when pasting to specific apps";
 
 /* Edit */

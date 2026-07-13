@@ -1,5 +1,5 @@
 import XCTest
-@testable import ClipboardManager
+@testable import ClipShelf
 
 final class PerformanceBenchmarkTests: XCTestCase {
     private var tempDir: URL!

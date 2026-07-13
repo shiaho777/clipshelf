@@ -101,7 +101,7 @@ final class JSONClipboardHistoryStore: ClipboardHistoryStore {
     private var lastSavedData: Data?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "HistoryStore")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "HistoryStore")
     static let backupCount = 3
     
     init(storageDirectory: URL) {

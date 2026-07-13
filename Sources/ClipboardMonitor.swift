@@ -51,7 +51,7 @@ final class ClipboardMonitor {
     private var lastAddTime: Date = .distantPast
     private var monitorInterval: TimeInterval = Cadence.normal
     private var unchangedPollCount = 0
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "Monitor")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Monitor")
     private var appActivationObserver: NSObjectProtocol?
     private var suppressObserver: NSObjectProtocol?
     private var currentBundleID: String?

@@ -1,6 +1,6 @@
 # Custom Script Rules API
 
-ClipboardManager lets you write JavaScript functions that process clipboard content in real time. Scripts run inside a sandboxed `JSContext` (JavaScriptCore) — no network access, no filesystem access.
+ClipShelf lets you write JavaScript functions that process clipboard content in real time. Scripts run inside a sandboxed `JSContext` (JavaScriptCore) — no network access, no filesystem access.
 
 ## The `process()` Function
 

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- Renamed product to **ClipShelf** (bundle id `com.nicebro.ClipShelf`, app `ClipShelf.app`)
+- Storage directory is now `~/Library/Application Support/ClipShelf/`
+- URL scheme is now `clipshelf://`
+- Docs and UI copy: removed marketing comparison table and “smart/thinking” positioning; paste feature described as app-aware paste
+- One-time migration from `~/Library/Application Support/ClipboardManager` to `ClipShelf` when the new folder is empty or missing files
 - Hot/cold history loading: startup keeps a hot window (~2000 items + pinned); full corpus remains searchable via FTS
 - Hot window size is user-configurable in Settings (500–10,000)
 - SQLite limited load prefers all pinned items, then fills remaining slots with newest unpinned

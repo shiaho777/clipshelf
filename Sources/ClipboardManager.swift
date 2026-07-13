@@ -63,7 +63,7 @@ class ClipboardManager: ObservableObject {
     private let pasteboard = NSPasteboard.general
     private var cleanupTimer: Timer?
     private var cachedExcludedBundleIDs: Set<String> = ClipboardManager.defaultExcludedBundleIDs
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "Storage")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Storage")
     private let storageDirectory: URL
     private let historyStore: ClipboardHistoryStore
     private let monitor: ClipboardMonitor
@@ -267,8 +267,7 @@ class ClipboardManager: ObservableObject {
         if let storageDirectory {
             resolvedStorageDirectory = storageDirectory
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            resolvedStorageDirectory = appSupport.appendingPathComponent("ClipboardManager")
+            resolvedStorageDirectory = AppStoragePaths.defaultStorageDirectory()
         }
         self.storageDirectory = resolvedStorageDirectory
         if let historyStore {

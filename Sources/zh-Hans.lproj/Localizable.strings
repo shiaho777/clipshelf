@@ -117,8 +117,8 @@
 "rule.Detect Sensitive Content" = "检测敏感内容";
 "rule.Trim Trailing Whitespace" = "去除行尾空白";
 
-/* Smart Paste */
-"settings.smartPaste" = "智能粘贴";
+/* App-aware Paste */
+"settings.smartPaste" = "按应用适配粘贴";
 "settings.smartPaste.description" = "粘贴到特定应用时自动适配格式";
 
 /* Edit */

@@ -1,4 +1,4 @@
-name: ClipboardManager
+name: ClipShelf
 options:
   bundleIdPrefix: com.nicebro
   deploymentTarget:
@@ -6,7 +6,7 @@ options:
   xcodeVersion: "15.0"
 
 targets:
-  ClipboardManager:
+  ClipShelf:
     type: application
     platform: macOS
     sources:
@@ -17,7 +17,8 @@ targets:
       - sdk: AppIntents.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nicebro.ClipboardManager
+        PRODUCT_BUNDLE_IDENTIFIER: com.nicebro.ClipShelf
+        PRODUCT_NAME: ClipShelf
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Sources/Info.plist
@@ -27,17 +28,17 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: YES
     entitlements:
-      path: Sources/ClipboardManager.entitlements
+      path: Sources/ClipShelf.entitlements
       properties:
         com.apple.security.app-sandbox: false
 
-  ClipboardManagerTests:
+  ClipShelfTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - Tests
     dependencies:
-      - target: ClipboardManager
+      - target: ClipShelf
     settings:
       base:
         SWIFT_VERSION: "5.9"

@@ -9,7 +9,7 @@ protocol OCRServiceProtocol {
 final class VisionOCRService: OCRServiceProtocol {
     static let shared = VisionOCRService()
     private let queue = DispatchQueue(label: "OCRService", qos: .utility)
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "OCR")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "OCR")
 
     func recognizeText(in imageData: Data, completion: @escaping (String?) -> Void) {
         queue.async { [logger] in

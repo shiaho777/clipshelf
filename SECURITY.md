@@ -23,14 +23,14 @@ We will acknowledge receipt within 48 hours and provide an initial assessment wi
 
 ### Local Storage
 
-- All clipboard data is stored locally in `~/Library/Application Support/ClipboardManager/`
+- All clipboard data is stored locally in `~/Library/Application Support/ClipShelf/`
 - History is persisted in a SQLite database (`history.db`) with WAL journaling
 - Images are stored as individual files in the `images/` subdirectory
 - Preferences are stored as JSON files in the same directory
 
 ### Sensitive Content
 
-- ClipboardManager automatically detects potentially sensitive content (credit card numbers, API keys, SSH private keys, access tokens) using pattern matching
+- ClipShelf automatically detects potentially sensitive content (credit card numbers, API keys, SSH private keys, access tokens) using pattern matching
 - Detected sensitive items are marked with `isSensitive` and auto-expire after 60 seconds by default
 - When sensitive items expire or are cleared, content is zero-filled in memory before removal
 - The `clearSensitiveItems()` function overwrites content with null bytes before deleting
@@ -57,7 +57,7 @@ Users can add additional excluded apps in Settings.
 
 ### Network
 
-- ClipboardManager makes **zero network calls** unless iCloud sync is explicitly enabled
+- ClipShelf makes **zero network calls** unless iCloud sync is explicitly enabled
 - No telemetry, no analytics, no crash reporting
 - OCR is performed entirely on-device using Apple Vision framework
 

@@ -1,6 +1,6 @@
 import XCTest
 import AppKit
-@testable import ClipboardManager
+@testable import ClipShelf
 
 final class ClipboardMonitorTests: XCTestCase {
 

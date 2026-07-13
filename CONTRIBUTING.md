@@ -1,4 +1,4 @@
-# Contributing to ClipboardManager
+# Contributing to ClipShelf
 
 Thanks for your interest in contributing! Here's how to get started.
 
@@ -11,15 +11,15 @@ Thanks for your interest in contributing! Here's how to get started.
 
 ```bash
 # Clone
-git clone https://github.com/nicebro/ClipboardManager.git
-cd ClipboardManager
+git clone https://github.com/shiaho777/clipshelf.git
+cd clipshelf
 
 # Generate Xcode project
 brew install xcodegen
 xcodegen generate
 
 # Open in Xcode
-open ClipboardManager.xcodeproj
+open ClipShelf.xcodeproj
 ```
 
 ## Project Structure
@@ -27,10 +27,10 @@ open ClipboardManager.xcodeproj
 ```
 Sources/
 ├── main.swift                # App entry point, AppDelegate
-├── ClipboardManager.swift    # Core coordinator
+├── ClipboardManager.swift  # History facade / coordinator
 ├── ClipboardMonitor.swift    # Pasteboard polling
 ├── ClipboardRuleEngine.swift # Rules processing pipeline
-├── PasteAdapter.swift        # Smart Paste adapters
+├── PasteAdapter.swift        # app-aware paste adapters
 ├── SQLiteHistoryStore.swift  # Primary persistence
 ├── FuzzySearch.swift         # Search algorithm
 ├── MenuBarView.swift         # Main panel UI
@@ -48,8 +48,8 @@ Tests/
 4. **Run tests** before submitting:
    ```bash
    xcodebuild test \
-     -project ClipboardManager.xcodeproj \
-     -scheme ClipboardManagerTests \
+     -project ClipShelf.xcodeproj \
+     -scheme ClipShelfTests \
      -destination 'platform=macOS' \
      CODE_SIGNING_ALLOWED=NO
    ```
@@ -63,7 +63,7 @@ Tests/
 - All persistence layers use protocol abstractions for testability
 - UI follows existing SwiftUI patterns in the codebase
 
-## Adding a Smart Paste Adapter
+## Adding an App-aware Paste Adapter
 
 1. Create a struct conforming to `PasteAdapter` in `Sources/PasteAdapter.swift`
 2. Add target bundle IDs and implement `adapt(_:type:)`

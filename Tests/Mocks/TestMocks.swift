@@ -1,5 +1,5 @@
 import Foundation
-@testable import ClipboardManager
+@testable import ClipShelf
 
 // MARK: - InMemoryClipboardHistoryStore
 

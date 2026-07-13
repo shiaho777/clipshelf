@@ -10,7 +10,7 @@ final class BiometricAuthService {
     static let shared = BiometricAuthService()
 
     private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager",
+        subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf",
         category: "BiometricAuth"
     )
 

@@ -1,5 +1,5 @@
 import XCTest
-@testable import ClipboardManager
+@testable import ClipShelf
 
 final class LanguageManagerTests: XCTestCase {
 

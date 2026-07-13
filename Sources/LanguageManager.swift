@@ -6,7 +6,7 @@ class LanguageManager: ObservableObject {
     static let shared = LanguageManager()
     static let supportedLanguages: Set<String> = ["en", "zh"]
     private let preferencesStore: AppPreferencesStore
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "Language")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Language")
     
     @Published var language: String {
         didSet {
@@ -29,8 +29,7 @@ class LanguageManager: ObservableObject {
         if let storageDirectory {
             resolvedStorageDirectory = storageDirectory
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            resolvedStorageDirectory = appSupport.appendingPathComponent("ClipboardManager")
+            resolvedStorageDirectory = AppStoragePaths.defaultStorageDirectory()
         }
         self.preferencesStore = preferencesStore ?? JSONAppPreferencesStore(storageDirectory: resolvedStorageDirectory)
         let initialLanguage: String

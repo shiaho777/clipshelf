@@ -19,7 +19,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private var lastKnownItems: [UUID: ClipboardItem] = [:]
     private var lastKnownOrder: [UUID] = []
     private let dbURL: URL
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "SQLiteStore")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SQLiteStore")
 
     /// Each migration is a (targetVersion, sql) pair. Migrations run in order.
     /// Version 0 = fresh database before any migration.

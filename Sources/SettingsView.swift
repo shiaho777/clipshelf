@@ -222,7 +222,7 @@ struct SettingsView: View {
             }
             Section(header: Text(lang.l("about.links"))) {
                 Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/nicebro/ClipboardManager")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf")!)
                 } label: {
                     HStack {
                         Image(systemName: "star")
@@ -235,7 +235,7 @@ struct SettingsView: View {
                 .foregroundColor(.accentColor)
 
                 Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/nicebro/ClipboardManager/blob/main/CHANGELOG.md")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf/blob/main/CHANGELOG.md")!)
                 } label: {
                     HStack {
                         Image(systemName: "clock.arrow.circlepath")
@@ -247,7 +247,7 @@ struct SettingsView: View {
                 .foregroundColor(.accentColor)
 
                 Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/nicebro/ClipboardManager/blob/main/CONTRIBUTING.md")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf/blob/main/CONTRIBUTING.md")!)
                 } label: {
                     HStack {
                         Image(systemName: "person.2")
@@ -259,7 +259,7 @@ struct SettingsView: View {
                 .foregroundColor(.accentColor)
 
                 Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/nicebro/ClipboardManager/issues/new?template=bug_report.md")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf/issues/new?template=bug_report.md")!)
                 } label: {
                     HStack {
                         Image(systemName: "ant")
@@ -287,8 +287,7 @@ struct SettingsView: View {
     }
 
     private static let storageDirectory: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("ClipboardManager")
+        return AppStoragePaths.defaultStorageDirectory()
     }()
 
     private func makeDataPortService() -> DataPortService {

@@ -23,7 +23,7 @@ If applicable, add screenshots to help explain your problem.
 
 **Environment**
 - macOS version: [e.g. 14.2]
-- ClipboardManager version: [e.g. 1.0.0]
+- ClipShelf version: [e.g. 1.0.0]
 
 **Additional context**
 Add any other context about the problem here.

@@ -11,7 +11,7 @@ struct PastePayload {
 
 protocol PasteAdapter {
     var targetBundleIDs: Set<String> { get }
-    /// Human-readable name shown in the Smart Paste status bar badge.
+    /// Human-readable name shown in the app-aware paste status bar badge.
     var adapterName: String { get }
     func adapt(_ content: String, type: ClipboardItem.ItemType) -> PastePayload
 }

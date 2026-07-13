@@ -14,7 +14,7 @@ final class ClipboardPersistenceCoordinator {
 
     init(
         historyStore: ClipboardHistoryStore,
-        logger: Logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "Persistence"),
+        logger: Logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Persistence"),
         useCountDebounce: TimeInterval = 0.5,
         snapshotDebounce: TimeInterval = 0.2,
         usageSnapshotDebounce: TimeInterval = 1.5,
@@ -24,8 +24,8 @@ final class ClipboardPersistenceCoordinator {
         self.logger = logger
         self.useCountDebounce = useCountDebounce
         self.onDeletedIDs = onDeletedIDs
-        let queue = DispatchQueue(label: "ClipboardManager.persistence", qos: .utility)
-        self.incrementalQueue = DispatchQueue(label: "ClipboardManager.incrementalPersistence", qos: .utility)
+        let queue = DispatchQueue(label: "ClipShelf.persistence", qos: .utility)
+        self.incrementalQueue = DispatchQueue(label: "ClipShelf.incrementalPersistence", qos: .utility)
         let store = historyStore
         let log = logger
         let persistBlock: ([ClipboardItem]) -> Void = { items in

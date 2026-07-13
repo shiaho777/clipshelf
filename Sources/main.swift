@@ -29,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pasteObserver: NSObjectProtocol?
     private var didPaste = false
     private var isPanelAnimating = false
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "App")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "App")
     private var queueObserver: Any?
 
     private let minPanelSize = NSSize(width: 300, height: 400)
@@ -131,7 +131,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async { self?.updateStatusBarBadge() }
         }.store(in: &cancellables)
 
-        // Observe Smart Paste events and show a brief status-bar badge.
+        // Observe app-aware paste events and show a brief status-bar badge.
         clipboardManager.$lastSmartPasteDescription
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
@@ -413,7 +413,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            guard url.scheme == "clipboardmanager" else { continue }
+            guard url.scheme == "clipshelf" else { continue }
             handleURL(url)
         }
     }

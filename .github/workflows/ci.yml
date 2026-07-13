@@ -21,15 +21,15 @@ jobs:
       - name: Build
         run: |
           xcodebuild build \
-            -project ClipboardManager.xcodeproj \
-            -scheme ClipboardManager \
+            -project ClipShelf.xcodeproj \
+            -scheme ClipShelf \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Test
         run: |
           xcodebuild test \
-            -project ClipboardManager.xcodeproj \
-            -scheme ClipboardManagerTests \
+            -project ClipShelf.xcodeproj \
+            -scheme ClipShelfTests \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO

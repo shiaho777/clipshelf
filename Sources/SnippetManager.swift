@@ -6,11 +6,10 @@ final class SnippetManager: ObservableObject {
     @Published var snippets: [Snippet] = []
 
     private let store: SnippetStore
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "SnippetManager")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SnippetManager")
 
     init(store: SnippetStore? = nil) {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("ClipboardManager")
+        let dir = AppStoragePaths.defaultStorageDirectory()
         self.store = store ?? JSONSnippetStore(storageDirectory: dir)
         loadSnippets()
     }

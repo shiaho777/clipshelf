@@ -3,9 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>ClipboardManager</string>
+    <string>ClipShelf</string>
+    <key>CFBundleDisplayName</key>
+    <string>ClipShelf</string>
     <key>CFBundleIdentifier</key>
-    <string>com.nicebro.ClipboardManager</string>
+    <string>com.nicebro.ClipShelf</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -13,7 +15,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>ClipboardManager</string>
+    <string>ClipShelf</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
@@ -23,19 +25,19 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>ClipboardManager 需要此权限来自动粘贴内容</string>
+    <string>ClipShelf needs this permission to paste content into other apps.</string>
     <key>NSAccessibilityUsageDescription</key>
-    <string>ClipboardManager 需要辅助功能权限来模拟粘贴快捷键</string>
+    <string>ClipShelf needs Accessibility access to simulate the paste shortcut.</string>
     <key>SUFeedURL</key>
-    <string>https://github.com/nicebro/ClipboardManager/releases/latest/download/appcast.xml</string>
+    <string>https://github.com/shiaho777/clipshelf/releases/latest/download/appcast.xml</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>com.nicebro.ClipboardManager</string>
+            <string>com.nicebro.ClipShelf</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>clipboardmanager</string>
+                <string>clipshelf</string>
             </array>
         </dict>
     </array>

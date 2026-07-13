@@ -89,15 +89,14 @@ class HotKeyManager: ObservableObject {
     var onQueueHotKey: (() -> Void)?
     var onQuickPasteHotKey: (() -> Void)?
     private let hotKeyStore: HotKeyStore
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "HotKey")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "HotKey")
 
     init(storageDirectory: URL? = nil, hotKeyStore: HotKeyStore? = nil) {
         let resolvedStorageDirectory: URL
         if let storageDirectory {
             resolvedStorageDirectory = storageDirectory
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            resolvedStorageDirectory = appSupport.appendingPathComponent("ClipboardManager")
+            resolvedStorageDirectory = AppStoragePaths.defaultStorageDirectory()
         }
         self.hotKeyStore = hotKeyStore ?? JSONHotKeyStore(storageDirectory: resolvedStorageDirectory)
         loadConfig()

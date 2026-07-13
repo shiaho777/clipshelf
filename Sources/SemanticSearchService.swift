@@ -12,7 +12,7 @@ import os
 final class SemanticSearchService {
     static let shared = SemanticSearchService()
 
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager",
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf",
                                 category: "SemanticSearch")
     private let queue = DispatchQueue(label: "SemanticSearch.embedding", qos: .utility)
 

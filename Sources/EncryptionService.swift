@@ -9,9 +9,9 @@ import os
 final class EncryptionService {
     static let shared = EncryptionService()
 
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager",
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf",
                                 category: "Encryption")
-    private let keychainService = "com.clipboardmanager.encryption"
+    private let keychainService = "com.clipshelf.encryption"
     private let keychainAccount = "masterKey-v1"
 
     // Lazy init: loaded from Keychain on first use, not at app start.

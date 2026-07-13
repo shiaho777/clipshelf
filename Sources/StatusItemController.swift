@@ -23,7 +23,7 @@ final class StatusItemController {
         smartPasteBadgeTask?.cancel()
         button.image = NSImage(
             systemSymbolName: "arrow.right.doc.on.clipboard",
-            accessibilityDescription: "Smart Paste"
+            accessibilityDescription: "App-aware Paste"
         )
         button.title = " " + adapterName
         smartPasteBadgeTask = Task { @MainActor in

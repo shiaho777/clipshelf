@@ -76,8 +76,8 @@ private enum ClipboardImageStoragePreparation {
 final class ClipboardImageManager {
     private let imageStore: ClipboardImageStore
     private let ocrService: OCRServiceProtocol
-    private let imagePrefetchQueue = DispatchQueue(label: "ClipboardManager.imagePrefetch", qos: .utility)
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "ImageManager")
+    private let imagePrefetchQueue = DispatchQueue(label: "ClipShelf.imagePrefetch", qos: .utility)
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "ImageManager")
 
     init(imageStore: ClipboardImageStore, ocrService: OCRServiceProtocol) {
         self.imageStore = imageStore

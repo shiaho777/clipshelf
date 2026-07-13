@@ -3,7 +3,7 @@ import os
 
 final class ClipboardPreferencesManager {
     private let preferencesStore: AppPreferencesStore
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "Preferences")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Preferences")
 
     init(preferencesStore: AppPreferencesStore) {
         self.preferencesStore = preferencesStore

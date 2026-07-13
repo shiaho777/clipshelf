@@ -46,8 +46,8 @@ jobs:
           CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
         run: |
           xcodebuild build \
-            -project ClipboardManager.xcodeproj \
-            -scheme ClipboardManager \
+            -project ClipShelf.xcodeproj \
+            -scheme ClipShelf \
             -configuration Release \
             -derivedDataPath build/DerivedData \
             -destination 'platform=macOS' \
@@ -60,8 +60,8 @@ jobs:
           CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
         run: |
           xcodebuild build \
-            -project ClipboardManager.xcodeproj \
-            -scheme ClipboardManager \
+            -project ClipShelf.xcodeproj \
+            -scheme ClipShelf \
             -configuration Release \
             -derivedDataPath build/DerivedData \
             -destination 'platform=macOS' \
@@ -70,21 +70,21 @@ jobs:
       - name: Run Tests
         run: |
           xcodebuild test \
-            -project ClipboardManager.xcodeproj \
-            -scheme ClipboardManagerTests \
+            -project ClipShelf.xcodeproj \
+            -scheme ClipShelfTests \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Create DMG
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Release/ClipboardManager.app"
-          DMG_NAME="ClipboardManager-${{ steps.version.outputs.VERSION }}.dmg"
+          APP_PATH="build/DerivedData/Build/Products/Release/ClipShelf.app"
+          DMG_NAME="ClipShelf-${{ steps.version.outputs.VERSION }}.dmg"
 
           mkdir -p build/dmg
           cp -R "$APP_PATH" build/dmg/
           ln -s /Applications build/dmg/Applications
 
-          hdiutil create -volname "ClipboardManager" \
+          hdiutil create -volname "ClipShelf" \
             -srcfolder build/dmg \
             -ov -format UDZO \
             "build/$DMG_NAME"
@@ -96,7 +96,7 @@ jobs:
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
-          DMG_NAME="ClipboardManager-${{ steps.version.outputs.VERSION }}.dmg"
+          DMG_NAME="ClipShelf-${{ steps.version.outputs.VERSION }}.dmg"
           xcrun notarytool submit "build/$DMG_NAME" \
             --apple-id "$NOTARY_APPLE_ID" \
             --password "$NOTARY_PASSWORD" \
@@ -107,9 +107,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ClipboardManager v${{ steps.version.outputs.VERSION }}
+          name: ClipShelf v${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            build/ClipboardManager-${{ steps.version.outputs.VERSION }}.dmg
+            build/ClipShelf-${{ steps.version.outputs.VERSION }}.dmg

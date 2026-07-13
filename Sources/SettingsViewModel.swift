@@ -10,7 +10,7 @@ final class SettingsViewModel: ObservableObject {
     private var didLoadLaunchAtLoginPreference = false
     private let launchAtLoginService: LaunchAtLoginService
     private let preferencesStore: AppPreferencesStore
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "Settings")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Settings")
     
     init(
         launchAtLoginService: LaunchAtLoginService = SMAppLaunchAtLoginService(),
@@ -26,8 +26,7 @@ final class SettingsViewModel: ObservableObject {
             if let storageDirectory {
                 resolvedStorageDirectory = storageDirectory
             } else {
-                let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                resolvedStorageDirectory = appSupport.appendingPathComponent("ClipboardManager")
+                resolvedStorageDirectory = AppStoragePaths.defaultStorageDirectory()
             }
             self.preferencesStore = JSONAppPreferencesStore(storageDirectory: resolvedStorageDirectory)
         }

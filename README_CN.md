@@ -1,74 +1,42 @@
-# ClipboardManager
+# ClipShelf
 
 <p align="center">
-  <strong>会思考的剪贴板管理器。</strong><br>
-  自动去除 URL 追踪参数 · 检测敏感信息 · 按目标应用智能粘贴
+  macOS 菜单栏剪贴板历史。<br>
+  复制时处理 · 按应用适配粘贴 · 本地可搜
 </p>
 
 [English](README.md)
 
-## 为什么选择 ClipboardManager？
+---
 
-多数剪贴板工具只负责**记录**。ClipboardManager 还会**处理**。
+## 它做什么
 
-每次复制时，规则引擎实时评估内容——去除 URL 追踪参数、识别 API Key / 银行卡号、或自动置顶特定应用内容。粘贴时，Smart Paste 会按目标应用自动适配格式。
+ClipShelf 保存可搜索的剪贴板历史，并在入库前可选地运行规则。从历史粘贴时，可按当前目标应用调整格式。
 
-### 功能对比
+本地工具，无需账号。只有在你开启 iCloud 同步或自动更新时才会访问网络。
 
-```
-                        ClipboardManager    Maccy    Raycast Clipboard
-规则引擎                       ✅              ❌         ❌
-Smart Paste                    ✅              ❌         ❌
-URL 追踪去除                   ✅              ❌         ❌
-敏感信息检测                   ✅              ❌         ❌
-正则变换                       ✅              ❌         ❌
-OCR（图片 → 文字）             ✅              ❌         ✅
-模糊搜索                       ✅              ✅         ✅
-富文本 / 图片                  ✅              ❌         ✅
-iCloud 同步                    ✅              ❌         ❌
-代码语法高亮                   ✅              ❌         ❌
-Quick Paste（光标旁）          ✅              ❌         ❌
-粘贴队列模式                   ✅              ❌         ❌
-截图自动捕获                   ✅              ❌         ❌
-按当前应用筛选                 ✅              ❌         ❌
-100% 开源                      ✅              ✅         ❌
-```
-
-## 核心功能
-
-### 剪贴板规则引擎
-
-- **去除 URL 追踪参数** — `utm_source`、`fbclid`、`gclid` 等
-- **敏感内容检测** — 信用卡、AWS Key、SSH 私钥；默认 60 秒后过期
-- **自定义规则** — 正则 / 应用 / 内容类型触发，支持 JavaScript 脚本动作
-
-### Smart Paste
-
-- VSCode / Obsidian：URL 转 Markdown 链接，代码块自动围栏
-- Terminal / iTerm2 / Warp：危险字符自动转义
-- Slack / 邮件 / 笔记等：按应用适配格式
+## 功能
 
 ### 剪贴板历史
+- 文本、富文本、图片、文件路径
+- 置顶
+- 模糊搜索与全文搜索（SQLite FTS）
+- 热/冷分层加载，历史量大时仍保持响应
 
-- 文本、富文本、图片
-- 模糊搜索 + 高亮匹配
-- 置顶、多选合并粘贴、拖放
-- 冷热分层存储：热数据常驻内存，冷数据走 SQLite/FTS
+### 复制时规则
+- 去除常见 URL 追踪参数
+- 标记敏感内容（银行卡、API Key、私钥等），可设过期
+- 自定义规则：正则、来源应用、内容类型，或沙箱 JavaScript
 
-### 隐私优先
-
-- 敏感内容自动检测与过期
-- 默认排除密码管理器
-- 数据本地存储（iCloud 同步可选）
-- 无遥测、无分析
+### 按应用适配粘贴
+- 针对常见编辑器、终端、笔记、通讯、邮件等调整格式
+- 可选粘贴队列，按顺序粘贴
 
 ### 其它
-
-- 全局快捷键（`⌘⇧V`，可自定义）
-- 粘贴队列（`⌘⇧B`）
-- OCR（设备端 Vision）
-- 文本变换、代码高亮、Snippet 文本扩展
-- 导入/导出备份、开机启动
+- 菜单栏应用，默认全局快捷键 `⌘⇧V`
+- 图片 OCR（设备端 Vision）
+- Snippet 文本扩展
+- 导入 / 导出
 - 中英文界面
 
 ## 安装
@@ -76,76 +44,42 @@ Quick Paste（光标旁）          ✅              ❌         ❌
 ### Homebrew
 
 ```bash
-brew install --cask clipboardmanager
+brew install --cask clipshelf
 ```
-
-### 下载 DMG
-
-从 [Releases](https://github.com/nicebro/ClipboardManager/releases) 下载最新版本。
 
 ### 从源码构建
 
-要求：macOS 13.0+、Xcode 15.0+、[XcodeGen](https://github.com/yonaskolb/XcodeGen)
+需要 macOS 13+、Xcode 15+、[XcodeGen](https://github.com/yonaskolb/XcodeGen)。
 
 ```bash
-git clone https://github.com/nicebro/ClipboardManager.git
-cd ClipboardManager
+git clone https://github.com/shiaho777/clipshelf.git
+cd clipshelf
 xcodegen generate
-xcodebuild -scheme ClipboardManager -configuration Release build
+xcodebuild -scheme ClipShelf -configuration Release build
 ```
 
-## 使用方法
+## 使用
 
-1. 启动应用 — 图标出现在菜单栏
-2. 复制任意内容 — 自动进入历史
-3. 点击菜单栏图标或按 `⌘⇧V` 打开
-4. 点击条目即可复制并粘贴
-5. 悬停可置顶 / 删除
+1. 启动 ClipShelf — 图标出现在菜单栏
+2. 正常复制 — 内容进入历史
+3. 按 `⌘⇧V` 打开面板，搜索并粘贴
+4. 按提示授予辅助功能权限（用于模拟粘贴）
 
-### 快捷键
+## 隐私
 
-| 快捷键 | 功能 |
-|--------|------|
-| `⌘⇧V` | 打开/关闭剪贴板管理器 |
-| `⌘⇧B` | 粘贴队列下一项 |
+- 历史保存在 `~/Library/Application Support/ClipShelf/`
+- 重命名后首次启动会在需要时从旧的 `ClipboardManager` 目录迁移数据
+- 默认排除密码管理器
+- 敏感项可自动过期
+- 无遥测
 
-### 筛选
+## 开发
 
-- **全部 / 文字 / 图片 / 截图**
-- **按来源应用筛选**
-- **仅当前应用**
-
-## 设置
-
-- 开机自启动
-- 语言（中文 / 英文）
-- 规则管理与测试
-- iCloud 同步
-- 历史数量与自动清理
-
-## 权限说明
-
-需要 **辅助功能** 权限以支持全局快捷键与模拟粘贴。
-
-系统设置 → 隐私与安全性 → 辅助功能 → 启用 ClipboardManager
-
-## 技术栈
-
-- Swift 5.9 · SwiftUI · AppKit
-- SQLite FTS5 · Carbon 全局快捷键
-- 零第三方运行时依赖（Sparkle 可选）
-
-## 性能相关优化
-
-- 启动仅加载热窗口历史（默认约 2000 条 + 全部置顶），完整库仍可通过 FTS 搜索
-- 列表刷新基于 `historyRevision`，useCount 等小改动不整表刷新
-- 大库 Fuzzy 回退扫描有上限，优先 FTS
-- 剪贴板轮询空闲深度降频，降低后台 CPU
+```bash
+xcodegen generate
+xcodebuild test -scheme ClipShelf -destination 'platform=macOS'
+```
 
 ## 许可证
 
-MIT License
-
-## 贡献
-
-欢迎提交 Issue 与 Pull Request。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+MIT — 见 [LICENSE](LICENSE)。

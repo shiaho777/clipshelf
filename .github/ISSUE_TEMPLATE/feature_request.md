@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for ClipboardManager
+about: Suggest an idea for ClipShelf
 title: "[Feature] "
 labels: enhancement
 assignees: ''

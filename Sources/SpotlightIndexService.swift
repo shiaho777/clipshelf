@@ -9,9 +9,9 @@ import os
 final class SpotlightIndexService {
     static let shared = SpotlightIndexService()
 
-    private let domainID = "com.clipboardmanager.clipboardHistory"
+    private let domainID = "com.clipshelf.clipboardHistory"
     private let index = CSSearchableIndex.default()
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager",
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf",
                                 category: "Spotlight")
     private var pendingItems: [UUID: ClipboardItem] = [:]
     private var pendingWork: DispatchWorkItem?
@@ -68,7 +68,7 @@ final class SpotlightIndexService {
         }
     }
 
-    /// Remove all ClipboardManager items from the Spotlight index.
+    /// Remove all ClipShelf items from the Spotlight index.
     func deindexAll() {
         Task.detached(priority: .background) { [weak self] in
             guard let self else { return }

@@ -28,7 +28,7 @@ final class DataPortService {
     private let storageDirectory: URL
     private let historyStore: ClipboardHistoryStore
     private let imageStore: ClipboardImageStore
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipboardManager", category: "DataPort")
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "DataPort")
 
     init(storageDirectory: URL, historyStore: ClipboardHistoryStore, imageStore: ClipboardImageStore) {
         self.storageDirectory = storageDirectory

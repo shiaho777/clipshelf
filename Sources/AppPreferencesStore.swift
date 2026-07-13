@@ -137,7 +137,7 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         return true
     }
     
-    // MARK: - Smart Paste
+    // MARK: - App-aware Paste
     
     func loadSmartPasteEnabled() throws -> Bool? {
         if FileManager.default.fileExists(atPath: smartPasteURL.path) {
