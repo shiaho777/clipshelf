@@ -102,3 +102,36 @@ final class ClipboardHistoryOrderingTests: XCTestCase {
         )
     }
 }
+
+    func testMovingItemReordersAndStampsTimestamps() {
+        let now = Date()
+        let a = ClipboardItem(id: UUID(), content: "a", type: .text, timestamp: now.addingTimeInterval(-3))
+        let b = ClipboardItem(id: UUID(), content: "b", type: .text, timestamp: now.addingTimeInterval(-2))
+        let c = ClipboardItem(id: UUID(), content: "c", type: .text, timestamp: now.addingTimeInterval(-1))
+        let items = [c, b, a]
+        let moved = ClipboardHistoryOrdering.movingItem(
+            id: a.id,
+            toDestinationID: c.id,
+            in: items,
+            placeBefore: true
+        )
+        XCTAssertEqual(moved?.map(\.content), ["a", "c", "b"])
+        guard let moved else { return }
+        XCTAssertGreaterThan(moved[0].timestamp, moved[1].timestamp)
+        XCTAssertGreaterThan(moved[1].timestamp, moved[2].timestamp)
+    }
+
+    func testMovingPinnedItemStaysInPinnedLane() {
+        let now = Date()
+        let p1 = ClipboardItem(id: UUID(), content: "p1", type: .text, timestamp: now.addingTimeInterval(-1), isPinned: true)
+        let p2 = ClipboardItem(id: UUID(), content: "p2", type: .text, timestamp: now.addingTimeInterval(-2), isPinned: true)
+        let u1 = ClipboardItem(id: UUID(), content: "u1", type: .text, timestamp: now.addingTimeInterval(-3))
+        let moved = ClipboardHistoryOrdering.movingItem(
+            id: p2.id,
+            toDestinationID: p1.id,
+            in: [p1, p2, u1],
+            placeBefore: true
+        )
+        XCTAssertEqual(moved?.map(\.content), ["p2", "p1", "u1"])
+        XCTAssertTrue(moved?.prefix(2).allSatisfy(\.isPinned) == true)
+    }

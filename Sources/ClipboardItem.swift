@@ -43,7 +43,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var imageData: Data?
     var rtfData: Data?
     let type: ItemType
-    let timestamp: Date
+    var timestamp: Date
     var isPinned: Bool
     var useCount: Int
     var imageHash: String?

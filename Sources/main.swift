@@ -263,11 +263,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             panel.animator().setFrame(originalFrame, display: true)
         }
 
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseUp, .rightMouseUp]) { [weak self] event in
             guard let self, self.panel.isVisible else { return }
+            if event.type == .leftMouseUp || event.type == .rightMouseUp {
+                if ClipboardDragSession.isActive {
+                    // End session after a short delay so an in-panel drop can still read source id.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        if NSEvent.pressedMouseButtons == 0 {
+                            ClipboardDragSession.end()
+                        }
+                    }
+                }
+                return
+            }
             // Keep the panel open during an active drag session so users can
             // drop clipboard items into other apps.
-            if NSEvent.pressedMouseButtons != 0 { return }
+            if ClipboardDragSession.isActive || NSEvent.pressedMouseButtons != 0 { return }
             if !NSMouseInRect(NSEvent.mouseLocation, self.panel.frame, false) {
                 self.hidePanel()
             }

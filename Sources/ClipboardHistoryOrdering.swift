@@ -165,6 +165,27 @@ enum ClipboardHistoryOrdering {
             let clamped = min(max(firstUnpinned, insertAt), next.count)
             next.insert(item, at: clamped)
         }
+        return stampOrder(next)
+    }
+
+    /// History is loaded with `ORDER BY is_pinned DESC, timestamp DESC`.
+    /// After a manual reorder, rewrite timestamps so the new visual order is stable
+    /// across saves/reloads while keeping relative spacing.
+    static func stampOrder(_ items: [ClipboardItem]) -> [ClipboardItem] {
+        guard !items.isEmpty else { return items }
+        var next = items
+        let pinned = next.enumerated().filter { $0.element.isPinned }.map(\.offset)
+        let unpinned = next.enumerated().filter { !$0.element.isPinned }.map(\.offset)
+        stampLane(&next, indices: pinned)
+        stampLane(&next, indices: unpinned)
         return next
+    }
+
+    private static func stampLane(_ items: inout [ClipboardItem], indices: [Int]) {
+        guard !indices.isEmpty else { return }
+        let base = indices.map { items[$0].timestamp }.max() ?? Date()
+        for (rank, index) in indices.enumerated() {
+            items[index].timestamp = base.addingTimeInterval(TimeInterval(-rank) * 0.001)
+        }
     }
 }

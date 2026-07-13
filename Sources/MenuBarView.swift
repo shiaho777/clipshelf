@@ -89,6 +89,7 @@ struct MenuBarView: View {
     @State private var searchGeneration: UInt = 0
     @State private var lastSeenItemCount: Int = 0
     @State private var lastSeenFirstItemID: UUID?
+    @State private var lastSeenOrderSignature: String = ""
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     @State private var diffPair: DiffPair?
     /// IDs of sensitive items the user has unlocked in the current panel session.
@@ -320,6 +321,7 @@ struct MenuBarView: View {
                 }
             },
             onReorder: { sourceID, placeBefore in
+                ClipboardDragSession.end()
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                     if placeBefore {
                         clipboardManager.moveItem(id: sourceID, before: item.id)
@@ -750,10 +752,12 @@ struct MenuBarView: View {
             itemsUpdateDebounceTask?.cancel()
             let task = DispatchWorkItem {
                 let items = clipboardManager.items
+                let orderSignature = items.prefix(visibleCount).map(\.id.uuidString).joined(separator: ",")
                 let needsFilterRebuild: Bool
                 if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     needsFilterRebuild = items.count != lastSeenItemCount
                         || items.first?.id != lastSeenFirstItemID
+                        || orderSignature != lastSeenOrderSignature
                 } else {
                     needsFilterRebuild = true
                 }
@@ -763,6 +767,7 @@ struct MenuBarView: View {
                 }
                 lastSeenItemCount = items.count
                 lastSeenFirstItemID = items.first?.id
+                lastSeenOrderSignature = orderSignature
                 if let hovered = hoveredItemId, clipboardManager.item(byID: hovered) == nil {
                     hoveredItemId = nil
                 }
@@ -771,7 +776,7 @@ struct MenuBarView: View {
                 }
             }
             itemsUpdateDebounceTask = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: task)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: task)
         }
         .popupWindow(item: $previewItem) { item in
             PreviewSheet(item: item, image: clipboardManager.resolvedImage(for: item)) { itemToPaste in

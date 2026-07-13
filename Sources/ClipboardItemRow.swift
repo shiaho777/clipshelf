@@ -3,7 +3,23 @@ import Combine
 import AppKit
 import UniformTypeIdentifiers
 
+enum ClipboardDragSession {
+    static var sourceItemID: UUID?
+    static var isActive = false
+
+    static func begin(id: UUID) {
+        sourceItemID = id
+        isActive = true
+    }
+
+    static func end() {
+        sourceItemID = nil
+        isActive = false
+    }
+}
+
 struct ClipboardItemRow: View {
+
     let item: ClipboardItem
     var image: NSImage? = nil
     var imageURL: URL? = nil
@@ -33,6 +49,7 @@ struct ClipboardItemRow: View {
     @State private var loadedImage: NSImage?
     @State private var isCode: Bool = false
     @State private var isHovered: Bool = false
+    @State private var isDropTargeted: Bool = false
 
     var body: some View {
         let detection = item.detection
@@ -225,6 +242,14 @@ struct ClipboardItemRow: View {
                     .padding(6)
             }
         }
+        .overlay(alignment: .top) {
+            if isDropTargeted && ClipboardDragSession.sourceItemID != item.id {
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(height: 2)
+                    .padding(.horizontal, 8)
+            }
+        }
         .onTapGesture {
             if item.isSensitive && !isUnlocked {
                 Task { @MainActor in
@@ -322,11 +347,12 @@ struct ClipboardItemRow: View {
             } // end sensitive else
         }
         .onDrag {
-            makeDragProvider()
+            ClipboardDragSession.begin(id: item.id)
+            return makeDragProvider()
         } preview: {
             dragPreview
         }
-        .onDrop(of: [.text, .plainText, .utf8PlainText, .image, .fileURL], isTargeted: nil) { providers in
+        .onDrop(of: [.text, .plainText, .utf8PlainText, .image, .fileURL, .data], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)
         }
         .task(id: item.id) {
@@ -384,108 +410,138 @@ struct ClipboardItemRow: View {
         if item.isSensitive && !isUnlocked {
             return NSItemProvider(object: "" as NSString)
         }
+
+        let provider: NSItemProvider
         switch item.type {
-        case .image:
-            if let img = loadedImage ?? image {
-                let provider = NSItemProvider(object: img)
-                if !item.content.isEmpty {
-                    provider.registerDataRepresentation(forTypeIdentifier: UTType.utf8PlainText.identifier, visibility: .all) { completion in
-                        completion(item.content.data(using: .utf8), nil)
-                        return nil
-                    }
-                }
-                provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
-                    completion(item.id.uuidString.data(using: .utf8), nil)
-                    return nil
-                }
-                return provider
-            }
-            let provider = NSItemProvider(object: (item.ocrText ?? item.content) as NSString)
-            provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
-                completion(item.id.uuidString.data(using: .utf8), nil)
-                return nil
-            }
-            return provider
-        case .fileURL:
-            let paths = filePaths.isEmpty ? item.filePaths : filePaths
-            if let first = paths.first {
-                let url = URL(fileURLWithPath: first)
-                let provider = NSItemProvider(contentsOf: url) ?? NSItemProvider()
-                for path in paths.dropFirst() {
-                    let extra = URL(fileURLWithPath: path)
-                    provider.registerFileRepresentation(
-                        forTypeIdentifier: UTType.fileURL.identifier,
-                        fileOptions: [],
-                        visibility: .all
-                    ) { completion in
-                        completion(extra, false, nil)
-                        return nil
-                    }
-                }
-                provider.registerDataRepresentation(forTypeIdentifier: UTType.utf8PlainText.identifier, visibility: .all) { completion in
-                    completion(paths.joined(separator: "\n").data(using: .utf8), nil)
-                    return nil
-                }
-                // Encode source id for internal reordering
-                provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
-                    completion(item.id.uuidString.data(using: .utf8), nil)
-                    return nil
-                }
-                return provider
-            }
-            return NSItemProvider(object: item.content as NSString)
+        case .text:
+            provider = NSItemProvider(object: item.content as NSString)
+            registerTextRepresentations(item.content, on: provider)
         case .richText:
-            let provider = NSItemProvider(object: item.content as NSString)
+            provider = NSItemProvider(object: item.content as NSString)
+            registerTextRepresentations(item.content, on: provider)
             if let rtf = item.rtfData {
                 provider.registerDataRepresentation(forTypeIdentifier: UTType.rtf.identifier, visibility: .all) { completion in
                     completion(rtf, nil)
                     return nil
                 }
             }
-            provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
-                completion(item.id.uuidString.data(using: .utf8), nil)
-                return nil
+        case .image:
+            if let img = loadedImage ?? image {
+                provider = NSItemProvider(object: img)
+                if let tiff = img.tiffRepresentation {
+                    provider.registerDataRepresentation(forTypeIdentifier: UTType.tiff.identifier, visibility: .all) { completion in
+                        completion(tiff, nil)
+                        return nil
+                    }
+                    if let rep = NSBitmapImageRep(data: tiff),
+                       let png = rep.representation(using: .png, properties: [:]) {
+                        provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
+                            completion(png, nil)
+                            return nil
+                        }
+                    }
+                }
+                let fallback = item.ocrText ?? item.content
+                if !fallback.isEmpty {
+                    registerTextRepresentations(fallback, on: provider)
+                }
+            } else {
+                let fallback = item.ocrText ?? item.content
+                provider = NSItemProvider(object: (fallback.isEmpty ? "Image" : fallback) as NSString)
+                if !fallback.isEmpty {
+                    registerTextRepresentations(fallback, on: provider)
+                }
             }
-            return provider
-        case .text:
-            let provider = NSItemProvider(object: item.content as NSString)
-            provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
-                completion(item.id.uuidString.data(using: .utf8), nil)
-                return nil
+        case .fileURL:
+            let paths = filePaths.isEmpty ? item.filePaths : filePaths
+            if let first = paths.first, FileManager.default.fileExists(atPath: first) {
+                let firstURL = URL(fileURLWithPath: first)
+                provider = NSItemProvider(contentsOf: firstURL) ?? NSItemProvider(object: first as NSString)
+                for path in paths.dropFirst() where FileManager.default.fileExists(atPath: path) {
+                    let url = URL(fileURLWithPath: path)
+                    provider.registerFileRepresentation(
+                        forTypeIdentifier: UTType.fileURL.identifier,
+                        fileOptions: [],
+                        visibility: .all
+                    ) { completion in
+                        completion(url, false, nil)
+                        return nil
+                    }
+                }
+                registerTextRepresentations(paths.joined(separator: "\n"), on: provider)
+            } else {
+                let text = paths.isEmpty ? item.content : paths.joined(separator: "\n")
+                provider = NSItemProvider(object: text as NSString)
+                registerTextRepresentations(text, on: provider)
             }
-            return provider
+        }
+
+        provider.suggestedName = dragSuggestedName
+        let sourceID = item.id
+        provider.registerDataRepresentation(forTypeIdentifier: Self.reorderTypeID, visibility: .ownProcess) { completion in
+            completion(sourceID.uuidString.data(using: .utf8), nil)
+            return nil
+        }
+        return provider
+    }
+
+    private var dragSuggestedName: String {
+        switch item.type {
+        case .image:
+            return item.imageFileName ?? "ClipShelf-Image"
+        case .fileURL:
+            return URL(fileURLWithPath: (filePaths.isEmpty ? item.filePaths : filePaths).first ?? "file").lastPathComponent
+        default:
+            let trimmed = item.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return "ClipShelf-Text" }
+            return String(trimmed.prefix(32))
+        }
+    }
+
+    private func registerTextRepresentations(_ text: String, on provider: NSItemProvider) {
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.utf8PlainText.identifier, visibility: .all) { completion in
+            completion(text.data(using: .utf8), nil)
+            return nil
+        }
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.plainText.identifier, visibility: .all) { completion in
+            completion(text.data(using: .utf8), nil)
+            return nil
+        }
+        provider.registerDataRepresentation(forTypeIdentifier: "public.utf8-plain-text", visibility: .all) { completion in
+            completion(text.data(using: .utf8), nil)
+            return nil
         }
     }
 
     private static let reorderTypeID = "com.nicebro.clipshelf.item-id"
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        // Prefer internal reorder payload
+        if let sourceID = ClipboardDragSession.sourceItemID, sourceID != item.id {
+            ClipboardDragSession.end()
+            onReorder?(sourceID, true)
+            return true
+        }
+
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(Self.reorderTypeID) }) {
             provider.loadDataRepresentation(forTypeIdentifier: Self.reorderTypeID) { data, _ in
                 guard let data,
                       let raw = String(data: data, encoding: .utf8),
-                      let sourceID = UUID(uuidString: raw)
-                else { return }
+                      let sourceID = UUID(uuidString: raw),
+                      sourceID != self.item.id
+                else {
+                    DispatchQueue.main.async { ClipboardDragSession.end() }
+                    return
+                }
                 DispatchQueue.main.async {
-                    // Drop onto this row: place source before current item.
+                    ClipboardDragSession.end()
                     self.onReorder?(sourceID, true)
                 }
             }
             return true
         }
-        // Also accept plain text provider that carries uuid only for own-process fallback
-        if let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) {
-            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
-                guard let raw = object as? String,
-                      let sourceID = UUID(uuidString: raw)
-                else { return }
-                DispatchQueue.main.async {
-                    self.onReorder?(sourceID, true)
-                }
-            }
-        }
-        return onReorder != nil
+
+        ClipboardDragSession.end()
+        return false
     }
 
     private var accessibilityDescription: String {
