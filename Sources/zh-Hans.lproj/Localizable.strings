@@ -234,3 +234,7 @@
 /* Sensitive item lock */
 "item.sensitive.title" = "敏感内容";
 "item.sensitive.unlockHint" = "点按以使用 Touch ID 解锁";
+
+"language.choose.title" = "选择语言";
+"language.choose.subtitle" = "请选择界面语言后继续";
+"language.switch" = "语言";

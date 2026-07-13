@@ -371,14 +371,28 @@ struct MenuBarView: View {
     }
     
     var body: some View {
+        Group {
+            if !lang.hasSelectedLanguage {
+                LanguagePickerView()
+            } else {
+                mainContent
+            }
+        }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
-            SearchField(
-                text: $searchText,
-                placeholder: lang.l("search.placeholder"),
-                size: .regular,
-                reduceMotion: reduceMotion,
-                focus: $isSearchFocused
-            )
+            HStack(alignment: .center, spacing: 8) {
+                SearchField(
+                    text: $searchText,
+                    placeholder: lang.l("search.placeholder"),
+                    size: .regular,
+                    reduceMotion: reduceMotion,
+                    focus: $isSearchFocused
+                )
+                LanguageSwitcherButton()
+            }
+            .padding(.trailing, 14)
 
             HStack(spacing: 4) {
                 ForEach(FilterType.staticCases, id: \.self) { type in

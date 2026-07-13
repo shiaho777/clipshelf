@@ -72,9 +72,13 @@ struct SettingsView: View {
     private var generalTab: some View {
         Form {
             Section {
-                Picker(lang.l("settings.language"), selection: $lang.language) {
-                    Text("English").tag("en")
-                    Text("中文").tag("zh")
+                Picker(lang.l("settings.language"), selection: Binding(
+                    get: { lang.language },
+                    set: { lang.selectLanguage($0) }
+                )) {
+                    ForEach(AppLanguageOption.all) { option in
+                        Text("\(option.flag)  \(option.title)").tag(option.code)
+                    }
                 }
             }
             Section {

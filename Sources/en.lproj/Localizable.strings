@@ -234,3 +234,7 @@
 /* Sensitive item lock */
 "item.sensitive.title" = "Sensitive";
 "item.sensitive.unlockHint" = "Tap to unlock with Touch ID";
+
+"language.choose.title" = "Choose Language";
+"language.choose.subtitle" = "Select a language to continue";
+"language.switch" = "Language";
