@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- Release distribution is DMG-only via GitHub Releases
+- Install docs list only the DMG channel
 - Removed iCloud/CloudKit sync; ClipShelf is fully local-only
 - Renamed product to **ClipShelf** (bundle id `com.nicebro.ClipShelf`, app `ClipShelf.app`)
 - Storage directory is now `~/Library/Application Support/ClipShelf/`

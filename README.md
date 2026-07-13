@@ -47,22 +47,14 @@ It is a local utility. No account is required. History stays on this Mac.
 
 ## Install
 
-### Homebrew
+Download the DMG from the latest [GitHub Release](https://github.com/shiaho777/clipshelf/releases/latest):
 
-```bash
-brew install --cask clipshelf
-```
+1. Open `ClipShelf-x.y.z.dmg`
+2. Drag **ClipShelf** into **Applications**
+3. Launch ClipShelf from Applications (or Spotlight)
+4. If macOS blocks the app: right-click ClipShelf → **Open** → **Open**
 
-### From source
-
-Requires macOS 13+, Xcode 15+, [XcodeGen](https://github.com/yonaskolb/XcodeGen).
-
-```bash
-git clone https://github.com/shiaho777/clipshelf.git
-cd clipshelf
-xcodegen generate
-xcodebuild -scheme ClipShelf -configuration Release build
-```
+Requires macOS 13 or later.
 
 ## Usage
 
@@ -70,8 +62,6 @@ xcodebuild -scheme ClipShelf -configuration Release build
 2. Copy as usual — items are stored in history
 3. Press `⌘⇧V` to open the panel, search, and paste
 4. Grant Accessibility when prompted (needed to simulate paste)
-
-
 
 ## Privacy
 
@@ -81,7 +71,17 @@ xcodebuild -scheme ClipShelf -configuration Release build
 - Sensitive items can auto-expire
 - No telemetry
 
-## Development layout
+## Development
+
+Requires macOS 13+, Xcode 15+, [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+
+```bash
+git clone https://github.com/shiaho777/clipshelf.git
+cd clipshelf
+xcodegen generate
+xcodebuild -scheme ClipShelf -configuration Release build
+xcodebuild test -scheme ClipShelf -destination 'platform=macOS'
+```
 
 ```
 Sources/
@@ -93,11 +93,6 @@ Sources/
 ├── SQLiteHistoryStore.swift      # Persistence + FTS
 ├── MenuBarView.swift             # Main UI
 └── ...
-```
-
-```bash
-xcodegen generate
-xcodebuild test -scheme ClipShelf -destination 'platform=macOS'
 ```
 
 ## License
