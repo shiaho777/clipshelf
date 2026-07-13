@@ -400,9 +400,6 @@ class ClipboardManager: ObservableObject {
         monitor.onCapture = { [weak self] content in
             self?.handleCapturedContent(content)
         }
-        DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
-        }
         if startRuntimeServices {
             monitor.start()
             configureCleanupTimer()

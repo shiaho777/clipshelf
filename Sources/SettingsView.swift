@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
     @ObservedObject var clipboardManager: ClipboardManager
@@ -13,6 +14,7 @@ struct SettingsView: View {
     @State private var importExportError: String?
     /// 0 = ZIP backup, 1 = CSV, 2 = Markdown
     @State private var exportFormat = 0
+    @State private var accessibilityTrusted = AXIsProcessTrusted()
     
     private let historyLimits = [500, 1000, 10_000, 50_000, 100_000, 0]
     private let hotWindowLimits = [500, 1_000, 2_000, 5_000, 10_000]
@@ -25,25 +27,38 @@ struct SettingsView: View {
     ]
     
     var body: some View {
-        TabView(selection: $selectedTab) {
-            generalTab
-                .tabItem { Label(lang.l("settings.tab.general"), systemImage: "gearshape") }
-                .tag(0)
-            rulesTab
-                .tabItem { Label(lang.l("settings.tab.rules"), systemImage: "list.bullet.rectangle") }
-                .tag(1)
-            dataTab
-                .tabItem { Label(lang.l("settings.tab.data"), systemImage: "externaldrive") }
-                .tag(2)
-            aboutTab
-                .tabItem { Label(lang.l("settings.tab.about"), systemImage: "info.circle") }
-                .tag(3)
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                Text(lang.l("settings.tab.general")).tag(0)
+                Text(lang.l("settings.tab.rules")).tag(1)
+                Text(lang.l("settings.tab.data")).tag(2)
+                Text(lang.l("settings.tab.about")).tag(3)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            Group {
+                switch selectedTab {
+                case 0:
+                    generalTab
+                case 1:
+                    rulesTab
+                case 2:
+                    dataTab
+                default:
+                    aboutTab
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .standardPopupLayout()
         .accessibilityIdentifier("settingsView")
         .onAppear {
+            accessibilityTrusted = AXIsProcessTrusted()
             settingsVM.loadLaunchAtLoginPreferenceIfNeeded()
-            // If AppDelegate requested a specific tab (e.g., Rules), navigate to it.
             let requestedTab = UserDefaults.standard.integer(forKey: "_settingsRequestedTab")
             if requestedTab > 0 {
                 selectedTab = requestedTab
@@ -117,7 +132,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 // Show a warning if expansion is enabled but Accessibility is not granted.
-                if UserDefaults.standard.bool(forKey: "snippetExpansionEnabled") && !AXIsProcessTrusted() {
+                if UserDefaults.standard.bool(forKey: "snippetExpansionEnabled") && !accessibilityTrusted {
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.orange)
@@ -137,6 +152,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .id("settings-general-tab")
     }
 
     // MARK: - Rules Tab
@@ -177,6 +193,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .id("settings-data-tab")
     }
 
     // MARK: - About Tab
@@ -199,7 +216,7 @@ struct SettingsView: View {
                 HStack {
                     Text(lang.l("about.itemsStored"))
                     Spacer()
-                    Text("\(clipboardManager.items.count)")
+                    Text("\(clipboardManager.totalStoredCount)")
                         .foregroundColor(.secondary)
                         .monospacedDigit()
                 }
@@ -268,6 +285,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .id("settings-about-tab")
     }
 
     private static let storageDirectory: URL = {

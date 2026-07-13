@@ -25,22 +25,33 @@ extension EnvironmentValues {
 private struct WindowConfigurator: NSViewRepresentable {
     let configure: (NSWindow) -> Void
 
+    final class Coordinator {
+        var didConfigure = false
+        var pendingWorkItem: DispatchWorkItem?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
-        DispatchQueue.main.async {
-            if let window = view.window {
-                configure(window)
-            }
-        }
+        scheduleConfigure(view: view, context: context)
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            if let window = nsView.window {
-                configure(window)
-            }
+        scheduleConfigure(view: nsView, context: context)
+    }
+
+    private func scheduleConfigure(view: NSView, context: Context) {
+        guard !context.coordinator.didConfigure else { return }
+        context.coordinator.pendingWorkItem?.cancel()
+        let work = DispatchWorkItem {
+            guard !context.coordinator.didConfigure, let window = view.window else { return }
+            configure(window)
+            context.coordinator.didConfigure = true
         }
+        context.coordinator.pendingWorkItem = work
+        DispatchQueue.main.async(execute: work)
     }
 }
 

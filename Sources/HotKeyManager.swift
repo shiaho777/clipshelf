@@ -227,19 +227,31 @@ struct HotKeyRecorderView: View {
 struct HotKeyRecorderHelper: NSViewRepresentable {
     @Binding var isRecording: Bool
     @Binding var hotKey: HotKeyConfig
+
+    final class Coordinator {
+        var isRecording = false
+        var onCommit: ((UInt16, UInt32) -> Void)?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
     
     func makeNSView(context: Context) -> NSView {
         let view = HotKeyRecorderNSView()
+        let coordinator = context.coordinator
         view.onKeyEvent = { keyCode, modifiers in
-            if isRecording {
-                hotKey = HotKeyConfig(keyCode: UInt32(keyCode), modifiers: modifiers)
-                isRecording = false
-            }
+            guard coordinator.isRecording else { return }
+            coordinator.onCommit?(keyCode, modifiers)
         }
         return view
     }
     
     func updateNSView(_ nsView: NSView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.isRecording = isRecording
+        coordinator.onCommit = { keyCode, modifiers in
+            hotKey = HotKeyConfig(keyCode: UInt32(keyCode), modifiers: modifiers)
+            isRecording = false
+        }
         if let view = nsView as? HotKeyRecorderNSView {
             view.isRecording = isRecording
         }
