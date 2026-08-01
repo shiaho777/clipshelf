@@ -258,9 +258,11 @@ final class InMemoryOCRService: OCRServiceProtocol {
 final class MockLaunchAtLoginService: LaunchAtLoginService {
     private(set) var setEnabledCalls: [Bool] = []
     var errorToThrow: Error?
+    var isEnabled = false
 
     func setEnabled(_ enabled: Bool) throws {
         setEnabledCalls.append(enabled)
         if let error = errorToThrow { throw error }
+        isEnabled = enabled
     }
 }

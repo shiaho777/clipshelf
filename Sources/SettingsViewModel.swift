@@ -13,7 +13,7 @@ final class SettingsViewModel: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Settings")
     
     init(
-        launchAtLoginService: LaunchAtLoginService = SMAppLaunchAtLoginService(),
+        launchAtLoginService: LaunchAtLoginService = LaunchAtLoginServiceFactory.defaultService(),
         preferencesStore: AppPreferencesStore? = nil,
         storageDirectory: URL? = nil
     ) {
@@ -42,14 +42,16 @@ final class SettingsViewModel: ObservableObject {
     
     func loadLaunchAtLoginPreferenceIfNeeded() {
         guard !didLoadLaunchAtLoginPreference else { return }
-        do {
-            launchAtLogin = try preferencesStore.loadLaunchAtLogin() ?? false
-            didLoadLaunchAtLoginPreference = true
-        } catch {
-            didLoadLaunchAtLoginPreference = true
-            launchAtLogin = false
-            logger.error("Failed to load launch-at-login preference: \(error.localizedDescription)")
-        }
+        didLoadLaunchAtLoginPreference = true
+        // The system is the source of truth: the toggle mirrors the actual
+        // registration state, not just the stored preference. A stored "on"
+        // with no registration means the login item was lost (reinstall,
+        // signature change, system cleanup) — the app re-registers at launch.
+        suppressLaunchAtLoginChange = true
+        launchAtLogin = launchAtLoginService.isEnabled
+        // Reset immediately: if the value didn't change, onChange never fires
+        // and must not swallow the user's next toggle.
+        suppressLaunchAtLoginChange = false
     }
     
     private func setLaunchAtLogin(_ enabled: Bool) {

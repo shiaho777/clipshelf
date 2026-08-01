@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         clipboardManager = ClipboardManager()
+        restoreLaunchAtLoginIfNeeded()
         LanguageManager.shared.$language
             .dropFirst()
             .receive(on: RunLoop.main)
@@ -468,6 +469,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if panel.isVisible { savePanelSize(panel.frame.size) }
         clipboardManager.prepareForTermination()
+    }
+
+    // MARK: - Launch at Login Self-Heal
+
+    /// Re-registers the login item when the stored preference says "on" but
+    /// the system registration is missing. App reinstalls, signature changes,
+    /// and system cleanup can silently drop login items, so without this the
+    /// app would stop launching at login even though the toggle stays on.
+    private func restoreLaunchAtLoginIfNeeded() {
+        let service = LaunchAtLoginServiceFactory.defaultService()
+        guard !service.isEnabled else { return }
+        let prefsStore = JSONAppPreferencesStore(storageDirectory: AppStoragePaths.defaultStorageDirectory())
+        guard (try? prefsStore.loadLaunchAtLogin()) == true else { return }
+        do {
+            try service.setEnabled(true)
+        } catch {
+            logger.error("Failed to restore launch-at-login: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Panel Size Persistence
