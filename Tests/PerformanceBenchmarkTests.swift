@@ -233,7 +233,9 @@ final class PerformanceBenchmarkTests: XCTestCase {
             ClipboardItem(
                 content: "local \(i)",
                 type: .text,
-                timestamp: now.addingTimeInterval(-Double(i + 10))
+                // All local items strictly older than the newest incoming item,
+                // so mergeFetchedSyncItems must place every incoming item on top.
+                timestamp: now.addingTimeInterval(-Double(i + 20))
             )
         })
         let manager = ClipboardManager(
