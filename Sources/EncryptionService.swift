@@ -14,9 +14,21 @@ final class EncryptionService {
     private let keychainService = "com.clipshelf.encryption"
     private let keychainAccount = "masterKey-v1"
 
-    // Lazy init: loaded from Keychain on first use, not at app start.
-    private lazy var _key: SymmetricKey = loadOrCreateKey()
-    private var key: SymmetricKey { _key }
+    // Key is loaded from the Keychain on first use, not at app start.
+    // Accessed concurrently from the persistence and incremental-persistence
+    // queues (SQLite bind/read), so initialization must be synchronized —
+    // a plain `lazy var` would race on first access.
+    private let keyLock = NSLock()
+    private var _key: SymmetricKey?
+    private var key: SymmetricKey {
+        if let _key { return _key }
+        keyLock.lock()
+        defer { keyLock.unlock() }
+        if let _key { return _key }
+        let created = loadOrCreateKey()
+        _key = created
+        return created
+    }
 
     private init() {}
 

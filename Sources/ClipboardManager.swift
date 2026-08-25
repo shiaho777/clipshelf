@@ -616,6 +616,9 @@ class ClipboardManager: ObservableObject {
         if let description = result.smartPasteDescription {
             lastSmartPasteDescription = description
         }
+        // Nothing reached the pasteboard (e.g. missing image data): the change
+        // count is untouched, so don't acknowledge it or count this as a use.
+        guard result.didWrite else { return }
         incrementUseCount(for: item.id)
         monitor.acknowledgeChangeCount()
         if autoPaste { onItemSelected?() }

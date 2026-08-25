@@ -25,7 +25,9 @@ struct SearchClipboardHistoryIntent: AppIntent {
         if !typeFilter.isEmpty, let type = ClipboardItem.ItemType(rawValue: typeFilter) {
             results = results.filter { $0.type == type }
         }
-        return .result(value: Array(results.prefix(limit).map(\.content)))
+        // prefix(_:) traps on negative values, so a Shortcuts user passing
+        // Limit = -1 would crash the app process without this clamp.
+        return .result(value: Array(results.prefix(max(0, limit)).map(\.content)))
     }
 }
 

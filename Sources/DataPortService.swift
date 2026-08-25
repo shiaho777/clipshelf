@@ -299,12 +299,22 @@ final class DataPortService {
 
 // MARK: - CSV escape helper
 
-private extension String {
+extension String {
     /// Wraps the string in double-quotes and escapes internal quotes if needed for CSV.
     var csvEscaped: String {
-        if contains(",") || contains("\"") || contains("\n") {
-            return "\"\(replacingOccurrences(of: "\"", with: "\"\""))\""
+        // Neutralize spreadsheet formula injection: clipboard content is
+        // attacker-influenceable, and a cell beginning with = + - @ or a tab
+        // would execute as a formula when the export opens in Excel/Numbers.
+        let sanitized: String
+        if let first = unicodeScalars.first,
+           first == "=" || first == "+" || first == "-" || first == "@" || first == "\t" || first == "\r" {
+            sanitized = "'".appending(self)
+        } else {
+            sanitized = self
         }
-        return self
+        if sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") {
+            return "\"\(sanitized.replacingOccurrences(of: "\"", with: "\"\""))\""
+        }
+        return sanitized
     }
 }

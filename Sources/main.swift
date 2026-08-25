@@ -37,6 +37,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let defaultPanelSize = NSSize(width: WindowLayout.mainPanelSize.width, height: WindowLayout.mainPanelSize.height)
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Single-instance guard. The LaunchAgent fallback's `launchctl
+        // bootstrap` starts the job immediately (RunAtLoad), and double
+        // launches happen from Finder too; two menu-bar instances would fight
+        // over the pasteboard and status item. Hand off to the existing
+        // instance and exit quietly. Skipped under unit tests, where another
+        // copy of the app may legitimately be running on this machine.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            let bundleID = Bundle.main.bundleIdentifier ?? "com.nicebro.ClipShelf"
+            let currentApp = NSRunningApplication.current
+            let otherInstances = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { $0 != currentApp }
+            if let existing = otherInstances.first {
+                existing.activate(options: .activateIgnoringOtherApps)
+                NSApp.terminate(nil)
+                return
+            }
+        }
+
         clipboardManager = ClipboardManager()
         restoreLaunchAtLoginIfNeeded()
         LanguageManager.shared.$language
@@ -354,6 +371,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard let self, !self.didPaste else { return }
             self.didPaste = true
             self.cleanupPasteObserver()
+            // Inject Cmd+V only once the target app is actually frontmost.
+            // If activation failed, pasting would insert clipboard content —
+            // potentially sensitive — into whatever window happens to have focus.
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApp.processIdentifier else {
+                self.logger.warning("Paste target failed to activate; skipping fallback Cmd+V")
+                return
+            }
             self.simulateCmdV()
         }
     }
@@ -467,8 +491,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
 
     func applicationWillTerminate(_ notification: Notification) {
-        if panel.isVisible { savePanelSize(panel.frame.size) }
-        clipboardManager.prepareForTermination()
+        // Termination can happen before launch completes (e.g. the
+        // single-instance guard), so nothing here may assume setup ran.
+        if let panel, panel.isVisible { savePanelSize(panel.frame.size) }
+        clipboardManager?.prepareForTermination()
     }
 
     // MARK: - Launch at Login Self-Heal

@@ -59,21 +59,21 @@ class HotKeyManager: ObservableObject {
     
     @Published var mainHotKey: HotKeyConfig = .defaultMain {
         didSet {
-            guard oldValue != mainHotKey else { return }
+            guard oldValue != mainHotKey, !isRestoringFromStore else { return }
             saveConfig()
             reregisterMainHotKey()
         }
     }
     @Published var queueHotKey: HotKeyConfig = .defaultQueue {
         didSet {
-            guard oldValue != queueHotKey else { return }
+            guard oldValue != queueHotKey, !isRestoringFromStore else { return }
             saveConfig()
             reregisterQueueHotKey()
         }
     }
     @Published var quickPasteHotKey: HotKeyConfig = .defaultQuickPaste {
         didSet {
-            guard oldValue != quickPasteHotKey else { return }
+            guard oldValue != quickPasteHotKey, !isRestoringFromStore else { return }
             saveConfig()
             reregisterQuickPasteHotKey()
         }
@@ -85,6 +85,11 @@ class HotKeyManager: ObservableObject {
     private var mainHotKeyRef: EventHotKeyRef?
     private var queueHotKeyRef: EventHotKeyRef?
     private var quickPasteHotKeyRef: EventHotKeyRef?
+    /// True while `loadConfig()` assigns stored configs. Without this, the first
+    /// assignment fires `didSet`, whose `saveConfig()` persists the other two
+    /// keys as still-default values — silently clobbering the user's saved
+    /// customizations on disk before they are ever read.
+    private var isRestoringFromStore = false
     var onMainHotKey: (() -> Void)?
     var onQueueHotKey: (() -> Void)?
     var onQuickPasteHotKey: (() -> Void)?
@@ -103,6 +108,8 @@ class HotKeyManager: ObservableObject {
     }
     
     private func loadConfig() {
+        isRestoringFromStore = true
+        defer { isRestoringFromStore = false }
         do {
             if let config = try hotKeyStore.loadMainHotKey() {
                 mainHotKey = config
