@@ -5,6 +5,10 @@ enum ClipboardPasteboardWriter {
     struct WriteResult {
         let smartPasteDescription: String?
         let retainedProviders: [NSPasteboardItemDataProvider]
+        /// False when nothing could be placed on the pasteboard (e.g. image
+        /// payload unavailable). The pasteboard is left untouched in that
+        /// case, so callers must not treat this as a successful copy.
+        let didWrite: Bool
     }
 
     static func write(
@@ -16,9 +20,12 @@ enum ClipboardPasteboardWriter {
         targetBundleID: String?,
         imagePayload: (() -> ClipboardImagePasteboardPayload?)?
     ) -> WriteResult {
-        pasteboard.clearContents()
         var retainedProviders: [NSPasteboardItemDataProvider] = []
         var smartPasteDescription: String?
+
+        // Resolve everything that can fail *before* clearing the pasteboard.
+        // Clearing first and failing later would destroy the user's current
+        // clipboard content while writing nothing in its place.
 
         if autoPaste, smartPasteEnabled, item.type != .image,
            let bundleID = targetBundleID,
@@ -27,40 +34,68 @@ enum ClipboardPasteboardWriter {
             content: item.content,
             type: item.type
            ) {
-            if let string = payload.string { pasteboard.setString(string, forType: .string) }
-            if let rtf = payload.rtf { pasteboard.setData(rtf, forType: .rtf) }
-            if let html = payload.html { pasteboard.setData(html, forType: .html) }
-            smartPasteDescription = PasteAdapterManager.shared.adapterName(for: bundleID)
-        } else if asPlainText, item.type != .image {
-            pasteboard.setString(item.content, forType: .string)
-        } else {
-            switch item.type {
-            case .image:
-                if let payload = imagePayload?() {
-                    if let provider = payload.dataProvider {
-                        let pasteboardItem = NSPasteboardItem()
-                        if pasteboardItem.setDataProvider(provider, forTypes: [payload.type]) {
-                            retainedProviders.append(provider)
-                            pasteboard.writeObjects([pasteboardItem])
-                        }
-                    } else if let data = payload.data {
-                        pasteboard.setData(data, forType: payload.type)
-                    }
-                }
-            case .richText:
-                if let rtfData = item.rtfData { pasteboard.setData(rtfData, forType: .rtf) }
-                pasteboard.setString(item.content, forType: .string)
-            case .text:
-                pasteboard.setString(item.content, forType: .string)
-            case .fileURL:
-                let fileURLs = item.filePaths.compactMap { URL(fileURLWithPath: $0) as NSURL }
-                if !fileURLs.isEmpty { pasteboard.writeObjects(fileURLs) }
+            var wrote = false
+            if payload.string != nil || payload.rtf != nil || payload.html != nil {
+                pasteboard.clearContents()
+                if let string = payload.string { wrote = pasteboard.setString(string, forType: .string) || wrote }
+                if let rtf = payload.rtf { wrote = pasteboard.setData(rtf, forType: .rtf) || wrote }
+                if let html = payload.html { wrote = pasteboard.setData(html, forType: .html) || wrote }
             }
+            smartPasteDescription = PasteAdapterManager.shared.adapterName(for: bundleID)
+            return WriteResult(
+                smartPasteDescription: smartPasteDescription,
+                retainedProviders: retainedProviders,
+                didWrite: wrote
+            )
+        }
+
+        if asPlainText, item.type != .image {
+            pasteboard.clearContents()
+            pasteboard.setString(item.content, forType: .string)
+            return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: true)
+        }
+
+        switch item.type {
+        case .image:
+            guard let payload = imagePayload?() else {
+                return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: false)
+            }
+            if let provider = payload.dataProvider {
+                let pasteboardItem = NSPasteboardItem()
+                guard pasteboardItem.setDataProvider(provider, forTypes: [payload.type]) else {
+                    return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: false)
+                }
+                retainedProviders.append(provider)
+                pasteboard.clearContents()
+                pasteboard.writeObjects([pasteboardItem])
+            } else if let data = payload.data {
+                pasteboard.clearContents()
+                guard pasteboard.setData(data, forType: payload.type) else {
+                    return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: false)
+                }
+            } else {
+                return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: false)
+            }
+        case .richText:
+            pasteboard.clearContents()
+            if let rtfData = item.rtfData { pasteboard.setData(rtfData, forType: .rtf) }
+            pasteboard.setString(item.content, forType: .string)
+        case .text:
+            pasteboard.clearContents()
+            pasteboard.setString(item.content, forType: .string)
+        case .fileURL:
+            let fileURLs = item.filePaths.compactMap { URL(fileURLWithPath: $0) as NSURL }
+            guard !fileURLs.isEmpty else {
+                return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: false)
+            }
+            pasteboard.clearContents()
+            pasteboard.writeObjects(fileURLs)
         }
 
         return WriteResult(
             smartPasteDescription: smartPasteDescription,
-            retainedProviders: retainedProviders
+            retainedProviders: retainedProviders,
+            didWrite: true
         )
     }
 }

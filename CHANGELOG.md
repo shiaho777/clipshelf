@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Hotkey customizations were silently reset on every relaunch: assigning the stored main hotkey during load fired `didSet`, whose `saveConfig()` persisted the not-yet-loaded default queue/quick-paste keys over the user's saved values (`HotKeyManager`)
+- Sensitive items became unrecoverable when AES-GCM encryption failed at write time: the plaintext was replaced by the `[🔒 Sensitive]` placeholder without storing any ciphertext. Writes now keep plaintext as a fallback instead of destroying content
+- A failed image copy no longer clears the pasteboard while writing nothing, and no longer increments use counts or acknowledges the pasteboard change (`ClipboardPasteboardWriter`)
+- Paste fallback: if the target app failed to activate within the timeout, ClipShelf injected ⌘V into whatever window had focus, potentially inserting sensitive clipboard content into the wrong app. It now verifies frontmost identity before simulating the keystroke
+- `SearchClipboardHistoryIntent` crashed the process when Shortcuts passed a negative Limit (`prefix(_:)` precondition)
+- Crash in `applicationWillTerminate` when termination happens before launch setup completes
+
+### Security
+- Script rules that never return (infinite loop) are quarantined after the timeout and the evaluation queue is rotated, so one bad script can no longer disable all script rules until relaunch; quarantined scripts are skipped without spending another timeout window (`ScriptRuleRunner`)
+- CSV export neutralizes spreadsheet formula injection for cells beginning with `=`, `+`, `-`, `@`, tab, or CR
+- Added a single-instance guard: two menu-bar instances would fight over the pasteboard and status item. This also covers the LaunchAgent fallback, whose `launchctl bootstrap` starts the job immediately (`RunAtLoad`)
+
 ### Changed
+- `EncryptionService` key initialization is now thread-safe; the persistence and incremental-persistence queues can reach it concurrently on first use
+- Image cache: shared image data is inserted with a byte cost so entries actually count against `totalCostLimit` and get evicted under memory pressure
+- `PersistenceScheduler` guards its pending work item with a lock (mutated from both the caller thread and the scheduler queue)
+- FTS LIKE-fallback search escapes `%`/`_` wildcards so queries like `100%` match literally
 - Release distribution is DMG-only via GitHub Releases
 - Install docs list only the DMG channel
 - Removed iCloud/CloudKit sync; ClipShelf is fully local-only

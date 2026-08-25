@@ -12,14 +12,25 @@ final class ScriptRuleRunner {
     static let defaultTimeout: TimeInterval = 3.0
 
     private let timeout: TimeInterval
-    /// Serial queue for all JS evaluation. `contextCache` and `cacheOrder` are accessed only from this queue.
-    private let evalQueue = DispatchQueue(label: "ScriptRuleRunner.eval", qos: .userInitiated)
+    /// Guards `evalQueue`, `contextCache`, `cacheOrder` and `hungScripts`.
+    /// The queue itself must be replaceable because a script that never
+    /// returns blocks its worker thread forever; everything reachable from
+    /// more than one thread lives behind this lock.
+    private let stateLock = NSLock()
+    /// Serial queue for all JS evaluation. Rotated to a fresh queue when a
+    /// script hangs, so later evaluations are not queued behind the stuck one.
+    private var evalQueue = DispatchQueue(label: "ScriptRuleRunner.eval", qos: .userInitiated)
     /// Reusable JSContext instances keyed by script source.
     /// Caching avoids re-parsing the script on every clipboard event.
     private var contextCache: [String: JSContext] = [:]
     /// Insertion / access order for true LRU eviction. Least-recently-used key is at index 0.
     private var cacheOrder: [String] = []
     private static let maxCacheSize = 20
+    /// Script sources that previously failed to return within `timeout`
+    /// (e.g. contain an infinite loop). JavaScriptCore has no public API to
+    /// preempt a running script, so these are skipped instead of burning a
+    /// fresh thread and another timeout window on every clipboard event.
+    private var hungScripts: Set<String> = []
 
     init(timeout: TimeInterval = ScriptRuleRunner.defaultTimeout) {
         self.timeout = timeout
@@ -32,37 +43,77 @@ final class ScriptRuleRunner {
     /// - Return `null` to discard the item
     /// - Return the original content unchanged for passthrough
     ///
-    /// Returns `nil` if the script exceeds `timeout`, throws a JS error, or is malformed.
+    /// Returns `nil` if the script exceeds `timeout`, threw a JS error,
+    /// is malformed, or previously hung and is quarantined.
     func evaluate(script: String, content: String, sourceBundleID: String?) async -> ScriptResult? {
+        stateLock.lock()
+        if hungScripts.contains(script) {
+            stateLock.unlock()
+            return nil
+        }
+        let queue = evalQueue
+        stateLock.unlock()
+
         let timeout = self.timeout
         return await withCheckedContinuation { continuation in
-            let lock = NSLock()
+            let sync = NSLock()
             var resumed = false
+            var completed = false
 
-            func tryResume(_ value: ScriptResult?) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !resumed else { return }
-                resumed = true
-                continuation.resume(returning: value)
-            }
-
-            evalQueue.async { [weak self] in
-                guard let self else { tryResume(nil); return }
+            queue.async { [weak self] in
+                guard let self else { tryResume(nil, finished: false); return }
                 let result = self.executeInContext(script: script, content: content, sourceBundleID: sourceBundleID)
-                tryResume(result)
+                tryResume(result, finished: true)
             }
 
             // Timeout: fires on a background global queue so no thread is blocked.
-            DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + timeout) {
-                tryResume(nil)
+            DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + timeout) { [weak self] in
+                let didTimeOut = tryResume(nil, finished: false)
+                if didTimeOut {
+                    // The script is still spinning on `queue`. Quarantine it and
+                    // rotate to a fresh queue so subsequent rules keep working;
+                    // the blocked thread is abandoned.
+                    self?.quarantineScript(script, staleQueue: queue)
+                }
+            }
+
+            func tryResume(_ value: ScriptResult?, finished: Bool) -> Bool {
+                sync.lock()
+                let isFirst = !resumed
+                resumed = true
+                if finished { completed = true }
+                let alreadyCompleted = completed
+                sync.unlock()
+                guard isFirst else { return false }
+                continuation.resume(returning: value)
+                // True when *this* caller won the race and the script had not
+                // finished — i.e. the timeout handler observing a live script.
+                return !finished && !alreadyCompleted
             }
         }
     }
 
-    // MARK: - Context Cache (accessed only from evalQueue)
+    // MARK: - Quarantine
+
+    private func quarantineScript(_ script: String, staleQueue: DispatchQueue) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        hungScripts.insert(script)
+        if contextCache[script] != nil {
+            contextCache.removeValue(forKey: script)
+            cacheOrder.removeAll { $0 == script }
+        }
+        if evalQueue === staleQueue {
+            evalQueue = DispatchQueue(label: "ScriptRuleRunner.eval", qos: .userInitiated)
+        }
+    }
+
+    // MARK: - Context Cache
 
     private func getOrCreateContext(for script: String) -> JSContext? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+
         if let cached = contextCache[script] {
             // Promote to most-recently-used position.
             cacheOrder.removeAll { $0 == script }
@@ -99,7 +150,7 @@ final class ScriptRuleRunner {
         return ctx
     }
 
-    // MARK: - Execution (always runs on evalQueue)
+    // MARK: - Execution (runs on the current evalQueue)
 
     private func executeInContext(script: String, content: String, sourceBundleID: String?) -> ScriptResult? {
         guard let ctx = getOrCreateContext(for: script) else { return nil }

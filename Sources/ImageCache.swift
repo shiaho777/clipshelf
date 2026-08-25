@@ -67,7 +67,9 @@ class ImageCache {
         }
         guard let data else { return nil }
         if let fileName {
-            sharedDataCache.setObject(data as NSData, forKey: fileName as NSString)
+            // Cost is required: entries inserted without one are not counted
+            // against totalCostLimit and would never be evicted under pressure.
+            sharedDataCache.setObject(data as NSData, forKey: fileName as NSString, cost: data.count)
         }
         guard let img = NSImage(data: data) else { return nil }
         let cost = data.count

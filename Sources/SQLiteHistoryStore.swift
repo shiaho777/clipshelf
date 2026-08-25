@@ -230,7 +230,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         let boundedLimit = max(0, min(limit, Int(Int32.max)))
         guard boundedLimit > 0 else { return [] }
 
-        let whereClause = terms.map { _ in "(content LIKE ? OR ocr_text LIKE ? OR source_app_name LIKE ?)" }.joined(separator: " AND ")
+        let whereClause = terms.map { _ in "(content LIKE ? ESCAPE '\\' OR ocr_text LIKE ? ESCAPE '\\' OR source_app_name LIKE ? ESCAPE '\\')" }.joined(separator: " AND ")
         let sql = """
         SELECT id
         FROM clipboard_items
@@ -244,7 +244,9 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
         var bindIndex: Int32 = 1
         for term in terms {
-            let pattern = "%\(term)%"
+            // Escape LIKE wildcards so a search for "100%" doesn't match
+            // everything containing "100" followed by anything.
+            let pattern = "%\(Self.escapeLikePattern(term))%"
             sqlite3_bind_text(stmt, bindIndex, pattern, -1, SQLITE_TRANSIENT_DESTRUCTOR)
             sqlite3_bind_text(stmt, bindIndex + 1, pattern, -1, SQLITE_TRANSIENT_DESTRUCTOR)
             sqlite3_bind_text(stmt, bindIndex + 2, pattern, -1, SQLITE_TRANSIENT_DESTRUCTOR)
@@ -259,6 +261,13 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             }
         }
         return uuids
+    }
+
+    /// Escapes SQL LIKE wildcards (`\`, `%`, `_`) for use with `ESCAPE '\'`.
+    static func escapeLikePattern(_ term: String) -> String {
+        term.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
     }
 
     /// Sanitise a raw user query into a safe FTS5 MATCH expression for the trigram tokenizer.
@@ -862,12 +871,16 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         var contentEncData: Data?
         var rtfEncData: Data?
         let isEnc: Bool
-        if item.isSensitive, let contentData = item.content.data(using: .utf8) {
+        if item.isSensitive, let contentData = item.content.data(using: .utf8),
+           let encrypted = try? EncryptionService.shared.encrypt(contentData) {
             storedContent = "[\u{1F512} Sensitive]"
-            contentEncData = try? EncryptionService.shared.encrypt(contentData)
+            contentEncData = encrypted
             if let rtf = item.rtfData { rtfEncData = try? EncryptionService.shared.encrypt(rtf) }
             isEnc = true
         } else {
+            // Encryption failed or content not encodable: fall back to storing
+            // plaintext. Writing the placeholder without ciphertext would make
+            // the item permanently unrecoverable.
             isEnc = false
         }
 
