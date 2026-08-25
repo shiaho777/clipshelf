@@ -61,34 +61,40 @@ final class ScriptRuleRunner {
             var completed = false
 
             queue.async { [weak self] in
-                guard let self else { tryResume(nil, finished: false); return }
+                guard let self else {
+                    sync.lock()
+                    let won = !resumed
+                    resumed = true
+                    sync.unlock()
+                    guard won else { return }
+                    continuation.resume(returning: nil)
+                    return
+                }
                 let result = self.executeInContext(script: script, content: content, sourceBundleID: sourceBundleID)
-                tryResume(result, finished: true)
+                sync.lock()
+                let timeoutWon = resumed
+                resumed = true
+                completed = true
+                sync.unlock()
+                // A timed-out script may still finish later; it must not win.
+                guard !timeoutWon else { return }
+                continuation.resume(returning: result)
             }
 
             // Timeout: fires on a background global queue so no thread is blocked.
             DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + timeout) { [weak self] in
-                let didTimeOut = tryResume(nil, finished: false)
-                if didTimeOut {
-                    // The script is still spinning on `queue`. Quarantine it and
-                    // rotate to a fresh queue so subsequent rules keep working;
-                    // the blocked thread is abandoned.
-                    self?.quarantineScript(script, staleQueue: queue)
-                }
-            }
-
-            func tryResume(_ value: ScriptResult?, finished: Bool) -> Bool {
                 sync.lock()
-                let isFirst = !resumed
+                let won = !resumed && !completed
                 resumed = true
-                if finished { completed = true }
-                let alreadyCompleted = completed
                 sync.unlock()
-                guard isFirst else { return false }
-                continuation.resume(returning: value)
-                // True when *this* caller won the race and the script had not
-                // finished — i.e. the timeout handler observing a live script.
-                return !finished && !alreadyCompleted
+                guard won else { return }
+                // Quarantine *before* resuming the caller: the awaiting task may
+                // immediately issue the next evaluation, and that must land on
+                // the fresh queue rather than behind the stuck script.
+                self?.quarantineScript(script, staleQueue: queue)
+                continuation.resume(returning: nil)
+                // The spinning worker thread is abandoned; JSC has no public API
+                // to preempt a running script.
             }
         }
     }
