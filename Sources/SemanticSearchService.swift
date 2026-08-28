@@ -20,8 +20,18 @@ final class SemanticSearchService {
     private let wordModel: NLEmbedding?
     private let dimension: Int
 
+    /// Caches query embeddings for the semantic-search path. Every keystroke
+    /// (post-debounce) re-searches the same query text, and computing the
+    /// NLEmbedding vector dominates that call — far more than the vDSP scan.
+    private let queryEmbeddingCache = NSCache<NSString, QueryVectorBox>()
+
     /// True when at least one embedding model is available.
     var isAvailable: Bool { sentenceModel != nil || wordModel != nil }
+
+    private final class QueryVectorBox {
+        let vector: [Float32]
+        init(_ vector: [Float32]) { self.vector = vector }
+    }
 
     private init() {
         sentenceModel = NLEmbedding.sentenceEmbedding(for: .english)
@@ -96,7 +106,7 @@ final class SemanticSearchService {
         guard isAvailable, !query.isEmpty, !embeddings.isEmpty else { return [] }
 
         // Compute query vector synchronously (called on search path already debounced)
-        guard let queryVec = computeEmbedding(for: query) else { return [] }
+        guard let queryVec = cachedQueryEmbedding(for: query) else { return [] }
         let queryNorm = l2Norm(queryVec)
         guard queryNorm > 1e-6 else { return [] }
 
@@ -117,6 +127,19 @@ final class SemanticSearchService {
     }
 
     // MARK: - Float32 ↔ Data
+
+    /// Cached embedding lookup for search queries; falls back to computing and
+    /// memoizing the vector. NSCache keeps repeated keystroke searches cheap
+    /// while still evicting under memory pressure.
+    private func cachedQueryEmbedding(for query: String) -> [Float32]? {
+        let key = query as NSString
+        if let boxed = queryEmbeddingCache.object(forKey: key) {
+            return boxed.vector
+        }
+        guard let vector = computeEmbedding(for: query) else { return nil }
+        queryEmbeddingCache.setObject(QueryVectorBox(vector), forKey: key, cost: vector.count * MemoryLayout<Float32>.size)
+        return vector
+    }
 
     func float32ArrayToData(_ vector: [Float32]) -> Data {
         vector.withUnsafeBufferPointer { buffer in

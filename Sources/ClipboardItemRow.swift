@@ -53,7 +53,10 @@ struct ClipboardItemRow: View {
     @State private var isDropTargeted: Bool = false
 
     var body: some View {
-        let detection = item.detection
+        // Only evaluate detection for types that render detection-driven UI;
+        // image rows never show color swatches, URL or folder affordances, and
+        // ContentDetector.analyze() is non-trivial for text content.
+        let detection = (item.type == .text || item.type == .richText) ? item.detection : .empty
         
         HStack(spacing: 8) {
             if let idx = index {

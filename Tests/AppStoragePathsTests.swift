@@ -2,6 +2,13 @@ import XCTest
 @testable import ClipShelf
 
 final class AppStoragePathsTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // defaultStorageDirectory() memoizes the migration as one-shot per process;
+        // reset so each test exercises the real migration path.
+        AppStoragePaths.resetMigrationMemoization()
+    }
+
     func testMigratesLegacyDirectoryWhenDestinationMissing() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ClipShelfMigration-\(UUID().uuidString)", isDirectory: true)
@@ -19,8 +26,7 @@ final class AppStoragePathsTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
     }
 
-    func testMergesMissingFilesWithoutOverwritingDestination() throws {
-        let root = FileManager.default.temporaryDirectory
+    func testMergesMissingFilesWithoutOverwritingDestination() throws {        let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ClipShelfMigration-\(UUID().uuidString)", isDirectory: true)
         let legacy = root.appendingPathComponent(AppStoragePaths.legacyDirectoryName, isDirectory: true)
         let destination = root.appendingPathComponent(AppStoragePaths.productDirectoryName, isDirectory: true)

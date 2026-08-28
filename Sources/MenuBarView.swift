@@ -271,7 +271,13 @@ struct MenuBarView: View {
     @ViewBuilder
     private func historyRow(index: Int, item: ClipboardItem) -> some View {
         let rowIndex: Int? = isMultiSelectMode ? nil : (index < 9 ? index + 1 : nil)
-        let imageURL = clipboardManager.imageFileURL(for: item)
+        // imageFileURL and filePaths are only consumed by image / fileURL rows;
+        // skip the path construction (and file-path JSON parsing) for the far
+        // more common text rows.
+        let isImageRow = item.type == .image
+        let isFileURLRow = item.type == .fileURL
+        let imageURL = isImageRow ? clipboardManager.imageFileURL(for: item) : nil
+        let rowFilePaths = isFileURLRow ? item.filePaths : []
         let isFocused = focusedIndex == index
         let isUnlocked = unlockedItemIDs.contains(item.id)
         let isSelected = selectedItemIDs.contains(item.id)
@@ -330,7 +336,7 @@ struct MenuBarView: View {
                     }
                 }
             },
-            filePaths: item.filePaths
+            filePaths: rowFilePaths
         )
         .id("\(item.id.uuidString)-\(lang.revision)")
     }
