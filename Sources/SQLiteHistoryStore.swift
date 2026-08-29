@@ -177,6 +177,10 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     }
 
     deinit {
+        for stmt in cachedStatements.values {
+            sqlite3_finalize(stmt)
+        }
+        cachedStatements.removeAll()
         if let db { sqlite3_close(db) }
     }
 
@@ -665,19 +669,19 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
         exec("BEGIN")
         var anyFailed = false
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, "UPDATE clipboard_items SET use_count = ? WHERE id = ?", -1, &stmt, nil) == SQLITE_OK {
-            defer { sqlite3_finalize(stmt) }
+        if let stmt = cachedStatement("UPDATE clipboard_items SET use_count = ? WHERE id = ?") {
             for (id, useCount, _) in changes {
-                sqlite3_reset(stmt)
-                sqlite3_clear_bindings(stmt)
                 sqlite3_bind_int(stmt, 1, Int32(useCount))
                 sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT_DESTRUCTOR)
                 if sqlite3_step(stmt) != SQLITE_DONE {
                     anyFailed = true
                     break
                 }
+                sqlite3_reset(stmt)
+                sqlite3_clear_bindings(stmt)
             }
+            sqlite3_reset(stmt)
+            sqlite3_clear_bindings(stmt)
         } else {
             anyFailed = true
         }
@@ -827,41 +831,37 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         (id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            logger.error("SQL prepare failed: \(String(cString: sqlite3_errmsg(db)))")
-            return false
-        }
-        defer { sqlite3_finalize(stmt) }
+        guard let stmt = cachedStatement(sql) else { return false }
+        defer { sqlite3_reset(stmt); sqlite3_clear_bindings(stmt) }
         for item in items {
-            sqlite3_reset(stmt)
-            sqlite3_clear_bindings(stmt)
-            bindItem(item, to: stmt!)
+            bindItem(item, to: stmt)
             if sqlite3_step(stmt) != SQLITE_DONE {
                 logger.error("SQL step failed: \(String(cString: sqlite3_errmsg(db)))")
+                sqlite3_reset(stmt)
+                sqlite3_clear_bindings(stmt)
                 return false
             }
+            sqlite3_reset(stmt)
+            sqlite3_clear_bindings(stmt)
         }
         return true
     }
 
     private func deleteItemsPrepared(_ ids: Set<UUID>) -> Bool {
-        guard let db else { return false }
+        guard db != nil else { return false }
         guard !ids.isEmpty else { return true }
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "DELETE FROM clipboard_items WHERE id = ?", -1, &stmt, nil) == SQLITE_OK else {
-            logger.error("SQL prepare failed: \(String(cString: sqlite3_errmsg(db)))")
-            return false
-        }
-        defer { sqlite3_finalize(stmt) }
+        guard let stmt = cachedStatement("DELETE FROM clipboard_items WHERE id = ?") else { return false }
+        defer { sqlite3_reset(stmt); sqlite3_clear_bindings(stmt) }
         for id in ids {
-            sqlite3_reset(stmt)
-            sqlite3_clear_bindings(stmt)
             sqlite3_bind_text(stmt, 1, id.uuidString, -1, SQLITE_TRANSIENT_DESTRUCTOR)
             if sqlite3_step(stmt) != SQLITE_DONE {
-                logger.error("SQL step failed: \(String(cString: sqlite3_errmsg(db)))")
+                logger.error("SQL step failed: \(String(cString: sqlite3_errmsg(self.db!)))")
+                sqlite3_reset(stmt)
+                sqlite3_clear_bindings(stmt)
                 return false
             }
+            sqlite3_reset(stmt)
+            sqlite3_clear_bindings(stmt)
         }
         return true
     }
@@ -1032,6 +1032,27 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
     // MARK: - Helpers
 
+    /// Cache of repeatedly-used prepared statements (upsert, delete, use-count
+    /// updates). Compiling SQL on every write showed up as measurable overhead
+    /// in the incremental persistence path; the store is guarded by
+    /// `dbLock`, so cached statements are only touched under that lock.
+    private var cachedStatements: [String: OpaquePointer] = [:]
+
+    private func cachedStatement(_ sql: String) -> OpaquePointer? {
+        if let stmt = cachedStatements[sql] {
+            sqlite3_reset(stmt)
+            sqlite3_clear_bindings(stmt)
+            return stmt
+        }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+            logger.error("SQL prepare failed: \(String(cString: sqlite3_errmsg(self.db!)))")
+            return nil
+        }
+        cachedStatements[sql] = stmt
+        return stmt
+    }
+
     @discardableResult
     private func exec(_ sql: String) -> Bool {
         let status = sqlite3_exec(db, sql, nil, nil, nil)
@@ -1044,17 +1065,12 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
     @discardableResult
     private func execBind(_ sql: String, bind: (OpaquePointer) -> Void) -> Bool {
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            logger.error("SQL prepare failed: \(String(cString: sqlite3_errmsg(self.db!)))")
-            return false
-        }
-        bind(stmt!)
+        guard let stmt = cachedStatement(sql) else { return false }
+        bind(stmt)
         let success = sqlite3_step(stmt) == SQLITE_DONE
         if !success {
             logger.error("SQL step failed: \(String(cString: sqlite3_errmsg(self.db!)))")
         }
-        sqlite3_finalize(stmt)
         return success
     }
 

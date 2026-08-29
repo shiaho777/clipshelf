@@ -16,6 +16,7 @@ enum FuzzySearch {
         let tokens = queryLower.split(separator: " ").map(String.init)
         guard !tokens.isEmpty else { return nil }
         let textLower = text.lowercased()
+        let textScalars = Array(textLower.unicodeScalars)
 
         // Try exact token matching first
         let allTokensExact = tokens.allSatisfy { textLower.contains($0) }
@@ -35,7 +36,7 @@ enum FuzzySearch {
         // Try fuzzy subsequence matching for each token
         var allIndices = Set<Int>()
         for token in tokens {
-            guard let tokenIndices = subsequenceIndices(query: token, in: textLower) else {
+            guard let tokenIndices = subsequenceIndices(query: token, textScalars: textScalars) else {
                 return nil
             }
             allIndices.formUnion(tokenIndices)
@@ -46,8 +47,12 @@ enum FuzzySearch {
     /// Returns the character indices in `textLower` where query characters matched as a subsequence.
     /// Returns nil if no subsequence match.
     private static func subsequenceIndices(query: String, in textLower: String) -> Set<Int>? {
-        let queryChars = Array(query)
-        let textChars = Array(textLower)
+        subsequenceIndices(query: query, textScalars: Array(textLower.unicodeScalars))
+    }
+
+    private static func subsequenceIndices(query: String, textScalars: [Unicode.Scalar]) -> Set<Int>? {
+        let queryChars = Array(query.unicodeScalars)
+        let textChars = textScalars
         guard !queryChars.isEmpty else { return Set() }
         guard textChars.count >= queryChars.count else { return nil }
 
@@ -242,13 +247,16 @@ enum FuzzySearch {
     
     /// Quick subsequence check without scoring — O(n) early filter.
     private static func isSubsequence(_ query: String, of text: String) -> Bool {
-        var qi = query.startIndex
-        var ti = text.startIndex
-        while qi < query.endIndex && ti < text.endIndex {
-            if query[qi] == text[ti] { qi = query.index(after: qi) }
-            ti = text.index(after: ti)
+        var queryScalars = query.unicodeScalars.makeIterator()
+        var queryCurrent = queryScalars.next()
+        guard queryCurrent != nil else { return true }
+        for scalar in text.unicodeScalars {
+            if scalar == queryCurrent {
+                queryCurrent = queryScalars.next()
+                if queryCurrent == nil { return true }
+            }
         }
-        return qi == query.endIndex
+        return queryCurrent == nil
     }
     
     // MARK: - Scoring
@@ -273,23 +281,23 @@ enum FuzzySearch {
     /// Subsequence matching: query characters must appear in order within the target.
     /// Returns a score, or nil if no match.
     static func subsequenceScore(query: String, in textLower: String, original: String) -> Int? {
-        let queryChars = Array(query)
-        let textChars = Array(textLower)
-        // Pre-build once here; previously this was allocated inside the hot loop
+        let queryChars = Array(query.unicodeScalars)
+        let textChars = Array(textLower.unicodeScalars)
+        // Pre-built once here; previously this was allocated inside the hot loop
         // for every matched character, causing O(n²) allocations per search item.
-        let origChars = Array(original)
+        let origChars = Array(original.unicodeScalars)
 
         guard !queryChars.isEmpty else { return 0 }
         guard textChars.count >= queryChars.count else { return nil }
-        
+
         var score = 0
         var queryIndex = 0
         var consecutiveMatches = 0
         var lastMatchIndex = -2  // impossible index to start
-        
+
         for (textIndex, textChar) in textChars.enumerated() {
             guard queryIndex < queryChars.count else { break }
-            
+
             if textChar == queryChars[queryIndex] {
                 // Consecutive character bonus
                 if textIndex == lastMatchIndex + 1 {
@@ -298,30 +306,44 @@ enum FuzzySearch {
                 } else {
                     consecutiveMatches = 1
                 }
-                
-                // Word boundary bonus (start of word)
-                if textIndex == 0 || !textChars[textIndex - 1].isLetter {
+
+                // Word boundary bonus (start of word). Unicode.Scalar has no
+                // `isLetter`; lowercase/uppercase/titlecase/modifier-letter
+                // categories are the "L" classes Character.isLetter checks.
+                // Guard the subscript first — textIndex 0 must not read [-1].
+                if textIndex == 0 {
                     score += 15
+                } else {
+                    let prev = textChars[textIndex - 1]
+                    let prevCategory = prev.properties.generalCategory
+                    let isLetterPrev = prevCategory == .lowercaseLetter
+                        || prevCategory == .uppercaseLetter
+                        || prevCategory == .titlecaseLetter
+                        || prevCategory == .modifierLetter
+                        || prevCategory == .otherLetter
+                    if !isLetterPrev {
+                        score += 15
+                    }
                 }
-                
+
             // CamelCase boundary bonus
                 if textIndex > 0, textIndex < origChars.count {
-                    if origChars[textIndex].isUppercase && origChars[textIndex - 1].isLowercase {
+                    if origChars[textIndex].properties.isUppercase && origChars[textIndex - 1].properties.isLowercase {
                         score += 10
                     }
                 }
-                
+
                 lastMatchIndex = textIndex
                 queryIndex += 1
             }
         }
-        
+
         // All query characters must be matched
         guard queryIndex == queryChars.count else { return nil }
-        
+
         // Shorter content = more relevant
         score += max(0, 100 - textChars.count)
-        
+
         return score
     }
 }
