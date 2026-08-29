@@ -310,15 +310,20 @@ enum FuzzySearch {
                 // Word boundary bonus (start of word). Unicode.Scalar has no
                 // `isLetter`; lowercase/uppercase/titlecase/modifier-letter
                 // categories are the "L" classes Character.isLetter checks.
-                let prev = textChars[textIndex - 1]
-                let prevCategory = prev.properties.generalCategory
-                let isLetterPrev = prevCategory == .lowercaseLetter
-                    || prevCategory == .uppercaseLetter
-                    || prevCategory == .titlecaseLetter
-                    || prevCategory == .modifierLetter
-                    || prevCategory == .otherLetter
-                if textIndex == 0 || !isLetterPrev {
+                // Guard the subscript first — textIndex 0 must not read [-1].
+                if textIndex == 0 {
                     score += 15
+                } else {
+                    let prev = textChars[textIndex - 1]
+                    let prevCategory = prev.properties.generalCategory
+                    let isLetterPrev = prevCategory == .lowercaseLetter
+                        || prevCategory == .uppercaseLetter
+                        || prevCategory == .titlecaseLetter
+                        || prevCategory == .modifierLetter
+                        || prevCategory == .otherLetter
+                    if !isLetterPrev {
+                        score += 15
+                    }
                 }
 
             // CamelCase boundary bonus

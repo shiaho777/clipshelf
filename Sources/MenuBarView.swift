@@ -768,7 +768,7 @@ struct MenuBarView: View {
                         orderChanged = true
                     }
                     if !orderChanged {
-                        let bound = min(visibleCount + 1, items.count)
+                        let bound = min(visibleCount + 1, items.count, filteredItems.count)
                         for i in 0..<bound where filteredItems[i].id != items[i].id {
                             orderChanged = true
                             break
