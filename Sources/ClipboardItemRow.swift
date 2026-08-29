@@ -672,27 +672,24 @@ struct ClipboardItemRow: View {
                 .foregroundColor(.primary.opacity(0.88))
         }
         // Only highlight within the first 50 chars (displayText is already truncated).
-        // This avoids O(n) Text concatenation for long content.
+        // Build contiguous runs (highlighted vs plain) instead of appending per
+        // character — Text + Text allocation cost scales with run count, not
+        // character count.
         let chars = Array(text)
-        var result = Text("")
+        var result: Text?
         var i = 0
         while i < chars.count {
-            if indices.contains(i) {
-                var end = i
-                while end + 1 < chars.count && indices.contains(end + 1) { end += 1 }
-                result = result + Text(String(chars[i...end]))
-                    .foregroundColor(.accentColor)
-                    .fontWeight(.semibold)
-                i = end + 1
-            } else {
-                var end = i
-                while end + 1 < chars.count && !indices.contains(end + 1) { end += 1 }
-                result = result + Text(String(chars[i...end]))
-                    .foregroundColor(.primary.opacity(0.88))
-                i = end + 1
-            }
+            let highlighted = indices.contains(i)
+            var end = i
+            while end + 1 < chars.count && indices.contains(end + 1) == highlighted { end += 1 }
+            let piece = Text(String(chars[i...end]))
+            let styled = highlighted
+                ? piece.foregroundColor(.accentColor).fontWeight(.semibold)
+                : piece.foregroundColor(.primary.opacity(0.88))
+            result = result.map { $0 + styled } ?? styled
+            i = end + 1
         }
-        return result
+        return result ?? Text(text)
     }
 
     private func rowActionButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {

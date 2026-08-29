@@ -16,6 +16,7 @@ enum FuzzySearch {
         let tokens = queryLower.split(separator: " ").map(String.init)
         guard !tokens.isEmpty else { return nil }
         let textLower = text.lowercased()
+        let textScalars = Array(textLower.unicodeScalars)
 
         // Try exact token matching first
         let allTokensExact = tokens.allSatisfy { textLower.contains($0) }
@@ -35,7 +36,7 @@ enum FuzzySearch {
         // Try fuzzy subsequence matching for each token
         var allIndices = Set<Int>()
         for token in tokens {
-            guard let tokenIndices = subsequenceIndices(query: token, in: textLower) else {
+            guard let tokenIndices = subsequenceIndices(query: token, textScalars: textScalars) else {
                 return nil
             }
             allIndices.formUnion(tokenIndices)
@@ -46,8 +47,12 @@ enum FuzzySearch {
     /// Returns the character indices in `textLower` where query characters matched as a subsequence.
     /// Returns nil if no subsequence match.
     private static func subsequenceIndices(query: String, in textLower: String) -> Set<Int>? {
+        subsequenceIndices(query: query, textScalars: Array(textLower.unicodeScalars))
+    }
+
+    private static func subsequenceIndices(query: String, textScalars: [Unicode.Scalar]) -> Set<Int>? {
         let queryChars = Array(query.unicodeScalars)
-        let textChars = Array(textLower.unicodeScalars)
+        let textChars = textScalars
         guard !queryChars.isEmpty else { return Set() }
         guard textChars.count >= queryChars.count else { return nil }
 

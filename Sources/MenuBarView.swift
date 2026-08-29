@@ -89,7 +89,6 @@ struct MenuBarView: View {
     @State private var searchGeneration: UInt = 0
     @State private var lastSeenItemCount: Int = 0
     @State private var lastSeenFirstItemID: UUID?
-    @State private var lastSeenOrderSignature: String = ""
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     @State private var diffPair: DiffPair?
     /// IDs of sensitive items the user has unlocked in the current panel session.
@@ -758,12 +757,24 @@ struct MenuBarView: View {
             itemsUpdateDebounceTask?.cancel()
             let task = DispatchWorkItem {
                 let items = clipboardManager.items
-                let orderSignature = items.prefix(visibleCount).map(\.id.uuidString).joined(separator: ",")
                 let needsFilterRebuild: Bool
                 if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    needsFilterRebuild = items.count != lastSeenItemCount
-                        || items.first?.id != lastSeenFirstItemID
-                        || orderSignature != lastSeenOrderSignature
+                    // Cheap change detection: count + head ID + the visible page's
+                    // IDs compared directly. Building a joined UUID string per
+                    // revision was O(visibleCount) string allocations on every
+                    // history mutation even when nothing visible changed.
+                    var orderChanged = items.count != lastSeenItemCount
+                    if !orderChanged, items.first?.id != lastSeenFirstItemID {
+                        orderChanged = true
+                    }
+                    if !orderChanged {
+                        let bound = min(visibleCount + 1, items.count)
+                        for i in 0..<bound where filteredItems[i].id != items[i].id {
+                            orderChanged = true
+                            break
+                        }
+                    }
+                    needsFilterRebuild = orderChanged
                 } else {
                     needsFilterRebuild = true
                 }
@@ -773,7 +784,6 @@ struct MenuBarView: View {
                 }
                 lastSeenItemCount = items.count
                 lastSeenFirstItemID = items.first?.id
-                lastSeenOrderSignature = orderSignature
                 if let hovered = hoveredItemId, clipboardManager.item(byID: hovered) == nil {
                     hoveredItemId = nil
                 }
