@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-08-29
 
 ### Fixed
 - Hotkey customizations were silently reset on every relaunch: assigning the stored main hotkey during load fired `didSet`, whose `saveConfig()` persisted the not-yet-loaded default queue/quick-paste keys over the user's saved values (`HotKeyManager`)
@@ -14,11 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Paste fallback: if the target app failed to activate within the timeout, ClipShelf injected ⌘V into whatever window had focus, potentially inserting sensitive clipboard content into the wrong app. It now verifies frontmost identity before simulating the keystroke
 - `SearchClipboardHistoryIntent` crashed the process when Shortcuts passed a negative Limit (`prefix(_:)` precondition)
 - Crash in `applicationWillTerminate` when termination happens before launch setup completes
+- Out-of-range crash in fuzzy scoring when a query matched at the first character of the content (`subsequenceScore`)
 
 ### Security
 - Script rules that never return (infinite loop) are quarantined after the timeout and the evaluation queue is rotated, so one bad script can no longer disable all script rules until relaunch; quarantined scripts are skipped without spending another timeout window (`ScriptRuleRunner`)
 - CSV export neutralizes spreadsheet formula injection for cells beginning with `=`, `+`, `-`, `@`, tab, or CR
 - Added a single-instance guard: two menu-bar instances would fight over the pasteboard and status item. This also covers the LaunchAgent fallback, whose `launchctl bootstrap` starts the job immediately (`RunAtLoad`)
+
+### Performance
+- Panel rendering: skip per-row image-URL construction and file-path parsing for text rows; content detection (regex + filesystem stat) runs only for text/richText rows; search highlighting builds contiguous styled runs instead of one `Text` per matched character; history-revision change detection compares item IDs directly instead of building a joined UUID string on every copy
+- Search: fuzzy matching and scoring operate on Unicode scalar arrays (scoring ~1.9× faster in micro-benchmarks, subsequence gate ~20× faster); `matchedIndices` reuses one scalar array across query tokens; the semantic-search query embedding is cached so repeated keystroke searches stop recomputing the NLEmbedding vector
+- Persistence: SQLite prepared statements for the incremental write path (upsert, delete, use-count updates) are compiled once and cached; the legacy-directory migration check in `AppStoragePaths.defaultStorageDirectory()` is memoized to one run per process
 
 ### Changed
 - `EncryptionService` key initialization is now thread-safe; the persistence and incremental-persistence queues can reach it concurrently on first use
