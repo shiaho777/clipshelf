@@ -57,6 +57,9 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        // Grouped forms paint their own opaque background by default; hide it
+        // so the window's HUD vibrancy shows through like on the main panel.
+        .scrollContentBackground(.hidden)
         .standardPopupLayout()
         .accessibilityIdentifier("settingsView")
         .onAppear {

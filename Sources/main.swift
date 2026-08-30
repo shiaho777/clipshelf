@@ -185,15 +185,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if settingsWindow == nil {
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: WindowLayout.popupSize.width, height: WindowLayout.popupSize.height),
-                styleMask: [.titled, .closable],
+                styleMask: [.titled, .closable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.contentViewController = NSHostingController(
+            // Match the main panel's HUD vibrancy so both windows feel like
+            // one app: transparent titlebar + blurred material behind content.
+            window.titlebarAppearsTransparent = true
+            let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: WindowLayout.popupSize.width, height: WindowLayout.popupSize.height))
+            vibrancy.material = .hudWindow
+            vibrancy.blendingMode = .behindWindow
+            vibrancy.state = .active
+            vibrancy.autoresizingMask = [.width, .height]
+            let hosting = NSHostingController(
                 rootView: SettingsView(clipboardManager: clipboardManager, snippetManager: snippetManager)
             )
+            hosting.view.layer?.backgroundColor = .clear
+            window.contentView = vibrancy
+            vibrancy.addSubview(hosting.view)
+            hosting.view.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                hosting.view.topAnchor.constraint(equalTo: vibrancy.topAnchor),
+                hosting.view.bottomAnchor.constraint(equalTo: vibrancy.bottomAnchor),
+                hosting.view.leadingAnchor.constraint(equalTo: vibrancy.leadingAnchor),
+                hosting.view.trailingAnchor.constraint(equalTo: vibrancy.trailingAnchor)
+            ])
             window.center()
             settingsWindow = window
         }
