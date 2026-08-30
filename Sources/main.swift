@@ -74,12 +74,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let savedSize = loadPanelSize()
         panel = FloatingPanel(
             contentRect: NSRect(origin: .zero, size: savedSize),
-            styleMask: [.titled, .resizable, .fullSizeContentView, .nonactivatingPanel, .borderless],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
+        // The bordered-but-transparent titlebar renders traffic-light buttons;
+        // without this NSPanel keeps them disabled (visible but not clickable).
+        // Close routes to hidePanel() so clicking ✕ hides the panel instead of
+        // terminating the app; Esc / hotkey / outside-click still work too.
+        panel.isReleasedWhenClosed = false
+        panel.standardWindowButton(.closeButton)?.isEnabled = true
+        panel.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+        panel.standardWindowButton(.zoomButton)?.isEnabled = false
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
+        panel.delegate = self
         panel.isMovableByWindowBackground = false
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -245,6 +254,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } else {
             showPanel()
         }
+    }
+
+    /// NSWindowDelegate close hook for the panel's ✕ button. Returning an
+    /// order-out instead of the default close keeps the panel object alive;
+    /// AppKit calls `windowShouldClose` before performing a real close.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender === panel else { return true }
+        hidePanel()
+        return false
     }
 
     private func showPanel() {
