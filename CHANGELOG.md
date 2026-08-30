@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-08-30
+
+### Fixed
+- The panel's traffic-light close button (✕) rendered but was disabled: the window mixed `.titled` with `.borderless` in its style mask, which makes NSPanel display non-functional buttons. The close button is now enabled and clicking it hides the panel while ClipShelf keeps running in the menu bar (`windowShouldClose` → `hidePanel`). Zoom and miniaturize stay disabled; Esc / hotkey / outside-click closures unchanged
+
 ## [1.1.0] - 2026-08-29
 
 ### Fixed
