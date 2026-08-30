@@ -37,7 +37,10 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .padding(.horizontal, 16)
-            .padding(.top, 12)
+            // The settings window uses full-size content view, so content starts
+            // under the titlebar (28pt). 40pt clears it; at 12pt the segmented
+            // control's top 2pt was clipped by the traffic-light row.
+            .padding(.top, 40)
             .padding(.bottom, 8)
 
             Group {
