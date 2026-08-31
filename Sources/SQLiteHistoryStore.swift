@@ -152,6 +152,11 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         CREATE INDEX IF NOT EXISTS idx_clipboard_items_expires
         ON clipboard_items(expires_at)
         WHERE expires_at IS NOT NULL;
+        """),
+        // Version 6: persist the screenshot flag. It was only ever held in
+        // memory, so every screenshot lost its badge and grouping after restart.
+        (6, """
+        ALTER TABLE clipboard_items ADD COLUMN is_screenshot INTEGER NOT NULL DEFAULT 0;
         """)
     ]
 
@@ -322,7 +327,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private func loadItemsLocked(limit: Int?) throws -> [ClipboardItem] {
         guard let db else { throw StoreError.databaseNotOpen }
 
-        let selectCols = "id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc"
+        let selectCols = "id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot"
 
         func fetch(_ sql: String) throws -> [ClipboardItem] {
             var stmt: OpaquePointer?
@@ -378,7 +383,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         if let cached = itemsLock.withLock({ lastKnownItems[id] }) {
             return cached
         }
-        let sql = "SELECT id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc FROM clipboard_items WHERE id = ? LIMIT 1"
+        let sql = "SELECT id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot FROM clipboard_items WHERE id = ? LIMIT 1"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
             throw StoreError.queryFailed(String(cString: sqlite3_errmsg(db)))
@@ -412,16 +417,22 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             newMap[item.id] = item
         }
         let newIDs = Set(newMap.keys)
-        let currentItems = itemsLock.withLock { lastKnownItems }
 
+        // Re-read the cache INSIDE the transaction window. The snapshot runs on
+        // the persistence queue while incremental deletes commit on the
+        // incremental queue; diffing against a cache read before BEGIN let a
+        // concurrent delete be overwritten by INSERT OR REPLACE — deleted rows
+        // resurrected after restart.
+        exec("BEGIN")
+        let currentItems = itemsLock.withLock { lastKnownItems }
         let toInsert = newIDs.subtracting(currentItems.keys)
         let toUpdate = newIDs.intersection(currentItems.keys).filter { newMap[$0] != currentItems[$0] }
 
         guard !toInsert.isEmpty || !toUpdate.isEmpty else {
+            exec("ROLLBACK")
             return false
         }
 
-        exec("BEGIN")
         var anyFailed = false
 
         if !toUpdate.isEmpty && !deleteItemsPrepared(toUpdate) {
@@ -625,11 +636,12 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         guard db != nil else { throw StoreError.databaseNotOpen }
         guard !ids.isEmpty else { return false }
 
-        let existingIDs = itemsLock.withLock { ids.intersection(lastKnownItems.keys) }
-        guard !existingIDs.isEmpty else { return false }
-
+        // Delete ALL requested rows, not just cached ones: cold items beyond
+        // the hot window aren't in lastKnownItems, and filtering by the cache
+        // made their deletes silent no-ops — rows lingered and returned on the
+        // next load. (DELETE of an unknown id is simply a no-op in SQL.)
         exec("BEGIN")
-        let anyFailed = !deleteItemsPrepared(existingIDs)
+        let anyFailed = !deleteItemsPrepared(ids)
 
         if anyFailed {
             exec("ROLLBACK")
@@ -639,10 +651,10 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
         exec("COMMIT")
         itemsLock.withLock {
-            for id in existingIDs {
+            for id in ids {
                 lastKnownItems.removeValue(forKey: id)
             }
-            lastKnownOrder.removeAll { existingIDs.contains($0) }
+            lastKnownOrder.removeAll { ids.contains($0) }
         }
         return true
     }
@@ -838,8 +850,8 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         guard let db else { return false }
         let sql = """
         INSERT OR REPLACE INTO clipboard_items
-        (id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         guard let stmt = cachedStatement(sql) else { return false }
         defer { sqlite3_reset(stmt); sqlite3_clear_bindings(stmt) }
@@ -928,6 +940,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             sqlite3_bind_null(stmt, 16)
         }
         sqlite3_bind_int(stmt, 17, isEnc ? 1 : 0)
+        sqlite3_bind_int(stmt, 18, item.isScreenshot ? 1 : 0)
     }
 
     private func readRow(_ stmt: OpaquePointer) -> ClipboardItem? {
@@ -973,13 +986,17 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         if sqlite3_column_type(stmt, 13) != SQLITE_NULL {
             expiresAt = Date(timeIntervalSinceReferenceDate: sqlite3_column_double(stmt, 13))
         }
+        // Column 17 (is_screenshot) may be absent on databases not yet migrated
+        // to v6 — treat an out-of-range column as false instead of crashing.
+        let isScreenshot = sqlite3_column_count(stmt) > 17 && sqlite3_column_int(stmt, 17) != 0
 
         return ClipboardItem(
             id: id, content: content, rtfData: rtfData, type: type,
             timestamp: timestamp, isPinned: isPinned, useCount: useCount,
             imageHash: imageHash, imageFileName: imageFileName, ocrText: ocrText,
             sourceBundleID: sourceBundleID, sourceAppName: sourceAppName,
-            isSensitive: isSensitive, expiresAt: expiresAt
+            isSensitive: isSensitive, expiresAt: expiresAt,
+            isScreenshot: isScreenshot
         )
     }
 

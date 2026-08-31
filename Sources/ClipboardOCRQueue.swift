@@ -6,6 +6,8 @@ final class ClipboardOCRQueue {
     private var headIndex = 0
     private var pendingIDSet: Set<UUID> = []
     private var isProcessing = false
+    /// The item whose OCR is in flight; pairs with the deadline watchdog.
+    private var currentOCRItem: UUID?
     private let maxPendingItems: Int
     private let imageManager: ClipboardImageManager
     private let itemProvider: (UUID) -> ClipboardItem?
@@ -68,17 +70,30 @@ final class ClipboardOCRQueue {
                 continue
             }
             isProcessing = true
+            // Deadline guard: Vision has no built-in timeout and a malformed /
+            // huge image can stall the recognizer forever, wedging isProcessing
+            // and silently disabling all future OCR. Reset and continue after
+            // 30s if the completion never fires.
+            currentOCRItem = id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+                guard let self, self.currentOCRItem == id, self.isProcessing else { return }
+                self.isProcessing = false
+                self.currentOCRItem = nil
+                self.processNext()
+            }
             Task { [weak self] in
                 guard let self else { return }
                 let data = await self.imageManager.imageDataForOCR(for: item)
                 guard let data else {
                     self.isProcessing = false
+                    self.currentOCRItem = nil
                     self.processNext()
                     return
                 }
                 self.imageManager.recognizeText(in: data) { [weak self] ocrText in
                     guard let self else { return }
                     self.isProcessing = false
+                    self.currentOCRItem = nil
                     if let ocrText {
                         self.onRecognized(id, ocrText)
                     }

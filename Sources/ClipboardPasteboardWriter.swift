@@ -67,7 +67,15 @@ enum ClipboardPasteboardWriter {
                 }
                 retainedProviders.append(provider)
                 pasteboard.clearContents()
+                // writeObjects has no direct success flag, but the write is only
+                // good if the pasteboard actually now contains our type with our
+                // change count bumped. Verify via contents to catch a failed
+                // clearContents/writeObjects before callers fire Cmd+V.
                 pasteboard.writeObjects([pasteboardItem])
+                let wrote = pasteboard.types?.contains(payload.type) == true
+                guard wrote else {
+                    return WriteResult(smartPasteDescription: nil, retainedProviders: [], didWrite: false)
+                }
             } else if let data = payload.data {
                 pasteboard.clearContents()
                 guard pasteboard.setData(data, forType: payload.type) else {

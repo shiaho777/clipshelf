@@ -326,10 +326,13 @@ class ClipboardManager: ObservableObject {
     }
 
     private func scheduleDeferredStartupMaintenance() {
-        let orphanRefs = Set(items.compactMap(\.imageFileName))
         Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
+            // Snapshot the referenced set at prune time, not at init: an init-
+            // time snapshot misses images captured in the first 5 seconds, and
+            // the pruner would delete their backing files as "orphans".
+            let orphanRefs = Set(self.items.compactMap(\.imageFileName))
             self.imageManager.pruneOrphanedFiles(referencedFileNames: orphanRefs)
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             self.migrateOCRForExistingImages()
@@ -769,6 +772,11 @@ class ClipboardManager: ObservableObject {
 
     func recentItemContents(limit: Int) -> [String] {
         ClipboardHistoryQueries.recentContents(from: items, limit: limit)
+    }
+
+    /// Recent items as full models (used by AppIntents to filter sensitive).
+    func recentItems(limit: Int) -> [ClipboardItem] {
+        Array(items.prefix(max(0, min(limit, items.count))))
     }
 
     func itemContents(sourceBundleID: String, limit: Int) -> [String] {

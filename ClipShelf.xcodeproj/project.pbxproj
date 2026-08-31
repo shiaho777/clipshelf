@@ -10,6 +10,7 @@
 		00D0C63EFD23E33319D436C8 /* SpotlightIndexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBFA949C7B891F290195995 /* SpotlightIndexService.swift */; };
 		0192C5775F6C6D7340736946 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B785B879897D1A17039E691 /* HotKeyManager.swift */; };
 		02A3D78C32987B7A98E927BB /* AppStoragePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A29E5FDD62E7AC816C123D3 /* AppStoragePaths.swift */; };
+		09D414AEFDD33A56E6984835 /* SettingsEmbeddedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F6B1A2FBCFA57C491A87132 /* SettingsEmbeddedView.swift */; };
 		09DDDF56A1BDE6237DDD6FFD /* PanelSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B79C1EBD7DD4098023217E /* PanelSupport.swift */; };
 		0CC0764752889AC3DAC016C6 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C4A6B7704BC3DDB9BC138A /* OCRService.swift */; };
 		0EBD1EF2D2BC19912FDF5A3D /* PersistenceScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5D4862E65514195982337A /* PersistenceScheduler.swift */; };
@@ -155,6 +156,7 @@
 		4A2AA7723DEF89EE469EA68C /* SnippetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetTests.swift; sourceTree = "<group>"; };
 		4C8402D5A2705E7785EC3ED2 /* ClipboardHistoryMaintenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryMaintenanceTests.swift; sourceTree = "<group>"; };
 		4DDFFE9A5F9D5B9AEAF309E3 /* PasteAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteAdapter.swift; sourceTree = "<group>"; };
+		4F6B1A2FBCFA57C491A87132 /* SettingsEmbeddedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsEmbeddedView.swift; sourceTree = "<group>"; };
 		51E553EBF5A42A604BD0C81C /* ClipboardHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryStore.swift; sourceTree = "<group>"; };
 		51F2B77363B55BD0177CB95D /* ClipboardItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItemRow.swift; sourceTree = "<group>"; };
 		52A27B7079D3CE90CC56A379 /* TextTransformAdvancedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextTransformAdvancedTests.swift; sourceTree = "<group>"; };
@@ -317,6 +319,7 @@
 				8E2751E10002E3E552D30F19 /* RulesSettingsView.swift */,
 				686B182792168FA86F2192E2 /* ScriptRuleRunner.swift */,
 				1613B25C159DA28839D9A192 /* SemanticSearchService.swift */,
+				4F6B1A2FBCFA57C491A87132 /* SettingsEmbeddedView.swift */,
 				F9E2701CB2FC3B2A9B206483 /* SettingsView.swift */,
 				53FE721CE8FC81F8CD2D3363 /* SettingsViewModel.swift */,
 				150E579A8FE4143562C642EE /* Snippet.swift */,
@@ -598,6 +601,7 @@
 				FE3C2B2CB7D99A036CEFF751 /* SQLiteHistoryStore.swift in Sources */,
 				E6B33336CCDF425BB4B9AFE8 /* ScriptRuleRunner.swift in Sources */,
 				92818E8A4D0E2F7DCDCD6055 /* SemanticSearchService.swift in Sources */,
+				09D414AEFDD33A56E6984835 /* SettingsEmbeddedView.swift in Sources */,
 				2235D427AF2A264343C3383F /* SettingsView.swift in Sources */,
 				CB049A1A821E72981B5ED4EA /* SettingsViewModel.swift in Sources */,
 				1FB394A0ABB624BFD8DC15F4 /* Snippet.swift in Sources */,

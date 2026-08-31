@@ -21,7 +21,9 @@ struct SearchClipboardHistoryIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
         guard let delegate = NSApp.delegate as? AppDelegate else { return .result(value: []) }
-        var results = delegate.clipboardManager.search(query)
+        // Sensitive items are never exposed to Shortcuts — the UI masks them
+        // behind biometric auth, and intents have no way to satisfy that gate.
+        var results = delegate.clipboardManager.search(query).filter { !$0.isSensitive }
         if !typeFilter.isEmpty, let type = ClipboardItem.ItemType(rawValue: typeFilter) {
             results = results.filter { $0.type == type }
         }
@@ -46,7 +48,9 @@ struct GetRecentItemsIntent: AppIntent {
         guard let delegate = NSApp.delegate as? AppDelegate else {
             return .result(value: [])
         }
-        return .result(value: delegate.clipboardManager.recentItemContents(limit: count))
+        // Never expose sensitive items to Shortcuts (no biometric gate here).
+        let items = delegate.clipboardManager.recentItems(limit: max(0, count))
+        return .result(value: items.filter { !$0.isSensitive }.map(\.content))
     }
 }
 
@@ -106,6 +110,8 @@ struct PasteItemByIndexIntent: AppIntent {
         guard let delegate = NSApp.delegate as? AppDelegate else { return .result(value: "") }
         let idx = index - 1
         guard let item = delegate.clipboardManager.item(at: idx) else { return .result(value: "") }
+        // Never paste/copy sensitive items via Shortcuts (no biometric gate here).
+        guard !item.isSensitive else { return .result(value: "") }
         delegate.clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
         return .result(value: item.content)
     }
@@ -127,7 +133,10 @@ struct GetItemsByAppIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
         guard let delegate = NSApp.delegate as? AppDelegate else { return .result(value: []) }
-        return .result(value: delegate.clipboardManager.itemContents(sourceBundleID: bundleID, limit: limit))
+        // Never expose sensitive items to Shortcuts (no biometric gate here).
+        let contents = delegate.clipboardManager.itemContents(sourceBundleID: bundleID, limit: max(0, limit))
+        let sensitive = Set(delegate.clipboardManager.items.filter(\.isSensitive).map(\.content))
+        return .result(value: contents.filter { !sensitive.contains($0) })
     }
 }
 

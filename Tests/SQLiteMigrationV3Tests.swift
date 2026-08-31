@@ -19,11 +19,11 @@ final class SQLiteMigrationV3Tests: XCTestCase {
     // MARK: - Schema version
 
     func testCurrentSchemaVersion() {
-        XCTAssertEqual(SQLiteHistoryStore.currentSchemaVersion, 5)
+        XCTAssertEqual(SQLiteHistoryStore.currentSchemaVersion, 6)
     }
 
     func testMigrationsCount() {
-        XCTAssertEqual(SQLiteHistoryStore.migrations.count, 5)
+        XCTAssertEqual(SQLiteHistoryStore.migrations.count, 6)
     }
 
     // MARK: - Fresh database

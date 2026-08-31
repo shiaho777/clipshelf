@@ -41,8 +41,17 @@ final class ClipboardMonitor {
 
     var onCapture: ((CapturedContent) -> Void)?
     var excludedBundleIDs: Set<String> = []
+    /// Pending suppressions (snippet expansion writes twice per expansion:
+    /// the snippet itself and the delayed restore). A simple Bool was consumed
+    /// by the first changed tick, letting the second write be captured as a
+    /// duplicate history entry — and swallowing a genuine user copy that
+    /// landed between the two writes.
+    private var suppressionsRemaining = 0
     /// When true, the next pasteboard change is skipped (used to suppress snippet-expansion writes).
-    var suppressNextCapture = false
+    var suppressNextCapture: Bool {
+        get { suppressionsRemaining > 0 }
+        set { suppressionsRemaining = max(0, suppressionsRemaining + (newValue ? 1 : -1)) }
+    }
 
     private var timer: Timer?
     private var lastChangeCount: Int = 0
@@ -162,9 +171,10 @@ final class ClipboardMonitor {
     func checkClipboard() -> CheckOutcome {
         guard pasteboard.changeCount != lastChangeCount else { return .noChange }
         lastChangeCount = pasteboard.changeCount
-        // Swallow the change that snippet expansion just wrote.
-        if suppressNextCapture {
-            suppressNextCapture = false
+        // Swallow snippet-expansion pasteboard writes. Both the expansion write
+        // and the delayed restore must be consumed.
+        if suppressionsRemaining > 0 {
+            suppressionsRemaining -= 1
             return .ignored
         }
 
