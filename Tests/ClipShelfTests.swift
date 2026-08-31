@@ -519,6 +519,9 @@ final class ClipboardManagerTests: XCTestCase {
         mgr.addTextItem(content: "4")
         XCTAssertEqual(mgr.items.count, 3)
         XCTAssertEqual(mgr.items.map(\.content), ["4", "3", "2"])
+        // Deletes/upserts land on a background persistence queue; give it a
+        // moment so the synchronous itemCount check doesn't race (CI flake).
+        mgr.flushPendingWrites()
         XCTAssertEqual(try historyStore.itemCount(), 3)
     }
 
