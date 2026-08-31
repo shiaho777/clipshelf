@@ -15,7 +15,11 @@ struct SettingsView: View {
     /// 0 = ZIP backup, 1 = CSV, 2 = Markdown
     @State private var exportFormat = 0
     @State private var accessibilityTrusted = AXIsProcessTrusted()
-    
+    /// Embedded mode (inside the main panel) hides the window-only header
+    /// handling and starts on the caller-chosen section.
+    var initialTab: Int = 0
+    var showsOwnHeader: Bool = true
+
     private let historyLimits = [500, 1000, 10_000, 50_000, 100_000, 0]
     private let hotWindowLimits = [500, 1_000, 2_000, 5_000, 10_000]
     private let cleanupOptions: [(key: String, value: Int)] = [
@@ -28,20 +32,22 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
-                Text(lang.l("settings.tab.general")).tag(0)
-                Text(lang.l("settings.tab.rules")).tag(1)
-                Text(lang.l("settings.tab.data")).tag(2)
-                Text(lang.l("settings.tab.about")).tag(3)
+            if showsOwnHeader {
+                Picker("", selection: $selectedTab) {
+                    Text(lang.l("settings.tab.general")).tag(0)
+                    Text(lang.l("settings.tab.rules")).tag(1)
+                    Text(lang.l("settings.tab.data")).tag(2)
+                    Text(lang.l("settings.tab.about")).tag(3)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, 16)
+                // The settings window uses full-size content view, so content starts
+                // under the titlebar (28pt). 40pt clears it; at 12pt the segmented
+                // control's top 2pt was clipped by the traffic-light row.
+                .padding(.top, 40)
+                .padding(.bottom, 8)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 16)
-            // The settings window uses full-size content view, so content starts
-            // under the titlebar (28pt). 40pt clears it; at 12pt the segmented
-            // control's top 2pt was clipped by the traffic-light row.
-            .padding(.top, 40)
-            .padding(.bottom, 8)
 
             Group {
                 switch selectedTab {
@@ -60,7 +66,6 @@ struct SettingsView: View {
         // Grouped forms paint their own opaque background by default; hide it
         // so the window's HUD vibrancy shows through like on the main panel.
         .scrollContentBackground(.hidden)
-        .standardPopupLayout()
         .accessibilityIdentifier("settingsView")
         .onAppear {
             accessibilityTrusted = AXIsProcessTrusted()
@@ -69,10 +74,11 @@ struct SettingsView: View {
             if requestedTab > 0 {
                 selectedTab = requestedTab
                 UserDefaults.standard.removeObject(forKey: "_settingsRequestedTab")
+            } else if !showsOwnHeader {
+                selectedTab = initialTab
             }
         }
     }
-
     // MARK: - General Tab
 
     private var generalTab: some View {
@@ -164,7 +170,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .id("settings-general-tab")
     }
-
     // MARK: - Rules Tab
 
     private var rulesTab: some View {
@@ -296,6 +301,14 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .id("settings-about-tab")
+    }
+
+    // MARK: - Embedded Sections (in-panel settings)
+
+    /// Settings sections reused by `SettingsEmbeddedView`, which renders them
+    /// inside the main panel instead of a separate window.
+    var embeddedSections: [some View] {
+        [AnyView(generalTab), AnyView(rulesTab), AnyView(dataTab), AnyView(aboutTab)]
     }
 
     private static let storageDirectory: URL = {

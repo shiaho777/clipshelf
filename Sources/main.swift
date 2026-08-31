@@ -24,7 +24,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 #if canImport(Sparkle)
     private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 #endif
-    var settingsWindow: NSWindow?
     private var clickMonitor: Any?
     private var pasteObserver: NSObjectProtocol?
     private var didPaste = false
@@ -56,13 +55,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         clipboardManager = ClipboardManager()
         restoreLaunchAtLoginIfNeeded()
-        LanguageManager.shared.$language
-            .dropFirst()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.settingsWindow?.title = LanguageManager.shared.l("settings.title")
-            }
-            .store(in: &cancellables)
         pasteQueue = PasteQueue.shared
         snippetManager = SnippetManager()
         checkAccessibilityPermission()
@@ -174,60 +166,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
     
-    /// Open the settings window, optionally requesting a specific tab.
-    /// `tab`: 0=General, 1=Rules, 2=Sync, 3=About.
+    /// Show settings inside the main panel, optionally requesting a tab.
+    /// `tab`: 0=General, 1=Rules, 2=Sync, 3=About. The panel switches to its
+    /// embedded settings page — no separate window is created.
     func openSettings(tab: Int = 0) {
-        hidePanel()
         if tab > 0 {
             UserDefaults.standard.set(tab, forKey: "_settingsRequestedTab")
         }
-
-        if settingsWindow == nil {
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: WindowLayout.popupSize.width, height: WindowLayout.popupSize.height),
-                styleMask: [.titled, .closable, .fullSizeContentView],
-                backing: .buffered,
-                defer: false
-            )
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            // Match the main panel's HUD vibrancy so both windows feel like
-            // one app: transparent titlebar + blurred material behind content.
-            window.titlebarAppearsTransparent = true
-            let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: WindowLayout.popupSize.width, height: WindowLayout.popupSize.height))
-            vibrancy.material = .hudWindow
-            vibrancy.blendingMode = .behindWindow
-            vibrancy.state = .active
-            vibrancy.autoresizingMask = [.width, .height]
-            let hosting = NSHostingController(
-                rootView: SettingsView(clipboardManager: clipboardManager, snippetManager: snippetManager)
-            )
-            hosting.view.layer?.backgroundColor = .clear
-            window.contentView = vibrancy
-            vibrancy.addSubview(hosting.view)
-            hosting.view.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                hosting.view.topAnchor.constraint(equalTo: vibrancy.topAnchor),
-                hosting.view.bottomAnchor.constraint(equalTo: vibrancy.bottomAnchor),
-                hosting.view.leadingAnchor.constraint(equalTo: vibrancy.leadingAnchor),
-                hosting.view.trailingAnchor.constraint(equalTo: vibrancy.trailingAnchor)
-            ])
-            window.center()
-            settingsWindow = window
-        }
-
-        settingsWindow?.title = LanguageManager.shared.l("settings.title")
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        showPanel()
     }
 
-    func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
-        settingsWindow?.delegate = nil
-        settingsWindow?.contentViewController = nil
-        settingsWindow = nil
-    }
-    
     func registerGlobalHotKey() {
         var eventType = EventTypeSpec()
         eventType.eventClass = OSType(kEventClassKeyboard)

@@ -68,6 +68,14 @@ struct MenuBarView: View {
     @ObservedObject var snippetManager: SnippetManager
     @ObservedObject var lang = LanguageManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Which in-panel page is showing. Settings renders inside the panel —
+    /// no separate window — toggled by the footer gear button.
+    private enum PanelPage {
+        case history
+        case settings
+    }
+
+    @State private var page: PanelPage = .history
     @State private var searchText = ""
     @State private var hoveredItemId: UUID?
     @State private var focusedIndex: Int?
@@ -398,6 +406,24 @@ struct MenuBarView: View {
     }
 
     private var mainContent: some View {
+        ZStack {
+            if page == .settings {
+                SettingsEmbeddedView(
+                    clipboardManager: clipboardManager,
+                    snippetManager: snippetManager,
+                    onBack: {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                            page = .history
+                        }
+                    }
+                )
+            } else {
+                historyContent
+            }
+        }
+    }
+
+    private var historyContent: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
                 SearchField(
@@ -684,7 +710,11 @@ struct MenuBarView: View {
                             .help(lang.l("multiselect.title"))
                             .accessibilityLabel(lang.l("multiselect.title"))
                         // Settings button with context menu for destructive / secondary actions.
-                        BottomBarButton(icon: "gearshape", action: onOpenSettings)
+                        BottomBarButton(icon: "gearshape", action: {
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                                page = .settings
+                            }
+                        })
                             .help(lang.l("settings.title"))
                             .accessibilityLabel(lang.l("settings.title"))
                             .contextMenu {

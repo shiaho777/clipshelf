@@ -12,6 +12,7 @@
 "items.count" = "%d items";
 "button.clear" = "Clear";
 "button.quit" = "Quit";
+"button.back" = "Back";
 "button.cancel" = "Cancel";
 
 /* Item */

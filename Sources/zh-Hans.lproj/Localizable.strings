@@ -12,6 +12,7 @@
 "items.count" = "%d 条";
 "button.clear" = "清空";
 "button.quit" = "退出";
+"button.back" = "返回";
 "button.cancel" = "取消";
 
 /* Item */
