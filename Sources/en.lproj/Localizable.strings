@@ -25,6 +25,8 @@
 "settings.language" = "Language";
 "settings.launchAtLogin" = "Launch at Login";
 "settings.launchAtLoginFailed" = "Failed to update launch-at-login permission";
+"settings.hotkeys.section" = "Hotkeys";
+"settings.history.section" = "History";
 "settings.maxHistory" = "History Limit";
 "settings.hotWindow" = "Memory Hot Window";
 "settings.hotWindow.description" = "Recent items kept in memory for instant UI. Older items stay searchable via full-text index.";

@@ -25,6 +25,8 @@
 "settings.language" = "语言";
 "settings.launchAtLogin" = "开机自启动";
 "settings.launchAtLoginFailed" = "更新开机自启动权限失败";
+"settings.hotkeys.section" = "快捷键";
+"settings.history.section" = "历史记录";
 "settings.maxHistory" = "历史记录上限";
 "settings.hotWindow" = "内存热窗口";
 "settings.hotWindow.description" = "仅将最近条目常驻内存以加快界面响应；更早记录仍可通过全文搜索找到。";
