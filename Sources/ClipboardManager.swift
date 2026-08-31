@@ -600,7 +600,11 @@ class ClipboardManager: ObservableObject {
 
     // MARK: - Actions
     
-    func copyToClipboard(_ item: ClipboardItem, autoPaste: Bool = false, asPlainText: Bool = false) {
+    /// Writes the item to the pasteboard. Returns false when nothing reached
+    /// the pasteboard (e.g. missing image data) — callers that auto-paste must
+    /// check this so a failed copy never Cmd+V's stale clipboard content.
+    @discardableResult
+    func copyToClipboard(_ item: ClipboardItem, autoPaste: Bool = false, asPlainText: Bool = false) -> Bool {
         let result = ClipboardPasteboardWriter.write(
             item: item,
             to: pasteboard,
@@ -618,10 +622,11 @@ class ClipboardManager: ObservableObject {
         }
         // Nothing reached the pasteboard (e.g. missing image data): the change
         // count is untouched, so don't acknowledge it or count this as a use.
-        guard result.didWrite else { return }
+        guard result.didWrite else { return false }
         incrementUseCount(for: item.id)
         monitor.acknowledgeChangeCount()
         if autoPaste { onItemSelected?() }
+        return true
     }
     
     func deleteItem(_ item: ClipboardItem) {
@@ -941,6 +946,23 @@ class ClipboardManager: ObservableObject {
             incoming: newItems
         )
         totalStoredCount += newItems.count
+        noteHistoryMutation()
+    }
+
+    /// Replace the in-memory history with an externally produced array
+    /// (backup/Maccy/Alfred import). Restores the pinned-first ordering
+    /// invariant and rebuilds every derived index so trim/dedupe/image
+    /// refcounting stay correct — assigning `items` directly left the index
+    /// stale and let `trimToLimit` delete pinned items.
+    func replaceHistoryForImport(with merged: [ClipboardItem]) {
+        let ordered = ClipboardHistoryOrdering.reorderedByPinState(merged)
+        items = ordered.items
+        rebuildItemIndexes()
+        recomputePinnedCount()
+        totalStoredCount = items.count
+        SpotlightIndexService.shared.deindexAll()
+        if !items.isEmpty { SpotlightIndexService.shared.indexItems(items) }
+        saveItems(immediately: true)
         noteHistoryMutation()
     }
 

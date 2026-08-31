@@ -141,22 +141,42 @@ class QuickPastePanel: ObservableObject {
     }
 
     /// Copy item to clipboard, hide panel, reactivate target app, then simulate Cmd+V.
+    /// Sensitive items require biometric auth first — same gate as the main panel.
+    /// The paste only proceeds when the clipboard write actually succeeded, so a
+    /// missing image payload never Cmd+V's stale clipboard content.
     private func pasteAndClose(item: ClipboardItem) {
         guard let cm = clipboardManager else { return }
-        cm.copyToClipboard(item)
-        let app = targetApp
-        // Hide the panel first (triggers exit animation).
-        hide()
-        // After the panel is dismissed and the target app is re-activated,
-        // simulate Cmd+V. The timing must account for:
-        // 1. Panel exit animation (0.1s in hide)
-        // 2. Target app activation delay
-        // 3. monitor.acknowledgeChangeCount (called by copyToClipboard)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            app?.activate(options: .activateIgnoringOtherApps)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self?.simulateCmdV()
+        let finish: () -> Void = { [weak self] in
+            let app = self?.targetApp
+            // Hide the panel first (triggers exit animation).
+            self?.hide()
+            // After the panel is dismissed and the target app is re-activated,
+            // simulate Cmd+V. The timing must account for:
+            // 1. Panel exit animation (0.1s in hide)
+            // 2. Target app activation delay
+            // 3. monitor.acknowledgeChangeCount (called by copyToClipboard)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                app?.activate(options: .activateIgnoringOtherApps)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self?.simulateCmdV()
+                }
             }
+        }
+        if item.isSensitive {
+            Task { @MainActor in
+                do {
+                    try await BiometricAuthService.shared.authenticate(
+                        reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                    )
+                } catch {
+                    return  // Auth failed/cancelled — do nothing.
+                }
+                guard cm.copyToClipboard(item) else { return }
+                finish()
+            }
+        } else {
+            guard cm.copyToClipboard(item) else { return }
+            finish()
         }
     }
 
@@ -339,6 +359,14 @@ struct QuickPasteView: View {
                 Text(item.filePaths.first.map { URL(fileURLWithPath: $0).lastPathComponent } ?? item.content)
                     .font(.system(size: 12))
                     .lineLimit(1)
+            } else if item.isSensitive {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange.opacity(0.8))
+                Text(LanguageManager.shared.l("item.sensitive.title"))
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
             } else {
                 Text(item.displayText)
                     .font(.system(size: 12))

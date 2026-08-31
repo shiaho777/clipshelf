@@ -203,6 +203,15 @@ final class ClipboardMonitor {
                         lastAddTime = now
                         onCapture?(CapturedContent(kind: .text(content: string), sourceBundleID: bundleID, sourceAppName: appName))
                         return .captured
+                    } else if string.count < lastContent.count {
+                        // Shrinking copy (e.g. copying one word out of a URL
+                        // just copied): it's a deliberate new copy, not an
+                        // editor autosave artifact. Previously it was dropped
+                        // here, silently losing the item.
+                        lastContent = string
+                        lastAddTime = now
+                        onCapture?(CapturedContent(kind: .text(content: string), sourceBundleID: bundleID, sourceAppName: appName))
+                        return .captured
                     } else {
                         return .ignored
                     }

@@ -162,6 +162,16 @@ final class SnippetExpansionMonitor {
         // Notify ClipboardMonitor to skip this pasteboard write.
         NotificationCenter.default.post(name: .clipboardSuppressCapture, object: nil)
         let pb = NSPasteboard.general
+        // Preserve non-string payloads (images, file URLs, RTF…) — previously
+        // only the string was saved and the restore wiped everything else,
+        // permanently destroying e.g. an image the user had copied.
+        let savedTypes = pb.types ?? []
+        var savedData: [(NSPasteboard.PasteboardType, Data)] = []
+        for type in savedTypes where type != .string {
+            if let data = pb.data(forType: type) {
+                savedData.append((type, data))
+            }
+        }
         let clipboardText = pb.string(forType: .string) ?? ""
 
         // Expand variables (pure function, safe to call from nonisolated context).
@@ -197,12 +207,19 @@ final class SnippetExpansionMonitor {
             }
         }
 
-        // Restore previous clipboard contents after a brief delay.
+        // Restore previous clipboard contents after a brief delay. The restore
+        // write itself bumps changeCount, so also suppress that tick — otherwise
+        // the pre-expansion text is recaptured as a duplicate history entry
+        // whenever a monitor poll lands between the two writes.
         let oldContents = clipboardText
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(name: .clipboardSuppressCapture, object: nil)
             pb.clearContents()
             if !oldContents.isEmpty {
                 pb.setString(oldContents, forType: .string)
+            }
+            for (type, data) in savedData {
+                pb.setData(data, forType: type)
             }
         }
     }

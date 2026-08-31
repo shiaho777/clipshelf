@@ -369,7 +369,7 @@ struct SettingsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let merged = try makeDataPortService().importMaccy(from: url, existingItems: clipboardManager.items, mode: .merge)
-            clipboardManager.items = merged
+            clipboardManager.replaceHistoryForImport(with: merged)
             showImportSuccess = true; importExportError = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showImportSuccess = false }
         } catch { importExportError = error.localizedDescription }
@@ -384,7 +384,7 @@ struct SettingsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let merged = try makeDataPortService().importAlfred(from: url, existingItems: clipboardManager.items, mode: .merge)
-            clipboardManager.items = merged
+            clipboardManager.replaceHistoryForImport(with: merged)
             showImportSuccess = true; importExportError = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showImportSuccess = false }
         } catch { importExportError = error.localizedDescription }
@@ -396,7 +396,7 @@ struct SettingsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let merged = try makeDataPortService().importBackup(from: url, existingItems: clipboardManager.items, mode: .merge)
-            clipboardManager.items = merged
+            clipboardManager.replaceHistoryForImport(with: merged)
             showImportSuccess = true
             importExportError = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showImportSuccess = false }

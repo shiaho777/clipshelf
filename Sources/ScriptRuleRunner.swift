@@ -116,17 +116,36 @@ final class ScriptRuleRunner {
 
     // MARK: - Context Cache
 
+    /// Runs the initial `evaluateScript` for a not-yet-cached script on a
+    /// detached helper thread instead of the caller. This matters because the
+    /// setup path takes `stateLock`, and `evaluateScript` may never return
+    /// (infinite loop). Executing it on the caller would hold `stateLock`
+    /// forever: `quarantineScript` (fired by the timeout) then deadlocks, the
+    /// continuation never resumes, and every future capture awaits forever.
+    private func evaluateScriptSetup(_ script: String, ctx: JSContext) {
+        let thread = Thread {
+            _ = ctx.evaluateScript(script)
+        }
+        thread.name = "ScriptRuleRunner.setup"
+        thread.stackSize = 8 << 20
+        thread.start()
+    }
+
     private func getOrCreateContext(for script: String) -> JSContext? {
         stateLock.lock()
-        defer { stateLock.unlock() }
 
         if let cached = contextCache[script] {
             // Promote to most-recently-used position.
             cacheOrder.removeAll { $0 == script }
             cacheOrder.append(script)
+            stateLock.unlock()
             return cached
         }
 
+        // Unknown script: the initial evaluateScript can hang forever, so it
+        // must not run while holding stateLock. Prepare the context, release
+        // the lock, then evaluate on a throwaway thread and wait on the cache
+        // (with the timeout as the escape hatch) for the result.
         let ctx = JSContext()!
         var compileError: String?
         ctx.exceptionHandler = { _, exception in compileError = exception?.toString() }
@@ -141,11 +160,37 @@ final class ScriptRuleRunner {
         var globalThis = this;
         """)
         if script.count > 50_000 {
+            stateLock.unlock()
             return nil
         }
-        ctx.evaluateScript(script)
+        stateLock.unlock()
+
+        let setupGroup = DispatchGroup()
+        setupGroup.enter()
+        let setupThread = Thread {
+            _ = ctx.evaluateScript(script)
+            setupGroup.leave()
+        }
+        setupThread.name = "ScriptRuleRunner.setup"
+        setupThread.stackSize = 8 << 20
+        setupThread.start()
+
+        if setupGroup.wait(timeout: .now() + timeout) == .timedOut {
+            // Treat as hung: quarantine so future evaluations skip it. The
+            // spinning thread is abandoned (JSC has no public preemption).
+            quarantineAfterSetupTimeout(script, ctx: ctx)
+            return nil
+        }
         guard compileError == nil else { return nil }
 
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        // Another evaluation may have cached this script while we waited.
+        if let cached = contextCache[script] {
+            cacheOrder.removeAll { $0 == script }
+            cacheOrder.append(script)
+            return cached
+        }
         // Evict the least-recently-used entry when cache is full.
         if contextCache.count >= Self.maxCacheSize {
             let lruKey = cacheOrder.removeFirst()
@@ -154,6 +199,19 @@ final class ScriptRuleRunner {
         contextCache[script] = ctx
         cacheOrder.append(script)
         return ctx
+    }
+
+    /// Quarantine path for a script whose initial evaluateScript timed out.
+    /// Runs while the setup thread may still be spinning — it holds no lock,
+    /// so this cannot deadlock.
+    private func quarantineAfterSetupTimeout(_ script: String, ctx: JSContext) {
+        stateLock.lock()
+        hungScripts.insert(script)
+        if contextCache[script] != nil {
+            contextCache.removeValue(forKey: script)
+            cacheOrder.removeAll { $0 == script }
+        }
+        stateLock.unlock()
     }
 
     // MARK: - Execution (runs on the current evalQueue)

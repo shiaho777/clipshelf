@@ -386,9 +386,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func pasteNextFromQueue() {
         guard let item = pasteQueue.dequeueNext() else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
-        clipboardManager.copyToClipboard(item)
+        clipboardManager.targetBundleID = previousApp?.bundleIdentifier
+        // Only fire Cmd+V when the clipboard write actually succeeded; a failed
+        // write (missing image file) would otherwise paste stale content.
+        guard clipboardManager.copyToClipboard(item) else {
+            updateStatusBarBadge()
+            return
+        }
         guard let targetApp = previousApp else { return }
-        clipboardManager.targetBundleID = targetApp.bundleIdentifier
         // Simulate paste directly since app is already frontmost
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.simulateCmdV()

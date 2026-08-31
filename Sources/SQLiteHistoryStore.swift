@@ -404,7 +404,13 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private func saveItemsLocked(_ items: [ClipboardItem]) throws -> Bool {
         guard let db else { throw StoreError.databaseNotOpen }
 
-        let newMap = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        // `Dictionary(uniqueKeysWithValues:)` traps on duplicate keys; imported
+        // or corrupt data can carry the same UUID twice, and a crash here would
+        // take the app down on every snapshot. Keep the first occurrence.
+        var newMap = [UUID: ClipboardItem](minimumCapacity: items.count)
+        for item in items where newMap[item.id] == nil {
+            newMap[item.id] = item
+        }
         let newIDs = Set(newMap.keys)
         let currentItems = itemsLock.withLock { lastKnownItems }
 
@@ -752,7 +758,11 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             }
             exec("COMMIT")
 
-            lastKnownItems = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+            var knownItems = [UUID: ClipboardItem](minimumCapacity: items.count)
+            for item in items where knownItems[item.id] == nil {
+                knownItems[item.id] = item
+            }
+            lastKnownItems = knownItems
             lastKnownOrder = items.map(\.id)
 
             // Rename original file

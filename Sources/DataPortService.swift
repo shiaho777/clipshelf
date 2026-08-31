@@ -25,6 +25,16 @@ enum ImportMode {
 }
 
 final class DataPortService {
+    /// Only flat file names that can't escape the images directory are safe to
+    /// join onto `imagesDir`. Rejects separators, `..`, and absolute paths.
+    static func isSafeImageFileName(_ name: String) -> Bool {
+        !name.isEmpty
+            && name != "." && name != ".."
+            && !name.contains("/")
+            && !name.contains("\\")
+            && !name.hasPrefix("~")
+    }
+
     private let storageDirectory: URL
     private let historyStore: ClipboardHistoryStore
     private let imageStore: ClipboardImageStore
@@ -49,11 +59,14 @@ final class DataPortService {
         let historyData = try encoder.encode(items)
         try historyData.write(to: tempDir.appendingPathComponent("history.json"))
 
-        // Copy image files
+        // Copy image files. `fileName` comes from imported/decoded data, so it
+        // must never be trusted as a path component: a crafted backup could
+        // carry "../../.ssh/id_rsa" and exfiltrate arbitrary readable files
+        // into the export zip.
         let imagesDir = tempDir.appendingPathComponent("images")
         try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
         for item in items {
-            guard let fileName = item.imageFileName else { continue }
+            guard let fileName = item.imageFileName, Self.isSafeImageFileName(fileName) else { continue }
             if let data = imageStore.imageData(for: fileName) {
                 try data.write(to: imagesDir.appendingPathComponent(fileName))
             }
@@ -94,7 +107,19 @@ final class DataPortService {
         }
 
         let historyData = try Data(contentsOf: historyURL)
-        let importedItems = try JSONDecoder().decode([ClipboardItem].self, from: historyData)
+        var importedItems = try JSONDecoder().decode([ClipboardItem].self, from: historyData)
+        // Imported metadata is untrusted: drop imageFileName values that
+        // reference anything outside the images store (path traversal), and
+        // de-duplicate UUIDs so downstream `uniqueKeys` maps can't trap.
+        var seenIDs = Set<UUID>()
+        importedItems = importedItems.compactMap { item in
+            guard seenIDs.insert(item.id).inserted else { return nil }
+            var item = item
+            if let name = item.imageFileName, !Self.isSafeImageFileName(name) {
+                item.imageFileName = nil
+            }
+            return item
+        }
 
         // Copy images into image store
         let imagesDir = historyURL.deletingLastPathComponent().appendingPathComponent("images")
