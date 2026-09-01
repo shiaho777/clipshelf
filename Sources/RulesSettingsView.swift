@@ -230,7 +230,7 @@ struct RulesSettingsView: View {
 
     private func exportRules() {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "cliprules")!]
+        panel.allowedContentTypes = [.init(filenameExtension: "cliprules") ?? .data]
         panel.nameFieldStringValue = "MyRules.cliprules"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let store = JSONClipboardRuleStore(storageDirectory: FileManager.default.temporaryDirectory)
@@ -244,7 +244,7 @@ struct RulesSettingsView: View {
 
     private func importRules() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "cliprules")!]
+        panel.allowedContentTypes = [.init(filenameExtension: "cliprules") ?? .data]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let store = JSONClipboardRuleStore(storageDirectory: FileManager.default.temporaryDirectory)
         do {

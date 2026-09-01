@@ -177,9 +177,28 @@ struct PreviewSheet: View {
                 Button {
                     let pb = NSPasteboard.general
                     pb.clearContents()
-                    if item.type == .image, let img = image {
-                        pb.writeObjects([img])
-                    } else {
+                    switch item.type {
+                    case .image:
+                        if let img = image {
+                            pb.writeObjects([img])
+                        }
+                    case .fileURL:
+                        // Copy real file URLs, not the encoded JSON path string —
+                        // writing item.content put literal ["…","…"] text on the
+                        // pasteboard and broke Finder/other consumers.
+                        let urls = item.filePaths.compactMap { URL(fileURLWithPath: $0) as NSURL }
+                        if !urls.isEmpty {
+                            pb.writeObjects(urls)
+                        } else {
+                            pb.setString(item.content, forType: .string)
+                        }
+                    case .richText:
+                        // Preserve formatting when the RTF payload exists.
+                        if let rtf = item.rtfData {
+                            pb.setData(rtf, forType: .rtf)
+                        }
+                        pb.setString(item.content, forType: .string)
+                    default:
                         pb.setString(item.content, forType: .string)
                     }
                     dismissPopup()

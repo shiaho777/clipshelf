@@ -349,7 +349,7 @@ struct SettingsView: View {
             } catch { importExportError = error.localizedDescription }
         default:
             let panel = NSSavePanel()
-            panel.allowedContentTypes = [.init(filenameExtension: "clipbackup")!]
+            panel.allowedContentTypes = [.init(filenameExtension: "clipbackup") ?? .data]
             panel.nameFieldStringValue = "ClipboardBackup.clipbackup"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
@@ -392,7 +392,7 @@ struct SettingsView: View {
 
     private func importData() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "clipbackup")!]
+        panel.allowedContentTypes = [.init(filenameExtension: "clipbackup") ?? .data]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let merged = try makeDataPortService().importBackup(from: url, existingItems: clipboardManager.items, mode: .merge)

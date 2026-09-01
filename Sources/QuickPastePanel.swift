@@ -25,6 +25,10 @@ class QuickPastePanel: ObservableObject {
     /// Shows the panel at the given screen location (or near the text cursor
     /// if Accessibility permissions allow).
     func show(clipboardManager: ClipboardManager, at cursorLocation: NSPoint? = nil) {
+        // Reentrancy guard: `isVisible` is only set at the END of show(); two
+        // rapid hotkey invocations created two panels + two click monitors,
+        // orphaning the first pair.
+        guard !isVisible else { return }
         let location = cursorLocation ?? CursorLocator.shared.cursorLocation() ?? defaultLocation()
         self.clipboardManager = clipboardManager
         // Save the current frontmost app so we can re-activate it after paste/dismiss.
@@ -113,18 +117,25 @@ class QuickPastePanel: ObservableObject {
 
     func hide() {
         guard isVisible else { return }
+        // Mark hidden immediately so re-entrant show/hide calls see a
+        // consistent state during the exit animation.
+        isVisible = false
+        let hidingPanel = panel
         let originalFrame = panel?.frame ?? .zero
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.1
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel?.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            self?.panel?.orderOut(nil)
-            self?.panel?.setFrame(originalFrame, display: false)
-            self?.panel?.alphaValue = 1
-            self?.panel = nil
-            self?.hostingController = nil
-            self?.isVisible = false
+            guard let self else { return }
+            // Only tear down if this hide is still the latest one — a quick
+            // re-show replaced `panel` and its completion must not nil it.
+            guard self.panel === hidingPanel else { return }
+            self.panel?.orderOut(nil)
+            self.panel?.setFrame(originalFrame, display: false)
+            self.panel?.alphaValue = 1
+            self.panel = nil
+            self.hostingController = nil
         })
         if let monitor = clickMonitor {
             NSEvent.removeMonitor(monitor)

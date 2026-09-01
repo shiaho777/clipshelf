@@ -57,6 +57,17 @@ struct SettingsEmbeddedView: View {
             settingsContent
         }
         .transition(.opacity)
+        // Honor a requested tab (e.g. the gear context-menu "Test Rules"
+        // action writes _settingsRequestedTab). Previously only the unused
+        // window variant read this key, so the request silently landed on
+        // the General section.
+        .onAppear {
+            let requested = UserDefaults.standard.integer(forKey: "_settingsRequestedTab")
+            if requested > 0, requested < sectionKeys.count {
+                section = requested
+            }
+            UserDefaults.standard.removeObject(forKey: "_settingsRequestedTab")
+        }
     }
 
     /// Capsule section switcher — same visual recipe as the history filter chips:
@@ -139,18 +150,6 @@ struct SettingsGeneralSectionPanel: View {
     var body: some View {
         SettingsSectionStack(isInPanel: true) {
             SettingsCard(title: nil) {
-                SettingsRow(label: lang.l("settings.language")) {
-                    Picker("", selection: Binding(
-                        get: { lang.language },
-                        set: { lang.selectLanguage($0) }
-                    )) {
-                        ForEach(AppLanguageOption.all) { option in
-                            Text("\(option.flag)  \(option.title)").tag(option.code)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 150)
-                }
                 SettingsRow(label: lang.l("settings.launchAtLogin")) {
                     Toggle("", isOn: $settingsVM.launchAtLogin)
                         .labelsHidden()
@@ -164,6 +163,24 @@ struct SettingsGeneralSectionPanel: View {
                         .foregroundColor(.red)
                         .padding(.horizontal, 14)
                 }
+                SettingsRow(label: lang.l("settings.language")) {
+                    Picker("", selection: Binding(
+                        get: { lang.language },
+                        set: { lang.selectLanguage($0) }
+                    )) {
+                        ForEach(AppLanguageOption.all) { option in
+                            Text("\(option.flag)  \(option.title)").tag(option.code)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                }
+            }
+            .onAppear {
+                // Mirror the system registration state before first interaction.
+                // Without this the toggle showed OFF while login-launch was
+                // actually enabled, and the first tap silently disabled it.
+                settingsVM.loadLaunchAtLoginPreferenceIfNeeded()
             }
             SettingsCard(title: lang.l("settings.hotkeys.section")) {
                 HotKeyRecorderView(hotKey: $hotKeyManager.mainHotKey)
@@ -349,7 +366,7 @@ struct SettingsDataSectionPanel: View {
             } catch { importExportError = error.localizedDescription }
         default:
             let panel = NSSavePanel()
-            panel.allowedContentTypes = [.init(filenameExtension: "clipbackup")!]
+            panel.allowedContentTypes = [.init(filenameExtension: "clipbackup") ?? .data]
             panel.nameFieldStringValue = "ClipboardBackup.clipbackup"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
@@ -392,7 +409,7 @@ struct SettingsDataSectionPanel: View {
 
     private func importData() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "clipbackup")!]
+        panel.allowedContentTypes = [.init(filenameExtension: "clipbackup") ?? .data]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let merged = try makeDataPortService().importBackup(from: url, existingItems: clipboardManager.items, mode: .merge)

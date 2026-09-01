@@ -7,6 +7,7 @@
 "search.placeholder" = "搜索...";
 "search.noResults" = "无匹配结果";
 "search.clearSearch" = "清除搜索";
+"search.results.more" = "找到 %d+ 条";
 "search.results" = "找到 %d 条";
 "empty.message" = "暂无记录";
 "items.count" = "%d 条";

@@ -6,15 +6,34 @@ import UniformTypeIdentifiers
 enum ClipboardDragSession {
     static var sourceItemID: UUID?
     static var isActive = false
+    /// When the session began; a session stuck longer than this (cancelled
+    /// drag with no mouse-up observed) is treated as dead. Without expiry,
+    /// `isActive == true` made the main panel's outside-click dismiss ignore
+    /// every click until relaunch.
+    static var startedAt: Date?
+
+    private static let staleThreshold: TimeInterval = 15
 
     static func begin(id: UUID) {
         sourceItemID = id
         isActive = true
+        startedAt = Date()
     }
 
     static func end() {
         sourceItemID = nil
         isActive = false
+        startedAt = nil
+    }
+
+    /// True when `isActive` and the session has not obviously gone stale.
+    static var isAlive: Bool {
+        guard isActive else { return false }
+        if let startedAt, Date().timeIntervalSince(startedAt) > staleThreshold {
+            end()
+            return false
+        }
+        return true
     }
 }
 

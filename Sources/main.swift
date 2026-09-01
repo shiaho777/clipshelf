@@ -289,8 +289,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return
             }
             // Keep the panel open during an active drag session so users can
-            // drop clipboard items into other apps.
-            if ClipboardDragSession.isActive || NSEvent.pressedMouseButtons != 0 { return }
+            // drop clipboard items into other apps. isAlive() expires stale
+            // sessions — a drag cancelled outside the panel used to leave
+            // isActive true forever, silently disabling outside-click dismiss.
+            if ClipboardDragSession.isAlive || NSEvent.pressedMouseButtons != 0 { return }
             if !NSMouseInRect(NSEvent.mouseLocation, self.panel.frame, false) {
                 self.hidePanel()
             }
@@ -427,6 +429,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     private func updateStatusBarBadge() {
         guard let button = statusItemController.statusItem?.button else { return }
+        // Don't fight the transient smart-paste badge: while it's showing, its
+        // own reset task will restore the correct state when done. Writing the
+        // queue icon here and having the badge reset wipe it left the status
+        // item showing the wrong state until the next queue event.
+        guard !statusItemController.isShowingSmartPasteBadge else { return }
         if pasteQueue.stackMode {
             button.image = NSImage(
                 systemSymbolName: "square.stack.3d.up.fill",

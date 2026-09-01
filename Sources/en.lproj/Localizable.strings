@@ -7,6 +7,7 @@
 "search.placeholder" = "Search...";
 "search.noResults" = "No matching results";
 "search.clearSearch" = "Clear Search";
+"search.results.more" = "%d+ found";
 "search.results" = "%d found";
 "empty.message" = "No records";
 "items.count" = "%d items";

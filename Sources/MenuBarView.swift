@@ -160,6 +160,8 @@ struct MenuBarView: View {
         }
         hasMoreFilteredItems = searched.count > visibleCount
         page.append(contentsOf: searched.prefix(visibleCount))
+        // When results are capped, the count is a lower bound — show it as such
+        // ("%d+ found") instead of presenting an exact total that's wrong.
         totalMatchCount = hasMoreFilteredItems ? page.count + 1 : page.count
         filteredItems = page
         var map: [UUID: Set<Int>] = [:]
@@ -253,6 +255,9 @@ struct MenuBarView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(merged, forType: .string)
+        // The merged text is added explicitly below; acknowledge the write so
+        // the monitor doesn't ALSO capture it (duplicate entry).
+        clipboardManager.acknowledgePasteboardWrite()
         clipboardManager.addTextItem(content: merged)
         isMultiSelectMode = false
         selectedItemIDs.removeAll()
@@ -272,6 +277,9 @@ struct MenuBarView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(result, forType: .string)
+        // The app just wrote the pasteboard itself; without acknowledging, the
+        // next poll recaptured this write as a new history entry.
+        clipboardManager.acknowledgePasteboardWrite()
         clipboardManager.addTextItem(content: result)
     }
 
@@ -684,6 +692,11 @@ struct MenuBarView: View {
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundStyle(.tertiary)
                             .monospacedDigit()
+                    } else if hasMoreFilteredItems {
+                        Text(lang.l("search.results.more", totalMatchCount))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(.tertiary)
+                            .monospacedDigit()
                     } else {
                         Text(lang.l("search.results", totalMatchCount))
                             .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -811,6 +824,11 @@ struct MenuBarView: View {
                 if needsFilterRebuild {
                     cachedAppFilters = buildAppFilters(from: items)
                     updateFilteredItems()
+                } else {
+                    // Same count and order, but content may have been edited in
+                    // place (EditSheet → updateItemContent). Refresh the visible
+                    // rows' data without rebuilding the whole filtered list.
+                    filteredItems = items
                 }
                 lastSeenItemCount = items.count
                 lastSeenFirstItemID = items.first?.id

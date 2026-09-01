@@ -734,6 +734,13 @@ class ClipboardManager: ObservableObject {
     func forceRefreshClipboard() {
         monitor.checkClipboard()
     }
+
+    /// Acknowledge a pasteboard write made by the app itself outside
+    /// `copyToClipboard` (transform results, merged multi-select, snippet
+    /// restore) so the monitor doesn't recapture it as a new history entry.
+    func acknowledgePasteboardWrite() {
+        monitor.acknowledgeChangeCount()
+    }
     
     // MARK: - Search
 
