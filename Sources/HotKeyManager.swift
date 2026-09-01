@@ -60,22 +60,36 @@ class HotKeyManager: ObservableObject {
     @Published var mainHotKey: HotKeyConfig = .defaultMain {
         didSet {
             guard oldValue != mainHotKey, !isRestoringFromStore else { return }
+            // Rebind to an already-taken combo (including one of this app's
+            // own other hotkeys): RegisterEventHotKey fails with
+            // eventHotKeyExistsErr and the old ref is already unregistered,
+            // so roll back in memory to keep config and registration in sync
+            // instead of persisting a key that does nothing.
+            if !reregisterMainHotKey() {
+                mainHotKey = oldValue
+                return
+            }
             saveConfig()
-            reregisterMainHotKey()
         }
     }
     @Published var queueHotKey: HotKeyConfig = .defaultQueue {
         didSet {
             guard oldValue != queueHotKey, !isRestoringFromStore else { return }
+            if !reregisterQueueHotKey() {
+                queueHotKey = oldValue
+                return
+            }
             saveConfig()
-            reregisterQueueHotKey()
         }
     }
     @Published var quickPasteHotKey: HotKeyConfig = .defaultQuickPaste {
         didSet {
             guard oldValue != quickPasteHotKey, !isRestoringFromStore else { return }
+            if !reregisterQuickPasteHotKey() {
+                quickPasteHotKey = oldValue
+                return
+            }
             saveConfig()
-            reregisterQuickPasteHotKey()
         }
     }
     @Published private(set) var isMainHotKeyRegistered = true
@@ -140,12 +154,13 @@ class HotKeyManager: ObservableObject {
         return success
     }
     
-    func reregisterMainHotKey() {
+    @discardableResult
+    func reregisterMainHotKey() -> Bool {
         if let ref = mainHotKeyRef {
             UnregisterEventHotKey(ref)
             mainHotKeyRef = nil
         }
-        registerMainHotKey()
+        return registerMainHotKey()
     }
     
     @discardableResult
@@ -163,12 +178,13 @@ class HotKeyManager: ObservableObject {
         return success
     }
     
-    func reregisterQueueHotKey() {
+    @discardableResult
+    func reregisterQueueHotKey() -> Bool {
         if let ref = queueHotKeyRef {
             UnregisterEventHotKey(ref)
             queueHotKeyRef = nil
         }
-        registerQueueHotKey()
+        return registerQueueHotKey()
     }
 
     @discardableResult
@@ -186,12 +202,13 @@ class HotKeyManager: ObservableObject {
         return success
     }
 
-    func reregisterQuickPasteHotKey() {
+    @discardableResult
+    func reregisterQuickPasteHotKey() -> Bool {
         if let ref = quickPasteHotKeyRef {
             UnregisterEventHotKey(ref)
             quickPasteHotKeyRef = nil
         }
-        registerQuickPasteHotKey()
+        return registerQuickPasteHotKey()
     }
     
     private func saveConfig() {

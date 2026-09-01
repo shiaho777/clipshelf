@@ -511,14 +511,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// and system cleanup can silently drop login items, so without this the
     /// app would stop launching at login even though the toggle stays on.
     private func restoreLaunchAtLoginIfNeeded() {
-        let service = LaunchAtLoginServiceFactory.defaultService()
-        guard !service.isEnabled else { return }
-        let prefsStore = JSONAppPreferencesStore(storageDirectory: AppStoragePaths.defaultStorageDirectory())
-        guard (try? prefsStore.loadLaunchAtLogin()) == true else { return }
-        do {
-            try service.setEnabled(true)
-        } catch {
-            logger.error("Failed to restore launch-at-login: \(error.localizedDescription)")
+        // The fallback service's isEnabled probe shells out to `launchctl
+        // print` and blocks until the subprocess exits — never run that on
+        // the main thread during launch. Nothing here needs to complete
+        // before the UI is up; the heal is idempotent.
+        DispatchQueue.global(qos: .utility).async {
+            let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "App")
+            let service = LaunchAtLoginServiceFactory.defaultService()
+            guard !service.isEnabled else { return }
+            let prefsStore = JSONAppPreferencesStore(storageDirectory: AppStoragePaths.defaultStorageDirectory())
+            guard (try? prefsStore.loadLaunchAtLogin()) == true else { return }
+            do {
+                try service.setEnabled(true)
+            } catch {
+                logger.error("Failed to restore launch-at-login: \(error.localizedDescription)")
+            }
         }
     }
 

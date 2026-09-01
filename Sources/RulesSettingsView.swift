@@ -7,9 +7,21 @@ struct RulesSettingsView: View {
     @State private var testInput = ""
     @State private var testResult: ClipboardRuleEngine.TestResult?
     @State private var ruleError: String?
-    
+    /// ClipboardRuleEngine is a plain class (not ObservableObject): toggling or
+    /// reordering a rule mutates `ruleEngine.rules` without any objectWillChange,
+    /// leaving this view showing stale toggles/order. Views bump this token on
+    /// every mutation to force a re-render.
+    @State private var rulesRevision = 0
+
     private var rules: [ClipboardRule] {
-        clipboardManager.ruleEngine.rules.sorted { $0.order < $1.order }
+        // Reading rulesRevision inside the computed property makes SwiftUI
+        // re-evaluate it whenever the token changes.
+        _ = rulesRevision
+        return clipboardManager.ruleEngine.rules.sorted { $0.order < $1.order }
+    }
+
+    private func noteRulesChanged() {
+        rulesRevision &+= 1
     }
 
     /// Move a user rule one step up (lower order) or down (higher order) in the sorted list.
@@ -28,6 +40,7 @@ struct RulesSettingsView: View {
         clipboardManager.ruleEngine.rules[ri].order = clipboardManager.ruleEngine.rules[ni].order
         clipboardManager.ruleEngine.rules[ni].order = tmp
         clipboardManager.saveRules()
+        noteRulesChanged()
     }
     
     var body: some View {
@@ -62,6 +75,7 @@ struct RulesSettingsView: View {
                             if let idx = clipboardManager.ruleEngine.rules.firstIndex(where: { $0.id == rule.id }) {
                                 clipboardManager.ruleEngine.rules[idx].isEnabled = newValue
                                 clipboardManager.saveRules()
+                                noteRulesChanged()
                             }
                         }
                     ))
@@ -99,6 +113,7 @@ struct RulesSettingsView: View {
                         Button(role: .destructive) {
                             clipboardManager.ruleEngine.rules.removeAll { $0.id == rule.id }
                             clipboardManager.saveRules()
+                            noteRulesChanged()
                         } label: {
                             Image(systemName: "trash")
                                 .font(.system(size: 11))
@@ -256,6 +271,7 @@ struct RulesSettingsView: View {
                 clipboardManager.ruleEngine.rules.append(r)
             }
             clipboardManager.saveRules()
+            noteRulesChanged()
         } catch {
             ruleError = error.localizedDescription
         }

@@ -13,24 +13,59 @@
 10. imageFileName path traversal in export/import (isSafeImageFileName)
 10b. CI flake: trim test raced async persistence (flushPendingWrites) — 190f313
 
+## Fixed — batch A (8) — ee4133e
+I1, I2, I3, I5, I6, S2, S5, S9
+
+## Fixed — batch B (7) — 7366f8d
+I11/S1, I7/S7, I9, S3, S4, S6, S8, S10
+
+## Fixed — batch C (10) — 0627bff
+U1, U2, U3, U4, U5, U6, U7, U8, U9, U10, I4 (partial)
+
+## Fixed — batch D1 (5) — c1aec69
+I15, U11, U13, U14
+
+## Fixed — batch D2 (6) — this commit
+- I13 P2: launch-at-login self-heal probed `launchctl print` (a blocking
+  subprocess) on the main thread at launch; moved to a utility queue.
+- S13 P2: JSONClipboardHistoryStore.loadItems(limit:) kept the OLDEST
+  unpinned items while SQLite/InMemory keep the newest — aligned to
+  pinned-first + newest-unpinned (prefix) semantics.
+- U15 P2: every row rebuilt a RelativeDateTimeFormatter on every 15s tick;
+  formatters are now cached per language.
+- S14 P2: stack-mode enqueue re-read `stackMode` inside the async image
+  completion, racing the toggle (mid-flight toggle-on dropped the item,
+  toggle-off semantics depended on timing). The enqueue decision is now
+  snapshotted at dispatch time; regression tests cover both toggle orders.
+- I12 P2: rebinding a hotkey to an already-registered combo (including the
+  app's own other hotkeys) left the config saved but the key dead —
+  RegisterEventHotKey failed with eventHotKeyExistsErr after the old ref was
+  unregistered. Failed rebinds now roll back the published config instead of
+  persisting a non-working key; reregister functions return success.
+- I10 P1: replacing `pasteboardDataProviders` dropped the previous write's
+  lazy image providers; a later interleave that cleared the pasteboard
+  (snippet restore, preview/color copy) asked a deallocated provider for
+  data and the image copy silently broke. Old providers are now only
+  released once the pasteboard no longer advertises a lazily-provided image.
+
 ## Verified findings from 3-agent audit (45) — TO FIX
 
 ### Infra (agent_7220)
-- [ ] I1 P0 startup orphan-prune deletes fresh images (ClipboardManager.swift:328)
-- [ ] I2 P0 snapshot vs incremental resurrection race (SQLiteHistoryStore saveItemsLocked)
-- [ ] I3 P1 deletes skipped for IDs missing from lastKnownItems (SQLiteHistoryStore:628)
-- [ ] I4 P1 in-app pasteboard writes not acknowledged → self-recapture (many files)
-- [ ] I5 P1 writeObjects failure reports didWrite:true (ClipboardPasteboardWriter:69)
-- [ ] I6 P1 snippet suppress single Bool for two writes (SnippetExpansionMonitor)
-- [ ] I7 P1 stale usage snapshot regresses use counts (ClipboardPersistenceCoordinator:86)
-- [ ] I8 P1 unbounded embeddingCache growth (ClipboardManager:73)
-- [ ] I9 P1 double Cmd+V in pasteAndClose (main.swift:328)
-- [ ] I10 P1 image provider invalidated by interleaved writers (ClipboardImageManager:19)
-- [ ] I11 P2 tombstone overflow drops protection (ClipboardManager:174)
-- [ ] I12 P2 hotkey recorder can't rebind active combo (HotKeyManager:274)
-- [ ] I13 P2 launchctl print sync on main at launch (LaunchAtLoginService:62)
-- [ ] I14 P2 FuzzySearch limit boundary equal-score inconsistency
-- [ ] I15 P2 unbounded regexCache + main-thread flush freeze on import
+- [x] I1 P0 startup orphan-prune deletes fresh images (ClipboardManager.swift:328)
+- [x] I2 P0 snapshot vs incremental resurrection race (SQLiteHistoryStore saveItemsLocked)
+- [x] I3 P1 deletes skipped for IDs missing from lastKnownItems (SQLiteHistoryStore:628)
+- [x] I4 P1 in-app pasteboard writes not acknowledged → self-recapture (many files)
+- [x] I5 P1 writeObjects failure reports didWrite:true (ClipboardPasteboardWriter:69)
+- [x] I6 P1 snippet suppress single Bool for two writes (SnippetExpansionMonitor)
+- [x] I7 P1 stale usage snapshot regresses use counts (ClipboardPersistenceCoordinator:86)
+- [x] I8 P1 unbounded embeddingCache growth (ClipboardManager:73) — evicted on delete; bounded by hot-window warm load
+- [x] I9 P1 double Cmd+V in pasteAndClose (main.swift:328)
+- [x] I10 P1 image provider invalidated by interleaved writers (ClipboardImageManager:19)
+- [x] I11 P2 tombstone overflow drops protection (ClipboardManager:174)
+- [x] I12 P2 hotkey recorder can't rebind active combo (HotKeyManager:274)
+- [x] I13 P2 launchctl print sync on main at launch (LaunchAtLoginService:62)
+- [x] I14 P2 FuzzySearch limit boundary equal-score inconsistency — verified: bounded appendMatch replaces only strictly-higher scores and final sort is deterministic (score desc, then list offset), so equal-score items cannot flicker across the boundary
+- [x] I15 P2 unbounded regexCache + main-thread flush freeze on import
 
 ### Services (agent_2bdf)
 - [ ] S1 P0 tombstone overflow replacement re-admits deleted IDs (dup of I11)
@@ -43,11 +78,11 @@
 - [ ] S8 P1 FTS implicit-AND violated; fallback skipped
 - [ ] S9 P2 readRow never restores isScreenshot
 - [ ] S10 P2 store deinit closes db without lock (use-after-free)
-- [ ] S11 P2 user copy swallowed between two snippet writes (related I6)
-- [ ] S12 P2 highlight indices computed on ocrText vs rendered preview
-- [ ] S13 P2 JSON store loadItems(limit:) semantics diverge (oldest kept)
-- [ ] S14 P2 image stackMode re-check races toggle off
-- [ ] S15 P2 semantic embedding computed on main thread
+- [x] S11 P2 user copy swallowed between two snippet writes (related I6) — fixed with I6 suppression counter: a real user copy landing between the two snippet writes is no longer swallowed as a suppression tick
+- [x] S12 P2 highlight indices computed on ocrText vs rendered preview — fixed: image rows render no highlighted text content (thumbnail + "Image" caption only); the map is computed on the same `displayText`/ocrText basis the row renders, and `displayText` is truncated to 50 chars on both sides
+- [x] S13 P2 JSON store loadItems(limit:) semantics diverge (oldest kept) — fixed in D2: keeps all pinned then NEWEST unpinned (prefix), matching SQLite/in-memory stores
+- [x] S14 P2 image stackMode re-check races toggle off — fixed in D2: enqueue decision snapshotted at dispatch time; regression tests added
+- [x] S15 P2 semantic embedding computed on main thread — verified: scheduleEmbeddingBatch runs computeEmbedding + store write on a utility DispatchQueue, only the merge callback hops back to main
 
 ### UI (agent_c171)
 - [ ] U1 P0 UTType(filenameExtension:)! force-unwrap crash (clipbackup/cliprules)
@@ -61,7 +96,7 @@
 - [ ] U9 P1 QuickPaste double-show leaks panel+monitor
 - [ ] U10 P1 keyboard nav dead until list clicked (first responder)
 - [ ] U11 P2 compare diff order ignores selection order
-- [ ] U12 P2 rules toggle/reorder doesn't republish (visual desync)
+- [x] U12 P2 rules toggle/reorder doesn't republish (visual desync) — fixed in D2: ClipboardRuleEngine is not observable; RulesSettingsView now bumps a revision token on toggle/reorder/delete/add/import to force re-render
 - [ ] U13 P2 stale isCode across row reuse / no cancellation check
 - [ ] U14 P2 onboarding reappears after Clear All (never marked complete)
 - [ ] U15 P2 TimeAgoText formatter churn every 15s per row

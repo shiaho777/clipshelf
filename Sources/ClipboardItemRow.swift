@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import Foundation
 import UniformTypeIdentifiers
 
 enum ClipboardDragSession {
@@ -801,19 +802,29 @@ struct TimeAgoText: View {
     @ObservedObject private var lang = LanguageManager.shared
     @State private var now = Date()
 
-    private static func makeFormatter(language: String) -> RelativeDateTimeFormatter {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .abbreviated
-        f.locale = Locale(identifier: language == "zh" ? "zh-Hans" : "en_US")
-        return f
-    }
-
     var body: some View {
-        Text(Self.makeFormatter(language: lang.language).localizedString(for: date, relativeTo: now))
+        Text(Self.formatter(for: lang.language).localizedString(for: date, relativeTo: now))
             .font(.system(size: 10))
             .foregroundStyle(.tertiary)
             .onReceive(TimeTickPublisher.shared.publisher) { newNow in
                 now = newNow
             }
+    }
+
+    /// Formatter construction is expensive (locale resolution), and every row
+    /// rebuilt its own on every 15s tick. Cache per language — the language
+    /// only changes at app startup or via Settings, so two entries max.
+    private static let formatterLock = NSLock()
+    private static var formatterCache: [String: RelativeDateTimeFormatter] = [:]
+
+    private static func formatter(for language: String) -> RelativeDateTimeFormatter {
+        formatterLock.withLock {
+            if let cached = formatterCache[language] { return cached }
+            let f = RelativeDateTimeFormatter()
+            f.unitsStyle = .abbreviated
+            f.locale = Locale(identifier: language == "zh" ? "zh-Hans" : "en_US")
+            formatterCache[language] = f
+            return f
+        }
     }
 }

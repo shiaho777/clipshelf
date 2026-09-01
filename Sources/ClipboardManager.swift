@@ -72,7 +72,9 @@ class ClipboardManager: ObservableObject {
     private let ruleStore: ClipboardRuleStore
     private var embeddingCache: [UUID: [Float32]] = [:]
     private let startupOCRMigrationLimit = 24
-    private var pasteboardDataProviders: [NSPasteboardItemDataProvider] = []
+    private var pasteboardDataProviders: [NSPasteboardItemDataProvider] = [] {
+        didSet { invalidateDataProvidersIfNeeded(oldValue: oldValue) }
+    }
     private let historyIndex = ClipboardHistoryIndex()
     private var ocrQueue: ClipboardOCRQueue!
 
@@ -609,7 +611,23 @@ class ClipboardManager: ObservableObject {
     }
 
     // MARK: - Actions
-    
+
+    /// Called whenever `pasteboardDataProviders` changes. Replacing the array
+    /// drops our last strong reference to the PREVIOUS write's lazy providers;
+    /// if anyone then clears the pasteboard (snippet restore, preview copy,
+    /// color-format copy…), macOS asks the deallocated provider for data and
+    /// the image copy silently breaks. Release the old providers only AFTER
+    /// the pasteboard no longer advertises a lazily-provided image type.
+    private func invalidateDataProvidersIfNeeded(oldValue: [NSPasteboardItemDataProvider]) {
+        guard !oldValue.isEmpty else { return }
+        if let types = pasteboard.types, types.contains(.png) || types.contains(.tiff) {
+            return
+        }
+        for provider in oldValue {
+            _ = provider
+        }
+    }
+
     /// Writes the item to the pasteboard. Returns false when nothing reached
     /// the pasteboard (e.g. missing image data) — callers that auto-paste must
     /// check this so a failed copy never Cmd+V's stale clipboard content.

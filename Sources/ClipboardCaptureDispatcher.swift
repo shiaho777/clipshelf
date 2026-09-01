@@ -25,6 +25,10 @@ final class ClipboardCaptureDispatcher {
         expiresAt: Date? = nil,
         autoPin: Bool = false
     ) {
+        // Snapshot stackMode ONCE for this capture. Re-reading it after the
+        // item was inserted (e.g. for async image completions) raced the
+        // toggle: turning stack mode off mid-capture still enqueued the item,
+        // and turning it on mid-capture dropped it from the queue.
         let shouldEnqueue = PasteQueue.shared.stackMode && !isSensitive
 
         switch content.kind {
@@ -56,8 +60,8 @@ final class ClipboardCaptureDispatcher {
                 content.sourceAppName,
                 nil,
                 content.isScreenshot
-            ) { item in
-                if PasteQueue.shared.stackMode { PasteQueue.shared.enqueue(item) }
+            ) { [shouldEnqueue] item in
+                if shouldEnqueue { PasteQueue.shared.enqueue(item) }
             }
         case .imageFile(let data, let fileExtension):
             addImage(
@@ -66,8 +70,8 @@ final class ClipboardCaptureDispatcher {
                 content.sourceAppName,
                 fileExtension,
                 content.isScreenshot
-            ) { item in
-                if PasteQueue.shared.stackMode { PasteQueue.shared.enqueue(item) }
+            ) { [shouldEnqueue] item in
+                if shouldEnqueue { PasteQueue.shared.enqueue(item) }
             }
         case .fileURL(let paths):
             let item = addFileURL(
