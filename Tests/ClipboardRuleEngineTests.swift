@@ -75,7 +75,7 @@ final class ClipboardRuleEngineTests: XCTestCase {
         ]
         let input = text("My card is 4111 1111 1111 1111")
         let result = await engine.process(input)
-        if case .storeSensitive(_, let ttl) = result {
+        if case .storeSensitive(_, let ttl, _) = result {
             XCTAssertEqual(ttl, 60)
         } else {
             XCTFail("Expected .storeSensitive, got \(result)")
@@ -88,7 +88,7 @@ final class ClipboardRuleEngineTests: XCTestCase {
         ]
         let input = text("AKIAIOSFODNN7EXAMPLE")
         let result = await engine.process(input)
-        if case .storeSensitive(_, let ttl) = result {
+        if case .storeSensitive(_, let ttl, _) = result {
             XCTAssertEqual(ttl, 30)
         } else {
             XCTFail("Expected .storeSensitive for AWS key")

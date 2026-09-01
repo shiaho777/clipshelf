@@ -134,7 +134,7 @@ struct RulesSettingsView: View {
             Text(lang.l("rules.title"))
         }
         .popupWindow(isPresented: $showAddRule) {
-            AddRuleSheet(clipboardManager: clipboardManager, isPresented: $showAddRule)
+            AddRuleSheet(clipboardManager: clipboardManager, isPresented: $showAddRule, onSaved: { noteRulesChanged() })
         }
 
         // Rule Test / Preview — error alert anchored here so it's visible anywhere in this view
@@ -324,6 +324,9 @@ struct RunningAppEntry: Identifiable {
 struct AddRuleSheet: View {
     @ObservedObject var clipboardManager: ClipboardManager
     @Binding var isPresented: Bool
+    /// Called after a rule was persisted so the parent list re-renders
+    /// (the engine itself is not observable).
+    var onSaved: (() -> Void)? = nil
     @ObservedObject var lang = LanguageManager.shared
 
     @State private var name = ""
@@ -439,6 +442,7 @@ struct AddRuleSheet: View {
                 Spacer()
                 Button(lang.l("rules.save")) {
                     saveRule()
+                    onSaved?()
                     isPresented = false
                 }
                 .keyboardShortcut(.defaultAction)

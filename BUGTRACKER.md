@@ -25,7 +25,7 @@ U1, U2, U3, U4, U5, U6, U7, U8, U9, U10, I4 (partial)
 ## Fixed — batch D1 (5) — c1aec69
 I15, U11, U13, U14
 
-## Fixed — batch D2 (6) — this commit
+## Fixed — batch D2 (6) — cf45709
 - I13 P2: launch-at-login self-heal probed `launchctl print` (a blocking
   subprocess) on the main thread at launch; moved to a utility queue.
 - S13 P2: JSONClipboardHistoryStore.loadItems(limit:) kept the OLDEST
@@ -47,6 +47,23 @@ I15, U11, U13, U14
   (snippet restore, preview/color copy) asked a deallocated provider for
   data and the image copy silently broke. Old providers are now only
   released once the pasteboard no longer advertises a lazily-provided image.
+
+## Fixed — batch D3 (3, new audit round)
+- D3-1 P1 (data consistency): updateItemContent mutated `items[index]` in
+  place without bumping historyRevision and without reindexing Spotlight.
+  The list's cheap change detection (count + head ID) saw "nothing changed"
+  and kept rendering the pre-edit text; Spotlight kept surfacing the old
+  content until the next full reindex. Now bumps the revision and reindexes
+  the item.
+- D3-2 P1 (rule semantics): when detectSensitive AND autoPin both fired in
+  one capture, `process()` returned .storeSensitive first and silently
+  discarded the pin. storeSensitive now carries `pin: Bool`; the ingest
+  pipeline forwards it so the item is stored sensitive AND pinned.
+  testProcess reports the combined "sensitive+pin" outcome.
+- D3-3 P2 (rules UI): saving a new rule from AddRuleSheet appended to the
+  non-observable engine and dismissed the sheet without any state change,
+  so the new rule did not appear until another mutation. AddRuleSheet now
+  invokes an onSaved callback that bumps the parent view's revision token.
 
 ## Verified findings from 3-agent audit (45) — TO FIX
 
@@ -101,5 +118,5 @@ I15, U11, U13, U14
 - [ ] U14 P2 onboarding reappears after Clear All (never marked complete)
 - [ ] U15 P2 TimeAgoText formatter churn every 15s per row
 
-## Count: 10 fixed + 44 unique pending (S1=I11, S7=I7 dup) = 54
-## Need 46 more findings → more audit rounds after fixing these
+## Count: 10 fixed + 45 audit findings resolved (42 fixed, 3 verified) + 3 batch-D3 fixes = 58
+## Campaign total so far: 55 code fixes across 7 commits. Remaining D3+ work: new audit rounds.

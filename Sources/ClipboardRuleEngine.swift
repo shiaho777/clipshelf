@@ -2,15 +2,16 @@ import Foundation
 
 enum RuleEngineResult: Equatable {
     case store(CapturedContent)
-    case storeSensitive(CapturedContent, ttl: Int?)
+    case storeSensitive(CapturedContent, ttl: Int?, pin: Bool)
     case discard
     case pin(CapturedContent)
-    
+
     static func == (lhs: RuleEngineResult, rhs: RuleEngineResult) -> Bool {
         switch (lhs, rhs) {
         case (.discard, .discard): return true
         case (.store(let a), .store(let b)): return a == b
-        case (.storeSensitive(let a, let t1), .storeSensitive(let b, let t2)): return a == b && t1 == t2
+        case (.storeSensitive(let a, let t1, let p1), .storeSensitive(let b, let t2, let p2)):
+            return a == b && t1 == t2 && p1 == p2
         case (.pin(let a), .pin(let b)): return a == b
         default: return false
         }
@@ -103,7 +104,10 @@ final class ClipboardRuleEngine {
         }
 
         if isSensitive {
-            return .storeSensitive(current, ttl: sensitiveTTL)
+            // A sensitive item hit by an autoPin rule must keep BOTH flags:
+            // returning .storeSensitive here without the pin silently dropped
+            // the user's autoPin request.
+            return .storeSensitive(current, ttl: sensitiveTTL, pin: shouldPin)
         }
         if shouldPin {
             return .pin(current)
@@ -226,7 +230,11 @@ final class ClipboardRuleEngine {
         }
 
         let outputText = textContent(current) ?? text
-        let outcome = isSensitive ? "sensitive" : (shouldPin ? "pin" : "store")
+        let outcome: String
+        if isSensitive && shouldPin { outcome = "sensitive+pin" }
+        else if isSensitive { outcome = "sensitive" }
+        else if shouldPin { outcome = "pin" }
+        else { outcome = "store" }
         return TestResult(output: outputText, matchedRules: matchedRuleNames,
                           outcome: outcome, steps: traceSteps)
     }

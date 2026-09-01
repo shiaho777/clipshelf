@@ -743,6 +743,12 @@ class ClipboardManager: ObservableObject {
         items[index].content = newContent
         updateIndexedItem(items[index], at: index)
         persistItemIncrementally(items[index])
+        // Spotlight holds the old content; without reindexing, search kept
+        // surfacing the pre-edit text. Also bump the history revision so the
+        // list's cheap change detection (count + head ID only) re-renders the
+        // edited row.
+        SpotlightIndexService.shared.indexItem(items[index])
+        noteHistoryMutation()
     }
     
     // MARK: - Refresh

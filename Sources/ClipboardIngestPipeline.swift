@@ -20,9 +20,9 @@ final class ClipboardIngestPipeline {
             switch result {
             case .store(let c):
                 self.onStore(c, false, nil, false)
-            case .storeSensitive(let c, let ttl):
+            case .storeSensitive(let c, let ttl, let pin):
                 let expiry = ttl.map { Date().addingTimeInterval(Double($0)) }
-                self.onStore(c, true, expiry, false)
+                self.onStore(c, true, expiry, pin)
             case .discard:
                 return
             case .pin(let c):
