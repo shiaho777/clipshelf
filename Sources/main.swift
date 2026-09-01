@@ -236,6 +236,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showPanel() {
         guard let button = statusItemController.statusItem?.button, !isPanelAnimating else { return }
+        // Re-show while already visible (e.g. gear → "Test Rules" when the
+        // panel is open): just bring it front. Running the entrance animation
+        // again would install a SECOND global click monitor — the old one is
+        // only removed in hidePanel(), so every duplicate show leaked one
+        // monitor and each fired hidePanel once.
+        guard !panel.isVisible else {
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
         previousApp = NSWorkspace.shared.frontmostApplication
 
         // Record frontmost app info for the "filter by current app" feature.

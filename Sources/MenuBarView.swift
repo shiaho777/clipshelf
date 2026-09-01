@@ -753,7 +753,16 @@ struct MenuBarView: View {
                             .help(lang.l("settings.title"))
                             .accessibilityLabel(lang.l("settings.title"))
                             .contextMenu {
-                                Button { onOpenRulesTest() } label: {
+                                Button {
+                                    // The gear only calls AppDelegate.openSettings
+                                    // (showPanel + tab request) — it does not
+                                    // switch this view's internal page, so the
+                                    // tab request must be applied here too.
+                                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                                        page = .settings
+                                    }
+                                    onOpenRulesTest()
+                                } label: {
                                     Label(lang.l("queue.testRules"), systemImage: "wand.and.rays")
                                 }
                                 Divider()

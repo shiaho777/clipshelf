@@ -65,6 +65,28 @@ I15, U11, U13, U14
   so the new rule did not appear until another mutation. AddRuleSheet now
   invokes an onSaved callback that bumps the parent view's revision token.
 
+## Fixed — batch D4 (2, fourth audit round)
+- D4-1 P1 (UI): the gear context-menu "Test Rules" action only called
+  AppDelegate.openSettings(tab: 1) — which writes the tab request and calls
+  showPanel() — but never switched MenuBarView's internal `page` to
+  .settings. With the panel already open, showPanel() only brings it front
+  and the embedded settings view never mounts, so the tab request (read in
+  onAppear) was consumed by nothing. The context-menu action now switches
+  to the settings page first.
+- D4-2 P1 (resource leak): showPanel() had no already-visible guard. Every
+  re-show while the panel was open (gear → Test Rules, or openSettings while
+  visible) re-ran the entrance animation AND installed a second global
+  click monitor — the old monitor is only removed in hidePanel(), so each
+  duplicate show leaked one monitor, and the first outside click then ran
+  N monitors' worth of handlers. showPanel now makes the visible panel key
+  and returns instead.
+- D4-3: verified areas with no new issues — QuickPastePanel show/hide
+  identity-guarded teardown, ClipboardImageStore path handling (import
+  imageFileName sanitized; store writes use generated UUID names),
+  SnippetVariableEngine cursor counting (grapheme-safe Character distance),
+  OCR queue watchdog and bounded depth, rule import regex validation
+  (invalid patterns safely skip), CSV formula injection escaping.
+
 ## Verified findings from 3-agent audit (45) — TO FIX
 
 ### Infra (agent_7220)
@@ -118,5 +140,5 @@ I15, U11, U13, U14
 - [x] U14 P2 onboarding reappears after Clear All (never marked complete) — fixed in batch D1
 - [x] U15 P2 TimeAgoText formatter churn every 15s per row — fixed in D2
 
-## Count: 10 fixed + 45 audit findings resolved (42 fixed, 3 verified) + 3 batch-D3 fixes = 58
+## Count: 10 fixed + 45 audit findings resolved (42 fixed, 3 verified) + 3 batch-D3 fixes + 2 batch-D4 fixes = 60
 ## Campaign total so far: 55 code fixes across 7 commits. Remaining D3+ work: new audit rounds.
