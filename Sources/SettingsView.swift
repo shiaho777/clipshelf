@@ -12,8 +12,8 @@ struct SettingsView: View {
     @State private var showExportSuccess = false
     @State private var showImportSuccess = false
     @State private var importExportError: String?
-    /// 0 = ZIP backup, 1 = CSV, 2 = Markdown
-    @State private var exportFormat = 0
+    /// 0 = ZIP backup, 1 = CSV, 2 = Markdown. Persisted (matches the embedded panel).
+    @AppStorage("settings.exportFormat") private var exportFormat = 0
     @State private var accessibilityTrusted = AXIsProcessTrusted()
     /// Embedded mode (inside the main panel) hides the window-only header
     /// handling and starts on the caller-chosen section.

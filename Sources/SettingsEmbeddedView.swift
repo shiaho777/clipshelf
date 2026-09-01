@@ -15,7 +15,10 @@ struct SettingsEmbeddedView: View {
     @ObservedObject private var lang = LanguageManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var sectionAnimation
-    @State private var section = 0
+    // @AppStorage, not @State: the settings page remounts on every re-entry
+    // (page = .history tears the view down), so @State reset the tab to
+    // General each time. Also keeps the choice across relaunches.
+    @AppStorage("settings.section") private var section = 0
 
     private let sectionKeys = ["settings.tab.general", "settings.tab.rules", "settings.tab.data", "settings.tab.about"]
 
@@ -67,6 +70,13 @@ struct SettingsEmbeddedView: View {
                 section = requested
             }
             UserDefaults.standard.removeObject(forKey: "_settingsRequestedTab")
+        }
+        .onChange(of: section) { newValue in
+            // Persist the tab only for organic navigation; a _settingsRequestedTab
+            // jump (gear → "Test Rules") is one-shot and must not overwrite it.
+            if UserDefaults.standard.object(forKey: "_settingsRequestedTab") == nil {
+                UserDefaults.standard.set(newValue, forKey: "settings.section")
+            }
         }
     }
 
@@ -276,8 +286,9 @@ struct SettingsDataSectionPanel: View {
     @State private var showExportSuccess = false
     @State private var showImportSuccess = false
     @State private var importExportError: String?
-    /// 0 = ZIP backup, 1 = CSV, 2 = Markdown
-    @State private var exportFormat = 0
+    /// 0 = ZIP backup, 1 = CSV, 2 = Markdown. Persisted: the view remounts on
+    /// every re-entry, so @State reset the picker to ZIP each time.
+    @AppStorage("settings.exportFormat") private var exportFormat = 0
 
     private static let storageDirectory: URL = AppStoragePaths.defaultStorageDirectory()
 
