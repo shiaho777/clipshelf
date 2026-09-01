@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] - 2026-09-01
+
+### Added
+- Check for Updates on the About page: checks GitHub Releases, downloads the DMG with a progress bar and live download speed, then installs by opening the disk image in Finder (drag ClipShelf into Applications)
+- Settings now open inside the main panel instead of a separate window, with the same HUD vibrancy as the panel
+
+### Fixed
+- Settings: the selected tab and export format no longer reset when re-entering the settings page
+- Settings UI: control rows are now aligned and the colored warning icons are gone
+- A batch of audit fixes across persistence, rules and panel lifecycle: double-paste, tombstone overflow, sync merge drift, stale flush, database close race, FTS AND semantics, Spotlight resurrection, UTType crash, test-rules page switching, hotkey rebind rollback, sensitive+pin handling, image provider lifetime, JSON import limits, and a duplicate panel-monitor leak
+
 ## [1.1.1] - 2026-08-30
 
 ### Fixed
