@@ -182,6 +182,11 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     }
 
     deinit {
+        // Take the db lock: saveEmbedding runs on SemanticSearchService's
+        // background queue and may still be inside a statement — closing here
+        // without the lock was a use-after-free at shutdown.
+        dbLock.lock()
+        defer { dbLock.unlock() }
         for stmt in cachedStatements.values {
             sqlite3_finalize(stmt)
         }
@@ -227,6 +232,15 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             if let idStr = columnText(stmt!, 0), let uuid = UUID(uuidString: idStr) {
                 uuids.append(uuid)
             }
+        }
+        // Multi-token queries: FTS5's default OR-ish bare-term matching breaks
+        // the documented implicit-AND contract (e.g. "ab xyz" matched rows
+        // containing only "xyz"). Re-run the LIKE fallback with strict AND
+        // semantics so every token must match. Single-token queries can keep
+        // the BM25-ranked FTS result.
+        let tokenCount = sanitized.components(separatedBy: " ").count
+        if tokenCount > 1 {
+            return searchLikeLocked(tokens: sanitized.components(separatedBy: " "), limit: boundedLimit)
         }
         if !uuids.isEmpty { return uuids }
         return searchLikeLocked(tokens: sanitized.components(separatedBy: " "), limit: boundedLimit)

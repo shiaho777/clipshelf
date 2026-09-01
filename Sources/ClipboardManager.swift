@@ -82,6 +82,11 @@ class ClipboardManager: ObservableObject {
     private var ingestPipeline: ClipboardIngestPipeline!
     private var captureDispatcher: ClipboardCaptureDispatcher!
     private var isInitializing = true
+    /// IDs of items the user deleted in this session. Guards against a stale
+    /// SQLite row (surviving a lost incremental delete) being resurrected by
+    /// `resolveItemIncludingColdStorage`. Kept bounded by dropping the oldest
+    /// third rather than replacing wholesale — replacing re-admitted up to
+    /// 5,000 deleted ids and made "permanently deleted" items readable again.
     private var deletedIDTombstones: Set<UUID> = []
     private var suppressItemsPublish = false
 
@@ -168,12 +173,14 @@ class ClipboardManager: ObservableObject {
             let removedIDs = Set(removed.map(\.id))
             removeIDsFromIndexes(removedIDs)
             ocrQueue?.remove(ids: ids)
+            // Evict deleted items' vectors; the cache is otherwise unbounded
+            // and grows ~2KB per text item for the process lifetime.
+            for id in removedIDs {
+                embeddingCache.removeValue(forKey: id)
+            }
             recomputePinnedCount()
             totalStoredCount = max(0, totalStoredCount - removed.count)
             deletedIDTombstones.formUnion(removedIDs)
-            if deletedIDTombstones.count > 5_000 {
-                deletedIDTombstones = Set(removedIDs)
-            }
         }
         return removed
     }
@@ -948,12 +955,27 @@ class ClipboardManager: ObservableObject {
 
     func mergeFetchedSyncItems(_ newItems: [ClipboardItem]) {
         guard !newItems.isEmpty else { return }
+        // Drop incoming ids already present (duplicate sync deliveries would
+        // otherwise double-count and desync the item index) and ids the user
+        // deleted. Then rebuild the pinned count: the merge reorders the
+        // array, so a stale cachedPinnedCount corrupts insertion indexing and
+        // trimming afterwards.
+        let existingIDs = Set(items.map(\.id))
+        var seenIncoming = Set<UUID>()
+        let fresh = newItems.filter { item in
+            seenIncoming.insert(item.id).inserted
+                && !existingIDs.contains(item.id)
+                && !deletedIDTombstones.contains(item.id)
+        }
+        guard !fresh.isEmpty else { return }
         items = ClipboardHistoryOrdering.mergeFetched(
             existing: items,
             pinnedCount: cachedPinnedCount,
-            incoming: newItems
+            incoming: fresh
         )
-        totalStoredCount += newItems.count
+        rebuildItemIndexes()
+        recomputePinnedCount()
+        totalStoredCount += fresh.count
         noteHistoryMutation()
     }
 

@@ -27,6 +27,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var clickMonitor: Any?
     private var pasteObserver: NSObjectProtocol?
     private var didPaste = false
+    /// Increments per paste attempt; stale timeout/observer callbacks from a
+    /// superseded attempt must not inject keystrokes.
+    private var pasteGeneration: UInt64 = 0
     private var isPanelAnimating = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "App")
     private var queueObserver: Any?
@@ -329,30 +332,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hidePanel()
         guard let targetApp = previousApp else { return }
         clipboardManager.targetBundleID = targetApp.bundleIdentifier
-        
+
         cleanupPasteObserver()
+        // Generation token: a second pasteAndClose before the first completes
+        // used to reset didPaste=false while the first call's 0.5s timeout was
+        // still pending — both the stale timeout and the new observer fired
+        // simulateCmdV, double-pasting. Each attempt owns a generation; stale
+        // callbacks check theirs and bail.
+        pasteGeneration &+= 1
+        let generation = pasteGeneration
         didPaste = false
-        
+
         pasteObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let self, !self.didPaste,
+            guard let self, !self.didPaste, self.pasteGeneration == generation,
                   let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   app.processIdentifier == targetApp.processIdentifier else { return }
             self.didPaste = true
             self.cleanupPasteObserver()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self, self.pasteGeneration == generation else { return }
                 self.simulateCmdV()
             }
         }
-        
+
         targetApp.activate(options: .activateIgnoringOtherApps)
-        
+
         // Timeout fallback
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, !self.didPaste else { return }
+            guard let self, !self.didPaste, self.pasteGeneration == generation else { return }
             self.didPaste = true
             self.cleanupPasteObserver()
             // Inject Cmd+V only once the target app is actually frontmost.

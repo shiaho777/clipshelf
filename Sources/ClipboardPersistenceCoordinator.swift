@@ -92,6 +92,10 @@ final class ClipboardPersistenceCoordinator {
         }
     }
 
+    /// Debounced snapshot of just use-count changes. Skipped entirely when a
+    /// full snapshot already covers the horizon: a usage snapshot capturing a
+    /// stale `items` array could otherwise land AFTER a flush and write back
+    /// older useCounts, regressing what was just persisted (lost update).
     func scheduleUsageSnapshot(_ items: [ClipboardItem]) {
         guard !snapshotScheduler.hasPending else { return }
         usageSnapshotScheduler.schedule(items)
@@ -104,8 +108,11 @@ final class ClipboardPersistenceCoordinator {
         group.enter()
         incrementalQueue.async { group.leave() }
         group.wait()
-        snapshotScheduler.flush(items)
+        // Cancel the pending usage snapshot BEFORE flushing: its captured
+        // items array predates the incremental writes just drained, and
+        // replaying it after the flush would resurrect stale use counts.
         usageSnapshotScheduler.cancel()
+        snapshotScheduler.flush(items)
     }
 
     func waitForIncrementalIdle() {

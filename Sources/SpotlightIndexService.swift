@@ -46,6 +46,10 @@ final class SpotlightIndexService {
         pendingWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            // A deindexAll() (e.g. clearAll) may have run while this batch was
+            // pending; without cancelling, the batch fired afterwards and
+            // re-indexed stale/deleted items with full content.
+            guard !pendingItems.isEmpty else { return }
             let items = Array(self.pendingItems.values)
             self.pendingItems.removeAll(keepingCapacity: true)
             self.indexItems(items)
@@ -56,6 +60,7 @@ final class SpotlightIndexService {
 
     /// Remove a single item from the Spotlight index.
     func deindexItem(id: UUID) {
+        pendingItems.removeValue(forKey: id)
         Task.detached(priority: .background) { [weak self] in
             guard let self else { return }
             do {
@@ -68,8 +73,12 @@ final class SpotlightIndexService {
         }
     }
 
-    /// Remove all ClipShelf items from the Spotlight index.
+    /// Remove all ClipShelf items from the Spotlight index. Also drops any
+    /// pending index batch so it can't fire afterwards and resurrect stale rows.
     func deindexAll() {
+        pendingItems.removeAll(keepingCapacity: true)
+        pendingWork?.cancel()
+        pendingWork = nil
         Task.detached(priority: .background) { [weak self] in
             guard let self else { return }
             do {
