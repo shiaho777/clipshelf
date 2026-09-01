@@ -89,6 +89,9 @@ struct MenuBarView: View {
     @State private var filteredItems: [ClipboardItem] = []
     @State private var isMultiSelectMode = false
     @State private var selectedItemIDs: Set<UUID> = []
+    /// Selection click order, so Compare diffs in the order the user picked
+    /// rather than list order (which inverted old/new).
+    @State private var selectionOrder: [UUID] = []
     @State private var showAppFilters = false
     @State private var filterByCurrentApp = false
     @State private var highlightMap: [UUID: Set<Int>] = [:]
@@ -241,7 +244,10 @@ struct MenuBarView: View {
     private func toggleMultiSelect() {
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.75)) {
             isMultiSelectMode.toggle()
-            if !isMultiSelectMode { selectedItemIDs.removeAll() }
+            if !isMultiSelectMode {
+                selectedItemIDs.removeAll()
+                selectionOrder.removeAll()
+            }
         }
     }
 
@@ -301,8 +307,10 @@ struct MenuBarView: View {
             withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7)) {
                 if selectedItemIDs.contains(item.id) {
                     selectedItemIDs.remove(item.id)
+                    selectionOrder.removeAll { $0 == item.id }
                 } else {
                     selectedItemIDs.insert(item.id)
+                    selectionOrder.append(item.id)
                 }
             }
         } : nil
@@ -606,6 +614,10 @@ struct MenuBarView: View {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78)) {
                             showOnboarding = false
                         }
+                        // Mark complete even when dismissed via the dismiss
+                        // path — otherwise the tutorial reappears the next
+                        // time the list becomes empty (e.g. after Clear All).
+                        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
@@ -667,10 +679,20 @@ struct MenuBarView: View {
                     HStack(spacing: 6) {
                         if selectedItemIDs.count == 2 {
                             Button(lang.l("multiselect.compare")) {
-                                let selected = filteredItems.filter { selectedItemIDs.contains($0.id) }
-                                if selected.count == 2 {
-                                    diffPair = DiffPair(itemA: selected[0], itemB: selected[1])
+                                // Order by selection time, not list order — the
+                                // diff always shows list-order "old vs new",
+                                // which inverted the diff when the user picked
+                                // newer-first. Track click order.
+                                let ordered = selectionOrder.compactMap { id in
+                                    filteredItems.first { $0.id == id }
                                 }
+                                guard ordered.count == 2 else {
+                                    let selected = filteredItems.filter { selectedItemIDs.contains($0.id) }
+                                    guard selected.count == 2 else { return }
+                                    diffPair = DiffPair(itemA: selected[0], itemB: selected[1])
+                                    return
+                                }
+                                diffPair = DiffPair(itemA: ordered[0], itemB: ordered[1])
                             }
                             .font(.system(size: 11, weight: .medium))
                         }

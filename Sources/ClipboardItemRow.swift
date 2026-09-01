@@ -385,7 +385,14 @@ struct ClipboardItemRow: View {
                 let result = await Task.detached(priority: .utility) {
                     PasteAdapterUtils.looksLikeCode(content)
                 }.value
-                isCode = result
+                // The row may have been recycled to a different item while we
+                // awaited; don't paint a previous item's verdict onto this one.
+                if !Task.isCancelled {
+                    isCode = result
+                }
+            } else if item.type != .text {
+                // Row reused for a non-text item (edit case) — clear stale verdict.
+                isCode = false
             }
             guard item.type == .image, loadedImage == nil else { return }
             if let image {

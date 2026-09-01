@@ -42,7 +42,13 @@ final class ClipboardRuleEngine {
     }
     private let scriptRunner = ScriptRuleRunner()
     private var enabledRules: [ClipboardRule] = []
-    private let regexCache = NSCache<NSString, NSRegularExpression>()
+    /// Bounded: rule patterns are user-supplied and unlimited caching retained
+    /// compiled regexes for the process lifetime.
+    private let regexCache: NSCache<NSString, NSRegularExpression> = {
+        let cache = NSCache<NSString, NSRegularExpression>()
+        cache.countLimit = 64
+        return cache
+    }()
 
     private func rebuildExecutionPlan() {
         enabledRules = rules.filter(\.isEnabled).sorted { $0.order < $1.order }
