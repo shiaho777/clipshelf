@@ -85,16 +85,16 @@ I15, U11, U13, U14
 - [x] I15 P2 unbounded regexCache + main-thread flush freeze on import
 
 ### Services (agent_2bdf)
-- [ ] S1 P0 tombstone overflow replacement re-admits deleted IDs (dup of I11)
-- [ ] S2 P0 AppIntents leak sensitive content (no isSensitive gating)
-- [ ] S3 P1 mergeFetchedSyncItems no dedupe/no recomputePinnedCount
-- [ ] S4 P1 stale pinnedCount → index wrong lane → OCR writes wrong row
-- [ ] S5 P1 OCR isProcessing wedged forever on stalled Vision call
-- [ ] S6 P1 Spotlight pending batch re-indexes stale items after clearAll
-- [ ] S7 P1 usage snapshot scheduled during executing flush resurrects state (dup I7)
-- [ ] S8 P1 FTS implicit-AND violated; fallback skipped
-- [ ] S9 P2 readRow never restores isScreenshot
-- [ ] S10 P2 store deinit closes db without lock (use-after-free)
+- [x] S1 P0 tombstone overflow replacement re-admits deleted IDs (dup of I11 — fixed in batch B)
+- [x] S2 P0 AppIntents leak sensitive content (no isSensitive gating) — fixed in batch A
+- [x] S3 P1 mergeFetchedSyncItems no dedupe/no recomputePinnedCount — fixed in batch B
+- [x] S4 P1 stale pinnedCount → index wrong lane → OCR writes wrong row — fixed in batch B
+- [x] S5 P1 OCR isProcessing wedged forever on stalled Vision call — fixed in batch A
+- [x] S6 P1 Spotlight pending batch re-indexes stale items after clearAll — fixed in batch B
+- [x] S7 P1 usage snapshot scheduled during executing flush resurrects state (dup I7 — fixed in batch B)
+- [x] S8 P1 FTS implicit-AND violated; fallback skipped — fixed in batch B
+- [x] S9 P2 readRow never restores isScreenshot — fixed in batch A
+- [x] S10 P2 store deinit closes db without lock (use-after-free) — fixed in batch B
 - [x] S11 P2 user copy swallowed between two snippet writes (related I6) — fixed with I6 suppression counter: a real user copy landing between the two snippet writes is no longer swallowed as a suppression tick
 - [x] S12 P2 highlight indices computed on ocrText vs rendered preview — fixed: image rows render no highlighted text content (thumbnail + "Image" caption only); the map is computed on the same `displayText`/ocrText basis the row renders, and `displayText` is truncated to 50 chars on both sides
 - [x] S13 P2 JSON store loadItems(limit:) semantics diverge (oldest kept) — fixed in D2: keeps all pinned then NEWEST unpinned (prefix), matching SQLite/in-memory stores
@@ -102,21 +102,21 @@ I15, U11, U13, U14
 - [x] S15 P2 semantic embedding computed on main thread — verified: scheduleEmbeddingBatch runs computeEmbedding + store write on a utility DispatchQueue, only the merge callback hops back to main
 
 ### UI (agent_c171)
-- [ ] U1 P0 UTType(filenameExtension:)! force-unwrap crash (clipbackup/cliprules)
-- [ ] U2 P1 "Test Rules" lands on General tab (embedded view ignores _settingsRequestedTab)
-- [ ] U3 P1 launch-at-login toggle inverted on first interaction (VM load never called)
-- [ ] U4 P1 stale rows after in-place content edit (cheap diff misses same-ID mutation)
-- [ ] U5 P1 Preview copy mangles fileURL (JSON text) / richText (drops RTF)
-- [ ] U6 P1 search count fabricated lower bound ("%d found" wrong)
-- [ ] U7 P1 smart-paste badge wipes queue status (P1 status desync)
-- [ ] U8 P1 cancelled drag permanently disables outside-click dismiss
-- [ ] U9 P1 QuickPaste double-show leaks panel+monitor
-- [ ] U10 P1 keyboard nav dead until list clicked (first responder)
-- [ ] U11 P2 compare diff order ignores selection order
+- [x] U1 P0 UTType(filenameExtension:)! force-unwrap crash (clipbackup/cliprules) — fixed in batch C
+- [x] U2 P1 "Test Rules" lands on General tab (embedded view ignores _settingsRequestedTab) — fixed in batch C
+- [x] U3 P1 launch-at-login toggle inverted on first interaction (VM load never called) — fixed in batch C
+- [x] U4 P1 stale rows after in-place content edit (cheap diff misses same-ID mutation) — fixed in batch C; D3-1 additionally bumps historyRevision on edit
+- [x] U5 P1 Preview copy mangles fileURL (JSON text) / richText (drops RTF) — fixed in batch C
+- [x] U6 P1 search count fabricated lower bound ("%d found" wrong) — fixed in batch C
+- [x] U7 P1 smart-paste badge wipes queue status (P1 status desync) — fixed in batch C
+- [x] U8 P1 cancelled drag permanently disables outside-click dismiss — fixed in batch C
+- [x] U9 P1 QuickPaste double-show leaks panel+monitor — fixed in batch C
+- [x] U10 P1 keyboard nav dead until list clicked (first responder) — fixed in batch C
+- [x] U11 P2 compare diff order ignores selection order — fixed in batch D1
 - [x] U12 P2 rules toggle/reorder doesn't republish (visual desync) — fixed in D2: ClipboardRuleEngine is not observable; RulesSettingsView now bumps a revision token on toggle/reorder/delete/add/import to force re-render
-- [ ] U13 P2 stale isCode across row reuse / no cancellation check
-- [ ] U14 P2 onboarding reappears after Clear All (never marked complete)
-- [ ] U15 P2 TimeAgoText formatter churn every 15s per row
+- [x] U13 P2 stale isCode across row reuse / no cancellation check — fixed in batch D1
+- [x] U14 P2 onboarding reappears after Clear All (never marked complete) — fixed in batch D1
+- [x] U15 P2 TimeAgoText formatter churn every 15s per row — fixed in D2
 
 ## Count: 10 fixed + 45 audit findings resolved (42 fixed, 3 verified) + 3 batch-D3 fixes = 58
 ## Campaign total so far: 55 code fixes across 7 commits. Remaining D3+ work: new audit rounds.
