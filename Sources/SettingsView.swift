@@ -234,52 +234,30 @@ struct SettingsView: View {
                         .monospacedDigit()
                 }
             }
+            Section(header: Text(lang.l("update.section"))) {
+                UpdateSectionView()
+            }
             Section(header: Text(lang.l("about.links"))) {
-                Button {
+                Button(lang.l("about.starGitHub")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf")!)
-                } label: {
-                    HStack {
-                        Image(systemName: "star")
-                            .foregroundColor(.orange)
-                            .font(.system(size: 11))
-                        Text(lang.l("about.starGitHub"))
-                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
 
-                Button {
+                Button(lang.l("about.changelog")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf/blob/main/CHANGELOG.md")!)
-                } label: {
-                    HStack {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 11))
-                        Text(lang.l("about.changelog"))
-                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
 
-                Button {
+                Button(lang.l("about.contributing")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf/blob/main/CONTRIBUTING.md")!)
-                } label: {
-                    HStack {
-                        Image(systemName: "person.2")
-                            .font(.system(size: 11))
-                        Text(lang.l("about.contributing"))
-                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
 
-                Button {
+                Button(lang.l("about.reportBug")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/clipshelf/issues/new?template=bug_report.md")!)
-                } label: {
-                    HStack {
-                        Image(systemName: "ant")
-                            .font(.system(size: 11))
-                        Text(lang.l("about.reportBug"))
-                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)

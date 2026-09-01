@@ -448,6 +448,9 @@ struct SettingsAboutSectionPanel: View {
                         .monospacedDigit()
                 }
             }
+            SettingsCard(title: lang.l("update.section")) {
+                UpdateSectionView()
+            }
             SettingsCard(title: lang.l("about.links")) {
                 aboutLink(key: "about.starGitHub", url: "https://github.com/shiaho777/clipshelf")
                 aboutLink(key: "about.changelog", url: "https://github.com/shiaho777/clipshelf/blob/main/CHANGELOG.md")

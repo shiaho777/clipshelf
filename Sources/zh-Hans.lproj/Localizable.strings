@@ -259,3 +259,17 @@
 "settings.importMaccy.panelMessage" = "常见位置：~/Library/Containers/org.p0deje.Maccy/";
 "settings.importAlfred.panelTitle" = "选择 Alfred 剪贴板数据库";
 "settings.importAlfred.panelMessage" = "常见位置：~/Library/Application Support/Alfred/Databases/";
+
+/* Updates */
+"update.section" = "更新";
+"update.check" = "检查更新";
+"update.checking" = "正在检查…";
+"update.upToDate" = "已是最新版本";
+"update.noRelease" = "未找到 GitHub 发布版本";
+"update.download" = "下载";
+"update.downloading" = "正在下载…";
+"update.cancel" = "取消";
+"update.ready" = "下载完成";
+"update.install" = "安装";
+"update.installHint" = "将在访达中打开磁盘映像，把 ClipShelf 拖入「应用程序」文件夹以替换当前版本。";
+"update.retry" = "重试";

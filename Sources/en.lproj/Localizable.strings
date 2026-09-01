@@ -259,3 +259,17 @@
 "settings.importMaccy.panelMessage" = "Typical location: ~/Library/Containers/org.p0deje.Maccy/";
 "settings.importAlfred.panelTitle" = "Select Alfred Clipboard Database";
 "settings.importAlfred.panelMessage" = "Typical location: ~/Library/Application Support/Alfred/Databases/";
+
+/* Updates */
+"update.section" = "Updates";
+"update.check" = "Check for Updates";
+"update.checking" = "Checking…";
+"update.upToDate" = "Up to date";
+"update.noRelease" = "No release found on GitHub";
+"update.download" = "Download";
+"update.downloading" = "Downloading…";
+"update.cancel" = "Cancel";
+"update.ready" = "Download complete";
+"update.install" = "Install";
+"update.installHint" = "The disk image opens in Finder — drag ClipShelf into Applications to replace the current version.";
+"update.retry" = "Retry";

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C7E98770C841323FFA5DD049 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6BDB39F2AAEA7FE3A69404B /* UpdateCheckerTests.swift */; };
+		120610DC344CA91C70753DB0 /* UpdateSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10004D3933F77371DEF4B2EA /* UpdateSectionView.swift */; };
+		78FE8EA495B7B60F463B3863 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55076D763AAC2B4F06A86D8E /* UpdateChecker.swift */; };
 		00D0C63EFD23E33319D436C8 /* SpotlightIndexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBFA949C7B891F290195995 /* SpotlightIndexService.swift */; };
 		0192C5775F6C6D7340736946 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B785B879897D1A17039E691 /* HotKeyManager.swift */; };
 		02A3D78C32987B7A98E927BB /* AppStoragePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A29E5FDD62E7AC816C123D3 /* AppStoragePaths.swift */; };
@@ -126,6 +129,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		E6BDB39F2AAEA7FE3A69404B /* UpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckerTests.swift; sourceTree = "<group>"; };
+		10004D3933F77371DEF4B2EA /* UpdateSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSectionView.swift; sourceTree = "<group>"; };
+		55076D763AAC2B4F06A86D8E /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		02C3076EFCF6BC0A12948F74 /* HotKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyStore.swift; sourceTree = "<group>"; };
 		0335E941B15C9A346502CD05 /* ClipboardContentCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardContentCodec.swift; sourceTree = "<group>"; };
 		085C26BCE9BAB0A0AC802BA9 /* StoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreTests.swift; sourceTree = "<group>"; };
@@ -265,6 +271,8 @@
 		0BD3396FDFBEEA68FDB14A38 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				10004D3933F77371DEF4B2EA /* UpdateSectionView.swift */,
+				55076D763AAC2B4F06A86D8E /* UpdateChecker.swift */,
 				3DF0DA6DFFD67C7B4BCD1088 /* AppIcon.icns */,
 				D8FD4FF6B4B4148F81878EE2 /* AppIntents.swift */,
 				731AA0F2B364715BB426C96D /* AppPreferencesStore.swift */,
@@ -344,6 +352,7 @@
 		1BFEE15FE0C3DDA1660B1126 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				E6BDB39F2AAEA7FE3A69404B /* UpdateCheckerTests.swift */,
 				76594624D4118AE0CC103019 /* AppStoragePathsTests.swift */,
 				B0E34011F67AB366FE14CB8E /* BatchD2FixesTests.swift */,
 				EA709BA587D931C3EEBF85D0 /* BatchD3FixesTests.swift */,
@@ -515,6 +524,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C7E98770C841323FFA5DD049 /* UpdateCheckerTests.swift in Sources */,
 				895DFD5142A464592FC94BCC /* AppStoragePathsTests.swift in Sources */,
 				2C2AE4E813E6BD9035F7A199 /* BatchD2FixesTests.swift in Sources */,
 				9E17A1FC81D899F09EFE97A7 /* BatchD3FixesTests.swift in Sources */,
@@ -555,6 +565,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				120610DC344CA91C70753DB0 /* UpdateSectionView.swift in Sources */,
+				78FE8EA495B7B60F463B3863 /* UpdateChecker.swift in Sources */,
 				57B65D1DBC771BA589BB1DAC /* AppIntents.swift in Sources */,
 				45CDE076E5AA4D318E46AE59 /* AppPreferencesStore.swift in Sources */,
 				02A3D78C32987B7A98E927BB /* AppStoragePaths.swift in Sources */,
