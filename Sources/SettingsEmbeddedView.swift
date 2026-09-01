@@ -170,7 +170,7 @@ struct SettingsGeneralSectionPanel: View {
                 if let errorKey = settingsVM.launchAtLoginErrorKey {
                     Text(lang.l(errorKey))
                         .font(.system(size: DesignSystem.FontSize.caption))
-                        .foregroundColor(.red)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 14)
                 }
                 SettingsRow(label: lang.l("settings.language")) {
@@ -198,7 +198,7 @@ struct SettingsGeneralSectionPanel: View {
                 HotKeyRecorderView(hotKey: $hotKeyManager.quickPasteHotKey, label: "hotkey.quickPaste")
             }
             SettingsCard(title: lang.l("settings.history.section")) {
-                SettingsRow(label: lang.l("settings.maxHistory")) {
+                SettingsRow(label: lang.l("settings.maxHistory"), controlWidth: pickerWidth) {
                     Picker("", selection: $clipboardManager.maxHistoryCount) {
                         ForEach(historyLimits, id: \.self) { limit in
                             Text(limit == 0 ? lang.l("settings.maxHistory.unlimited") : "\(limit)").tag(limit)
@@ -206,7 +206,9 @@ struct SettingsGeneralSectionPanel: View {
                     }
                     .labelsHidden()
                 }
-                SettingsRow(label: lang.l("settings.hotWindow")) {
+                SettingsRow(label: lang.l("settings.hotWindow"),
+                            caption: lang.l("settings.hotWindow.description"),
+                            controlWidth: pickerWidth) {
                     Picker("", selection: $clipboardManager.hotWindowCount) {
                         ForEach(hotWindowLimits, id: \.self) { limit in
                             Text("\(limit)").tag(limit)
@@ -214,11 +216,7 @@ struct SettingsGeneralSectionPanel: View {
                     }
                     .labelsHidden()
                 }
-                Text(lang.l("settings.hotWindow.description"))
-                    .font(.system(size: DesignSystem.FontSize.caption))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 14)
-                SettingsRow(label: lang.l("settings.autoCleanup")) {
+                SettingsRow(label: lang.l("settings.autoCleanup"), controlWidth: pickerWidth) {
                     Picker("", selection: $clipboardManager.autoCleanupInterval) {
                         ForEach(cleanupOptions, id: \.value) { option in
                             Text(lang.l(option.key)).tag(option.value)
@@ -226,35 +224,26 @@ struct SettingsGeneralSectionPanel: View {
                     }
                     .labelsHidden()
                 }
-                SettingsRow(label: lang.l("settings.smartPaste")) {
+                SettingsRow(label: lang.l("settings.smartPaste"),
+                            caption: lang.l("settings.smartPaste.description")) {
                     Toggle("", isOn: $clipboardManager.smartPasteEnabled)
                         .labelsHidden()
                 }
-                Text(lang.l("settings.smartPaste.description"))
-                    .font(.system(size: DesignSystem.FontSize.caption))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 14)
             }
             SettingsCard(title: lang.l("snippets.title")) {
-                SettingsRow(label: lang.l("settings.snippetExpansion")) {
+                SettingsRow(label: lang.l("settings.snippetExpansion"),
+                            caption: lang.l("settings.snippetExpansion.description")) {
                     Toggle("", isOn: Binding(
                         get: { UserDefaults.standard.bool(forKey: "snippetExpansionEnabled") },
                         set: { UserDefaults.standard.set($0, forKey: "snippetExpansionEnabled") }
                     ))
                     .labelsHidden()
                 }
-                Text(lang.l("settings.snippetExpansion.description"))
-                    .font(.system(size: DesignSystem.FontSize.caption))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 14)
                 if UserDefaults.standard.bool(forKey: "snippetExpansionEnabled") && !accessibilityTrusted {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                            .font(.system(size: DesignSystem.FontSize.caption))
+                    HStack(spacing: DesignSystem.Spacing.sm) {
                         Text(lang.l("snippet.accessibilityRequired"))
                             .font(.system(size: DesignSystem.FontSize.caption))
-                            .foregroundColor(.orange)
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Button(lang.l("snippet.openPrivacy")) {
                             NSWorkspace.shared.open(
@@ -268,6 +257,9 @@ struct SettingsGeneralSectionPanel: View {
             }
         }
     }
+
+    /// Shared trailing width so the pickers in one card align into a column.
+    private var pickerWidth: CGFloat { 110 }
 }
 
 struct SettingsRulesSectionPanel: View {
@@ -313,10 +305,10 @@ struct SettingsDataSectionPanel: View {
                 }
                 filledButton(lang.l("settings.export")) { exportData() }
                 if showExportSuccess {
-                    captionText(lang.l("settings.exportSuccess"), color: .green)
+                    captionText(lang.l("settings.exportSuccess"))
                 }
                 if let error = importExportError {
-                    captionText(error, color: .red)
+                    captionText(error)
                 }
             }
             SettingsCard(title: lang.l("settings.import")) {
@@ -324,7 +316,7 @@ struct SettingsDataSectionPanel: View {
                 filledButton(lang.l("settings.importMaccy")) { importFromMaccy() }
                 filledButton(lang.l("settings.importAlfred")) { importFromAlfred() }
                 if showImportSuccess {
-                    captionText(lang.l("settings.importSuccess"), color: .green)
+                    captionText(lang.l("settings.importSuccess"))
                 }
             }
         }
@@ -345,10 +337,10 @@ struct SettingsDataSectionPanel: View {
         )
     }
 
-    private func captionText(_ text: String, color: Color) -> some View {
+    private func captionText(_ text: String) -> some View {
         Text(text)
             .font(.system(size: DesignSystem.FontSize.caption))
-            .foregroundColor(color)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 4)
     }
 
@@ -457,10 +449,10 @@ struct SettingsAboutSectionPanel: View {
                 }
             }
             SettingsCard(title: lang.l("about.links")) {
-                aboutLink(icon: "star", key: "about.starGitHub", url: "https://github.com/shiaho777/clipshelf")
-                aboutLink(icon: "clock.arrow.circlepath", key: "about.changelog", url: "https://github.com/shiaho777/clipshelf/blob/main/CHANGELOG.md")
-                aboutLink(icon: "person.2", key: "about.contributing", url: "https://github.com/shiaho777/clipshelf/blob/main/CONTRIBUTING.md")
-                aboutLink(icon: "ant", key: "about.reportBug", url: "https://github.com/shiaho777/clipshelf/issues/new?template=bug_report.md")
+                aboutLink(key: "about.starGitHub", url: "https://github.com/shiaho777/clipshelf")
+                aboutLink(key: "about.changelog", url: "https://github.com/shiaho777/clipshelf/blob/main/CHANGELOG.md")
+                aboutLink(key: "about.contributing", url: "https://github.com/shiaho777/clipshelf/blob/main/CONTRIBUTING.md")
+                aboutLink(key: "about.reportBug", url: "https://github.com/shiaho777/clipshelf/issues/new?template=bug_report.md")
             }
             SettingsCard(title: nil) {
                 Button {
@@ -487,13 +479,11 @@ struct SettingsAboutSectionPanel: View {
         }
     }
 
-    private func aboutLink(icon: String, key: String, url: String) -> some View {
+    private func aboutLink(key: String, url: String) -> some View {
         Button {
             NSWorkspace.shared.open(URL(string: url)!)
         } label: {
             HStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
                 Text(lang.l(key))
                     .font(.system(size: DesignSystem.FontSize.secondary))
                 Spacer()
@@ -544,13 +534,16 @@ struct SettingsSectionStack<Content: View>: View {
 
 /// A single settings row: label on the left, control on the right — mirrors
 /// the main panel's row anatomy (12–13pt text, quiet secondary captions).
+/// Descriptions belong in `caption` so they align inside the row instead of
+/// dangling between rows with mismatched padding.
 struct SettingsRow<Control: View>: View {
     let label: String
     var caption: String? = nil
+    var controlWidth: CGFloat? = nil
     @ViewBuilder let control: () -> Control
 
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.system(size: DesignSystem.FontSize.body))
@@ -560,8 +553,10 @@ struct SettingsRow<Control: View>: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer()
+            Spacer(minLength: DesignSystem.Spacing.lg)
             control()
+                .fixedSize()
+                .frame(width: controlWidth, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

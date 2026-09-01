@@ -179,7 +179,7 @@ final class ClipboardRuleEngine {
                     traceSteps.append(TraceStep(
                         ruleName: rule.name, actionName: "detectSensitive",
                         inputText: inputText,
-                        outputText: isSensitive ? "⚠️ sensitive detected" : "✓ no match",
+                        outputText: isSensitive ? "sensitive detected" : "no match",
                         isTerminal: false))
 
                 case .replaceRegex(let pattern, let replacement):

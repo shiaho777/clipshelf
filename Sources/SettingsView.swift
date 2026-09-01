@@ -148,15 +148,12 @@ struct SettingsView: View {
                 Text(lang.l("settings.snippetExpansion.description"))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                // Show a warning if expansion is enabled but Accessibility is not granted.
+                // Show a quiet hint if expansion is enabled but Accessibility is not granted.
                 if UserDefaults.standard.bool(forKey: "snippetExpansionEnabled") && !accessibilityTrusted {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                            .font(.caption)
+                    HStack {
                         Text(lang.l("snippet.accessibilityRequired"))
                             .font(.caption)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.secondary)
                         Spacer()
                         Button(lang.l("snippet.openPrivacy")) {
                             NSWorkspace.shared.open(

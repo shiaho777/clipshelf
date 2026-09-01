@@ -64,11 +64,6 @@ struct RulesSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if rule.isSensitive {
-                        Image(systemName: "lock.shield")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.orange)
-                    }
                     Toggle("", isOn: Binding(
                         get: { rule.isEnabled },
                         set: { newValue in
@@ -162,7 +157,7 @@ struct RulesSettingsView: View {
                                 .foregroundStyle(.secondary)
                             Text(result.outcome)
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(result.outcome == "discard" ? .red : (result.outcome == "sensitive" ? .orange : .green))
+                                .foregroundStyle(.primary)
                         }
                         if !result.matchedRules.isEmpty {
                             Text("\(lang.l("rules.test.matched")): \(result.matchedRules.joined(separator: ", "))")
@@ -189,12 +184,11 @@ struct RulesSettingsView: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     ForEach(Array(result.steps.enumerated()), id: \.offset) { i, step in
                                         HStack(alignment: .top, spacing: 6) {
-                                            Image(systemName: step.isTerminal
-                                                    ? "xmark.circle.fill"
-                                                    : (step.didChange ? "arrow.right.circle.fill" : "checkmark.circle"))
-                                                .font(.system(size: 9))
-                                                .foregroundColor(step.isTerminal ? .red : (step.didChange ? .orange : Color.secondary.opacity(0.6)))
-                                                .padding(.top, 1)
+                                            Circle()
+                                                .strokeBorder(Color.secondary.opacity(0.5), lineWidth: 1)
+                                                .background(Circle().fill(step.didChange ? Color.secondary.opacity(0.35) : Color.clear))
+                                                .frame(width: 5, height: 5)
+                                                .padding(.top, 4)
                                             VStack(alignment: .leading, spacing: 1) {
                                                 HStack(spacing: 3) {
                                                     Text(step.ruleName)
@@ -205,7 +199,8 @@ struct RulesSettingsView: View {
                                                         .font(.system(size: 10))
                                                     Text(step.actionName)
                                                         .font(.system(size: 10, design: .monospaced))
-                                                        .foregroundColor(step.isTerminal ? .red : .primary)
+                                                        .foregroundStyle(step.isTerminal ? .secondary : .primary)
+                                                        .strikethrough(step.isTerminal)
                                                 }
                                                 if step.didChange {
                                                     Text(step.outputText.prefix(120))
@@ -277,11 +272,7 @@ struct RulesSettingsView: View {
         }
     }
 
-    private var isSensitive: Bool { false }
-
-    // MARK: - Error Alert
-
-    /// Append a `.alert` modifier to the body to surface import/export errors.
+    // MARK: - Error Alert    /// Append a `.alert` modifier to the body to surface import/export errors.
     var errorAlert: some View {
         EmptyView()
             .alert(
@@ -301,13 +292,6 @@ struct RulesSettingsView: View {
         case .sourceApp(let b): return lang.l("rules.trigger.app", b)
         case .contentType(let t): return lang.l("rules.trigger.type", t.rawValue)
         }
-    }
-}
-
-// MARK: - Sensitive badge helper
-private extension ClipboardRule {
-    var isSensitive: Bool {
-        actions.contains { if case .detectSensitive = $0 { return true }; return false }
     }
 }
 
