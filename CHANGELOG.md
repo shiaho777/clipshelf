@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-09-03
+
+### Added
+- Status bar right-click menu: Open ClipShelf, Settings (`⌘,`), Quit (`⌘Q`)
+- Preview sheet "Open with Default App" button: images open in Preview, text/RTF in TextEdit, files with their default app; sensitive items require Touch ID first
+- List rows show the source app icon + name and use count next to the timestamp
+- Secret-looking tokens (API keys, private keys, card numbers) are auto-masked in list and Quick Paste rows with a per-row reveal button
+- Quick Paste footer hint for keyboard shortcuts
+
+### Changed
+- Removed the main-panel `⌘1-9` quick-paste shortcuts and row badges: they often failed to fire and conflicted with frontmost-app shortcuts
+- Filter bar collapsed from two rows into a single scrollable strip
+- Footer buttons now show text labels instead of icon-only
+- Settings tab switches animate with a directional slide matching the filter chips (was a hard cut)
+- Image rows show a larger thumbnail plus the OCR first line instead of a bare `[Image]` label
+- Popup sheets open beside the main panel instead of covering it
+- Body text contrast raised for the HUD vibrancy background
+
 ## [1.1.2] - 2026-09-01
 
 ### Added

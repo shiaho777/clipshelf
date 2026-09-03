@@ -98,13 +98,25 @@ struct PlainTextPreview: NSViewRepresentable {
 struct PreviewSheet: View {
     let item: ClipboardItem
     var image: NSImage? = nil
+    /// Backing image file when available — used for "open externally" so the
+    /// system app opens the real file instead of a re-encoded temp copy.
+    var imageURL: URL? = nil
     var onPaste: ((ClipboardItem) -> Void)? = nil
     @Environment(\.popupWindowDismiss) private var dismissPopup
     @ObservedObject var lang = LanguageManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(lang.l("preview.title"), onClose: { dismissPopup() })
+            SheetHeader(lang.l("preview.title"), onClose: { dismissPopup() }) {
+                // Open externally: images → Preview.app (like double-clicking
+                // in Finder), text/rich text → TextEdit, files → default app.
+                SheetHeaderIconButton(
+                    icon: "arrow.up.right.square",
+                    help: lang.l("preview.openExternally")
+                ) {
+                    openExternally()
+                }
+            }
 
             if item.type == .image {
                 if let img = image {
@@ -220,7 +232,115 @@ struct PreviewSheet: View {
                 Spacer()
             }
         }
-        .standardPopupLayout()
+        .standardPopupLayout(size: WindowLayout.previewSize)
+    }
+
+    // MARK: - Open Externally
+
+    /// Sensitive items go through Touch ID first — same gate as paste — so a
+    /// locked row can't leak its content into a temp file via this button.
+    private func openExternally() {
+        if item.isSensitive {
+            Task { @MainActor in
+                do {
+                    try await BiometricAuthService.shared.authenticate(
+                        reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                    )
+                } catch {
+                    return
+                }
+                openItemExternally()
+            }
+        } else {
+            openItemExternally()
+        }
+    }
+
+    private func openItemExternally() {
+        let ws = NSWorkspace.shared
+        var config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        switch item.type {
+        case .image:
+            if let url = imageURL, FileManager.default.fileExists(atPath: url.path) {
+                ws.open(url, configuration: config, completionHandler: nil)
+            } else if let img = image, let url = Self.writeTempImage(img) {
+                ws.open(url, configuration: config, completionHandler: nil)
+            }
+        case .text:
+            if let url = Self.writeTempText(item.content, fileExtension: "txt") {
+                Self.openWithTextEdit([url], configuration: config)
+            }
+        case .richText:
+            if let rtf = item.rtfData,
+               let url = Self.writeTempData(rtf, fileExtension: "rtf") {
+                Self.openWithTextEdit([url], configuration: config)
+            } else if let url = Self.writeTempText(item.content, fileExtension: "txt") {
+                Self.openWithTextEdit([url], configuration: config)
+            }
+        case .fileURL:
+            // Like double-clicking in Finder — opens with the default app.
+            let urls = item.filePaths
+                .filter { FileManager.default.fileExists(atPath: $0) }
+                .prefix(10)
+                .map { URL(fileURLWithPath: $0) }
+            for url in urls {
+                ws.open(url, configuration: config, completionHandler: nil)
+            }
+        }
+    }
+
+    /// TextEdit is the "system text editor" — prefer it explicitly so a .txt
+    /// doesn't land in VSCode just because it's the default handler.
+    private static func openWithTextEdit(_ urls: [URL], configuration: NSWorkspace.OpenConfiguration) {
+        if let editor = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.TextEdit") {
+            NSWorkspace.shared.open(urls, withApplicationAt: editor, configuration: configuration, completionHandler: nil)
+        } else {
+            for url in urls {
+                NSWorkspace.shared.open(url, configuration: configuration, completionHandler: nil)
+            }
+        }
+    }
+
+    private static func previewTempDirectory() -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipShelfPreview", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Opportunistic prune so temp opens don't accumulate forever.
+        if let files = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
+        ) {
+            let cutoff = Date().addingTimeInterval(-86_400)
+            for file in files {
+                if let date = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                   date < cutoff {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        }
+        return dir
+    }
+
+    private static func writeTempData(_ data: Data, fileExtension: String) -> URL? {
+        let url = previewTempDirectory()
+            .appendingPathComponent("ClipShelf-\(UUID().uuidString.prefix(8)).\(fileExtension)")
+        do {
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private static func writeTempText(_ text: String, fileExtension: String) -> URL? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return writeTempData(data, fileExtension: fileExtension)
+    }
+
+    private static func writeTempImage(_ nsImage: NSImage) -> URL? {
+        guard let tiff = nsImage.tiffRepresentation else { return nil }
+        // Preview.app opens TIFF natively — no re-encode needed.
+        return writeTempData(tiff, fileExtension: "tiff")
     }
 }
 
@@ -302,7 +422,7 @@ struct EditSheet: View {
                 .disabled(editedContent.isEmpty)
             }
         }
-        .standardPopupLayout()
+        .standardPopupLayout(size: WindowLayout.editorSize)
         .onAppear { editedContent = item.content }
     }
 }
@@ -311,21 +431,33 @@ struct EditSheet: View {
 struct BottomBarButton: View {
     let icon: String
     var tint: Color = .secondary
+    /// Optional short text shown next to the icon so footer actions are
+    /// discoverable without hovering for a tooltip.
+    var label: String? = nil
     let action: () -> Void
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    
+
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(tint)
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
-                )
-                .contentShape(Rectangle())
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(tint)
+                if let label, !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(tint)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, label == nil ? 0 : 6)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in

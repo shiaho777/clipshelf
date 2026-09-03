@@ -52,12 +52,110 @@ final class RowHoverTracker {
     func set(_ id: UUID?) { itemID = id }
 }
 
+// MARK: - Source App Icon (cached)
+
+/// Small app icon for the row metadata line. Resolves via NSWorkspace and
+/// caches per bundleID — lookup hits disk, never do it per render uncached.
+struct SourceAppIcon: View {
+    let bundleID: String?
+    var size: CGFloat = 12
+
+    private static let cache: NSCache<NSString, NSImage> = {
+        let c = NSCache<NSString, NSImage>()
+        c.countLimit = 128
+        return c
+    }()
+
+    static func cachedImage(for bundleID: String?) -> NSImage? {
+        guard let bundleID, !bundleID.isEmpty else { return nil }
+        let key = bundleID as NSString
+        if let hit = cache.object(forKey: key) { return hit }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: 32, height: 32)
+        cache.setObject(icon, forKey: key)
+        return icon
+    }
+
+    var body: some View {
+        if let img = Self.cachedImage(for: bundleID) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
+    }
+}
+
+// MARK: - Secret Masking for list previews
+
+/// Masks secret-looking substrings in short list previews so API keys pasted
+/// from a terminal don't sit in plaintext in the panel. Full content is still
+/// available via preview/edit/unlock — this only affects the 50-char row text.
+enum SecretMasker {
+    private static let patterns: [String] = [
+        #"sk-[A-Za-z0-9_\-]{8,}"#,
+        #"AKIA[0-9A-Z]{16}"#,
+        #"ghp_[A-Za-z0-9]{10,}"#,
+        #"gho_[A-Za-z0-9]{10,}"#,
+        #"github_pat_[A-Za-z0-9_]{10,}"#,
+        #"xox[bpas]-[A-Za-z0-9\-]{8,}"#,
+        #"AIza[A-Za-z0-9_\-]{10,}"#,
+        #"-----BEGIN[A-Z ]*PRIVATE KEY-----"#,
+        #"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b"#,
+    ]
+
+    private static var regexes: [NSRegularExpression] {
+        patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }
+
+    /// Long single-token strings with mixed letters+digits (e.g. pasted tokens
+    /// without a known prefix) — mask the middle, keep prefix/suffix for ID.
+    private static func maskLongToken(_ token: String) -> String? {
+        let t = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.contains(" "), !t.contains("\n"), t.count >= 20, t.count <= 256 else { return nil }
+        let letters = t.contains(where: { $0.isLetter })
+        let digits = t.contains(where: { $0.isNumber })
+        guard letters && digits else { return nil }
+        return String(t.prefix(3)) + "••••••" + String(t.suffix(2))
+    }
+
+    private static func maskMatch(_ match: String) -> String {
+        let t = match.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count > 8 else { return "••••••" }
+        return String(t.prefix(3)) + "••••••" + String(t.suffix(2))
+    }
+
+    /// Returns a masked copy when secret-looking content is found, else nil.
+    /// Operates on short previews only — cheap enough to call from row body.
+    static func masked(_ text: String) -> String? {
+        var result = text
+        var didMask = false
+        for regex in regexes {
+            let ns = result as NSString
+            let matches = regex.matches(in: result, range: NSRange(location: 0, length: ns.length))
+            for m in matches.reversed() {
+                let found = ns.substring(with: m.range)
+                result = (result as NSString).replacingCharacters(in: m.range, with: maskMatch(found))
+                didMask = true
+            }
+        }
+        if !didMask, let single = maskLongToken(result) {
+            // Only auto-mask single-token rows (API key pastes). Multi-word
+            // prose that happens to contain a long word stays readable.
+            let words = result.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+            if words.count == 1 { result = single; didMask = true }
+        }
+        return didMask ? result : nil
+    }
+}
+
 struct ClipboardItemRow: View {
 
     let item: ClipboardItem
     var image: NSImage? = nil
     var imageURL: URL? = nil
-    var index: Int? = nil
     var isFocused: Bool = false
     let onCopy: (Bool) -> Void
     let onPin: () -> Void
@@ -84,6 +182,33 @@ struct ClipboardItemRow: View {
     @State private var isCode: Bool = false
     @State private var isHovered: Bool = false
     @State private var isDropTargeted: Bool = false
+    /// Auto-masked secrets (non-sensitive items that look like keys) can be
+    /// revealed per-row with the eye button. Resets on row recycle — safe default.
+    @State private var isSecretRevealed: Bool = false
+
+    /// Second line under the content: app icon + app name + relative time +
+    /// use count. Shared by text/image/file rows so rows scan uniformly.
+    @ViewBuilder
+    private var metaLine: some View {
+        HStack(spacing: 4) {
+            SourceAppIcon(bundleID: item.sourceBundleID, size: 12)
+            if let appName = item.sourceAppName, !appName.isEmpty {
+                Text(appName)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 110, alignment: .leading)
+            }
+            TimeAgoText(date: item.timestamp)
+            if item.useCount > 1 {
+                Text("· \(item.useCount)×")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.quaternary)
+                    .monospacedDigit()
+            }
+        }
+    }
 
     var body: some View {
         // Only evaluate detection for types that render detection-driven UI;
@@ -92,12 +217,6 @@ struct ClipboardItemRow: View {
         let detection = (item.type == .text || item.type == .richText) ? item.detection : .empty
         
         HStack(spacing: 8) {
-            if let idx = index {
-                Text("⌘\(idx)")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.quaternary)
-                    .frame(width: 24)
-            }
             if item.isPinned {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 8))
@@ -126,38 +245,47 @@ struct ClipboardItemRow: View {
                     }
                 }
             } else if item.type == .image {
-                if let nsImage = loadedImage ?? image {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 200, maxHeight: 52)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
-                } else {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(width: 72, height: 52)
-                        .overlay {
-                            Image(systemName: "photo")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.tertiary)
-                        }
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        Text(lang.l("item.image"))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        if item.isScreenshot {
-                            TagBadge(
-                                lang.l("item.screenshot"),
-                                systemImage: "camera.viewfinder",
-                                color: .blue
-                            )
-                        }
+                HStack(spacing: 10) {
+                    if let nsImage = loadedImage ?? image {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 96, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+                            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                    } else {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color.primary.opacity(0.05))
+                            .frame(width: 96, height: 60)
+                            .overlay {
+                                Image(systemName: "photo")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.tertiary)
+                            }
                     }
-                    TimeAgoText(date: item.timestamp)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            if let ocr = item.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines), !ocr.isEmpty {
+                                Text(String(ocr.prefix(60)))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.primary.opacity(0.95))
+                                    .lineLimit(1)
+                            } else {
+                                Text(lang.l("item.image"))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            if item.isScreenshot {
+                                TagBadge(
+                                    lang.l("item.screenshot"),
+                                    systemImage: "camera.viewfinder",
+                                    color: .blue
+                                )
+                            }
+                        }
+                        metaLine
+                    }
                 }
             } else if item.type == .fileURL {
                 let paths = item.filePaths
@@ -169,6 +297,7 @@ struct ClipboardItemRow: View {
                         Text(paths.first.map { URL(fileURLWithPath: $0).lastPathComponent } ?? item.content)
                             .lineLimit(1)
                             .font(.system(size: 12))
+                            .foregroundStyle(.primary.opacity(0.95))
                         if paths.count > 1 {
                             TagBadge("+\(paths.count - 1)", color: .orange, fontSize: 9)
                         }
@@ -176,16 +305,28 @@ struct ClipboardItemRow: View {
                             TagBadge(lang.l("item.screenshot"), color: .blue)
                         }
                     }
-                    TimeAgoText(date: item.timestamp)
+                    metaLine
                 }
             } else {
+                let rawPreview = item.displayText
+                let autoMasked = SecretMasker.masked(rawPreview)
+                let shownPreview = isSecretRevealed ? rawPreview : (autoMasked ?? rawPreview)
+                let isAutoMaskedRow = autoMasked != nil && !isSecretRevealed
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
-                        highlightedDisplayText(item.displayText)
+                        if isAutoMaskedRow {
+                            Image(systemName: "eye.slash.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.orange.opacity(0.7))
+                        }
+                        highlightedDisplayText(shownPreview)
                             .lineLimit(2)
                             .font(.system(size: 12))
                         if item.type == .richText {
                             TagBadge("R", color: .blue)
+                        }
+                        if isAutoMaskedRow {
+                            TagBadge(lang.l("item.secret.masked"), color: .orange, fontSize: 8)
                         }
                         if item.type == .text && isCode {
                             Image(systemName: "chevron.left.slash.chevron.right")
@@ -203,15 +344,25 @@ struct ClipboardItemRow: View {
                                 .foregroundStyle(.orange.opacity(0.6))
                         }
                     }
-                    TimeAgoText(date: item.timestamp)
+                    metaLine
                 }
             }
 
             Spacer(minLength: 4)
-            
-            // Action buttons
-            if isHovered {
+
+            // Action buttons — visible on hover AND keyboard focus so
+            // keyboard-first users discover pin/preview without a mouse.
+            if isHovered || isFocused {
                 HStack(spacing: 4) {
+                    if (item.type == .text || item.type == .richText)
+                        && !(item.isSensitive && !isUnlocked)
+                        && SecretMasker.masked(item.displayText) != nil {
+                        rowActionButton(
+                            icon: isSecretRevealed ? "eye.slash" : "eye",
+                            color: .orange.opacity(0.8)
+                        ) { isSecretRevealed.toggle() }
+                        .help(lang.l("item.secret.toggle"))
+                    }
                     if detection.isURL {
                         rowActionButton(icon: "arrow.up.right.square", color: .blue.opacity(0.7)) {
                             if let url = detection.url { NSWorkspace.shared.open(url) }
@@ -712,7 +863,7 @@ struct ClipboardItemRow: View {
     private func highlightedDisplayText(_ text: String) -> Text {
         guard let indices = highlightIndices, !indices.isEmpty else {
             return Text(text)
-                .foregroundColor(.primary.opacity(0.88))
+                .foregroundColor(.primary.opacity(0.95))
         }
         // Only highlight within the first 50 chars (displayText is already truncated).
         // Build contiguous runs (highlighted vs plain) instead of appending per
@@ -728,7 +879,7 @@ struct ClipboardItemRow: View {
             let piece = Text(String(chars[i...end]))
             let styled = highlighted
                 ? piece.foregroundColor(.accentColor).fontWeight(.semibold)
-                : piece.foregroundColor(.primary.opacity(0.88))
+                : piece.foregroundColor(.primary.opacity(0.95))
             result = result.map { $0 + styled } ?? styled
             i = end + 1
         }

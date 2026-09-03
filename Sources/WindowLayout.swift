@@ -3,7 +3,32 @@ import AppKit
 
 enum WindowLayout {
     static let mainPanelSize = CGSize(width: 340, height: 480)
-    static let popupSize = mainPanelSize
+    /// Popups (preview/edit/snippets/diff) sit BESIDE the main panel instead
+    /// of exactly on top of it — see `PopupPlacement`.
+    static let popupSize = CGSize(width: 360, height: 440)
+    static let previewSize = CGSize(width: 400, height: 380)
+    static let editorSize = CGSize(width: 380, height: 400)
+}
+
+/// Positions popup sheets beside their parent panel so content stays visible
+/// for comparison. Falls back to a slight cascade when there is no room.
+enum PopupPlacement {
+    static func origin(parentFrame: CGRect, size: CGSize) -> NSPoint {
+        if let screen = NSScreen.main?.visibleFrame {
+            let leftX = parentFrame.minX - size.width - 12
+            if leftX >= screen.minX {
+                return NSPoint(x: leftX, y: parentFrame.maxY - size.height)
+            }
+            let rightX = parentFrame.maxX + 12
+            if rightX + size.width <= screen.maxX {
+                return NSPoint(x: rightX, y: parentFrame.maxY - size.height)
+            }
+        }
+        return NSPoint(
+            x: parentFrame.minX + 28,
+            y: parentFrame.maxY - size.height - 28
+        )
+    }
 }
 
 private final class PopupPanel: NSPanel {
@@ -119,11 +144,7 @@ private struct BoolPopupWindowPresenter<PopupContent: View>: NSViewRepresentable
 
             if let parentWindow = anchorView?.window {
                 let frame = parentWindow.frame
-                let origin = NSPoint(
-                    x: frame.minX + 28,
-                    y: frame.maxY - size.height - 28
-                )
-                panel.setFrameOrigin(origin)
+                panel.setFrameOrigin(PopupPlacement.origin(parentFrame: frame, size: size))
                 panel.level = parentWindow.level.rawValue >= NSWindow.Level.floating.rawValue
                     ? parentWindow.level + 1
                     : .floating
@@ -242,11 +263,7 @@ private struct ItemPopupWindowPresenter<Item: Identifiable, PopupContent: View>:
 
             if let parentWindow = anchorView?.window {
                 let frame = parentWindow.frame
-                let origin = NSPoint(
-                    x: frame.minX + 28,
-                    y: frame.maxY - size.height - 28
-                )
-                panel.setFrameOrigin(origin)
+                panel.setFrameOrigin(PopupPlacement.origin(parentFrame: frame, size: size))
                 panel.level = parentWindow.level.rawValue >= NSWindow.Level.floating.rawValue
                     ? parentWindow.level + 1
                     : .floating

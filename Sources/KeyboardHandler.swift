@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct KeyboardShortcutHandler: NSViewRepresentable {
-    let onNumberPressed: (Int) -> Void
+    var onNumberPressed: ((Int) -> Void)? = nil
     var onArrowPressed: ((Int) -> Void)? = nil
     var onEnterPressed: ((Bool) -> Void)? = nil  // Bool = asPlainText (Shift held)
     var onEscPressed: (() -> Void)? = nil

@@ -181,11 +181,6 @@ struct MenuBarView: View {
         updateFilteredItems()
     }
     
-    private func selectItem(at index: Int, asPlainText: Bool = false) {
-        guard index > 0 && index <= min(9, filteredItems.count) else { return }
-        pasteItem(filteredItems[index - 1], asPlainText: asPlainText)
-    }
-    
     private func moveFocus(_ direction: Int) {
         let count = filteredItems.count
         guard count > 0 else { return }
@@ -290,7 +285,6 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private func historyRow(index: Int, item: ClipboardItem) -> some View {
-        let rowIndex: Int? = isMultiSelectMode ? nil : (index < 9 ? index + 1 : nil)
         // imageFileURL and filePaths are only consumed by image / fileURL rows;
         // skip the path construction (and file-path JSON parsing) for the far
         // more common text rows.
@@ -317,7 +311,6 @@ struct MenuBarView: View {
         ClipboardItemRow(
             item: item,
             imageURL: imageURL,
-            index: rowIndex,
             isFocused: isFocused,
             onCopy: { asPlainText in
                 clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
@@ -382,8 +375,8 @@ struct MenuBarView: View {
         Text(label)
             .font(.system(size: 12, weight: filterType == type ? .semibold : .regular))
             .foregroundColor(filterType == type ? .primary : .secondary.opacity(0.65))
-            .frame(maxWidth: type.isAppFilter ? nil : .infinity)
-            .padding(.horizontal, type.isAppFilter ? 10 : 0)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background {
                 if filterType == type {
@@ -400,6 +393,7 @@ struct MenuBarView: View {
                     filterType = type
                 }
             }
+            .accessibilityLabel(label)
     }
     
     var body: some View {
@@ -444,72 +438,61 @@ struct MenuBarView: View {
             }
             .padding(.trailing, 14)
 
-            HStack(spacing: 4) {
-                ForEach(FilterType.staticCases, id: \.self) { type in
-                    filterButton(type)
-                }
-                if let bid = frontmostApp.bundleID, let name = frontmostApp.appName {
-                    Divider().frame(height: 16).opacity(0.3)
-                    Button {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.75)) {
-                            filterByCurrentApp.toggle()
-                            if filterByCurrentApp { filterType = .app(bundleID: bid, name: name) }
-                        }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: filterByCurrentApp ? "app.badge.fill" : "app.badge")
-                                .font(.system(size: 10, weight: .medium))
-                            Text(name)
-                                .font(.system(size: 11, weight: filterByCurrentApp ? .semibold : .regular))
-                                .lineLimit(1)
-                        }
-                        .foregroundColor(filterByCurrentApp ? .primary : .secondary.opacity(0.65))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background {
-                            if filterByCurrentApp {
-                                Capsule()
-                                    .fill(Color(NSColor.controlBackgroundColor))
-                                    .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
+            // Single compact filter strip: static filters + current app + recent
+            // apps in one horizontal scroll. Previously this was two stacked rows
+            // (static + expandable app list) costing ~90px before the list.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(FilterType.staticCases, id: \.self) { type in
+                        filterButton(type)
+                    }
+                    if let bid = frontmostApp.bundleID, let name = frontmostApp.appName {
+                        Divider().frame(height: 16).opacity(0.3)
+                            .padding(.horizontal, 2)
+                        Button {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.75)) {
+                                filterByCurrentApp.toggle()
+                                if filterByCurrentApp { filterType = .app(bundleID: bid, name: name) }
+                                else if case .app = filterType { filterType = .all }
                             }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: filterByCurrentApp ? "app.badge.fill" : "app.badge")
+                                    .font(.system(size: 10, weight: .medium))
+                                Text(name)
+                                    .font(.system(size: 11, weight: filterByCurrentApp ? .semibold : .regular))
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 90)
+                            }
+                            .foregroundColor(filterByCurrentApp ? .primary : .secondary.opacity(0.65))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background {
+                                if filterByCurrentApp {
+                                    Capsule()
+                                        .fill(Color(NSColor.controlBackgroundColor))
+                                        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
+                                }
+                            }
+                            .contentShape(Capsule())
                         }
-                        .contentShape(Capsule())
+                        .buttonStyle(.plain)
+                        .help(lang.l("filter.currentApp"))
                     }
-                    .buttonStyle(.plain)
-                    .help(lang.l("filter.currentApp"))
-                }
-                if !cachedAppFilters.isEmpty {
-                    Divider().frame(height: 16).opacity(0.3)
-                    Button {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.75)) { showAppFilters.toggle() }
-                    } label: {
-                        Image(systemName: "app.badge")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(filterType.isAppFilter ? .primary : .secondary.opacity(0.65))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(3)
-            .background(Capsule().fill(Color.primary.opacity(0.04)))
-            .padding(.horizontal, 14)
-            .padding(.bottom, showAppFilters ? 4 : 10)
-
-            if showAppFilters {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                    ForEach(cachedAppFilters, id: \.self) { type in
+                    if !cachedAppFilters.isEmpty {
+                        Divider().frame(height: 16).opacity(0.3)
+                            .padding(.horizontal, 2)
+                        ForEach(cachedAppFilters, id: \.self) { type in
                             filterButton(type)
                         }
                     }
-                    .padding(.horizontal, 4)
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .padding(3)
             }
-            
+            .background(Capsule().fill(Color.primary.opacity(0.04)))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 6)
+
             Divider().opacity(0.3)
 
             // MARK: Paste Queue panel
@@ -632,7 +615,6 @@ struct MenuBarView: View {
             }
             .frame(minHeight: 100, maxHeight: 350)
             .background(KeyboardShortcutHandler(
-                onNumberPressed: { selectItem(at: $0) },
                 onArrowPressed: { moveFocus($0) },
                 onEnterPressed: { confirmFocused(asPlainText: $0) },
                 onEscPressed: {
@@ -719,7 +701,7 @@ struct MenuBarView: View {
                     }
                     Spacer()
                     HStack(spacing: 2) {
-                        BottomBarButton(icon: pasteQueue.stackMode ? "square.stack.3d.up.fill" : "square.stack.3d.up", tint: pasteQueue.stackMode ? .accentColor : .secondary.opacity(0.7)) {
+                        BottomBarButton(icon: pasteQueue.stackMode ? "square.stack.3d.up.fill" : "square.stack.3d.up", tint: pasteQueue.stackMode ? .accentColor : .secondary.opacity(0.7), label: lang.l("queue.stackMode")) {
                             if pasteQueue.stackMode && pasteQueue.remaining > 0 {
                                 showStackModeClearConfirm = true
                             } else {
@@ -730,14 +712,14 @@ struct MenuBarView: View {
                         }
                         .help(lang.l("queue.stackMode.help"))
                         .accessibilityLabel(lang.l("queue.stackMode"))
-                        BottomBarButton(icon: "text.quote", tint: .accentColor) { showSnippets = true }
+                        BottomBarButton(icon: "text.quote", tint: .accentColor, label: lang.l("snippets.title")) { showSnippets = true }
                             .help(lang.l("snippets.title"))
                             .accessibilityLabel(lang.l("snippets.title"))
-                        BottomBarButton(icon: "checklist", tint: .accentColor) { toggleMultiSelect() }
+                        BottomBarButton(icon: "checklist", tint: .accentColor, label: lang.l("multiselect.title")) { toggleMultiSelect() }
                             .help(lang.l("multiselect.title"))
                             .accessibilityLabel(lang.l("multiselect.title"))
                         // Settings button with context menu for destructive / secondary actions.
-                        BottomBarButton(icon: "gearshape", action: {
+                        BottomBarButton(icon: "gearshape", label: lang.l("settings.title"), action: {
                             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                                 page = .settings
                             }
@@ -865,12 +847,16 @@ struct MenuBarView: View {
             itemsUpdateDebounceTask = task
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: task)
         }
-        .popupWindow(item: $previewItem) { item in
-            PreviewSheet(item: item, image: clipboardManager.resolvedImage(for: item)) { itemToPaste in
+        .popupWindow(item: $previewItem, size: WindowLayout.previewSize) { item in
+            PreviewSheet(
+                item: item,
+                image: clipboardManager.resolvedImage(for: item),
+                imageURL: clipboardManager.imageFileURL(for: item)
+            ) { itemToPaste in
                 pasteItem(itemToPaste)
             }
         }
-        .popupWindow(item: $editingItem) { item in
+        .popupWindow(item: $editingItem, size: WindowLayout.editorSize) { item in
             EditSheet(item: item, clipboardManager: clipboardManager) {
                 clipboardManager.onItemSelected?()
             }

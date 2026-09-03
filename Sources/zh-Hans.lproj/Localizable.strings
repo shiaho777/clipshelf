@@ -51,6 +51,7 @@
 
 /* Preview */
 "preview.title" = "预览";
+"preview.openExternally" = "用默认应用打开";
 
 /* Actions */
 "action.copy" = "复制";
@@ -65,6 +66,10 @@
 "action.colorCopy" = "点击切换格式并复制";
 "action.transform" = "转换";
 "status.item.normalDescription" = "剪贴板";
+
+/* 状态栏右键菜单 */
+"status.menu.open" = "打开 ClipShelf";
+"status.menu.quit" = "退出 ClipShelf";
 
 /* Transforms */
 "transform.uppercase" = "全部大写";
@@ -154,7 +159,7 @@
 "onboarding.step2.title" = "即时搜索";
 "onboarding.step2.desc" = "输入关键词模糊搜索历史记录，支持 app: 和 type: 前缀进行高级过滤。";
 "onboarding.step3.title" = "键盘优先";
-"onboarding.step3.desc" = "按 1-9 快速粘贴，方向键导航，Tab 切换筛选，空格预览。";
+"onboarding.step3.desc" = "方向键导航，Tab 切换筛选，空格预览，回车粘贴。";
 "onboarding.next" = "下一步";
 "onboarding.done" = "开始使用";
 
@@ -220,6 +225,7 @@
 
 /* Quick Paste */
 "quickpaste.title" = "快速粘贴";
+"quickpaste.hint" = "1–9 粘贴 · ↑↓ 选择 · 回车确认 · Esc 关闭";
 "hotkey.quickPaste" = "快速粘贴快捷键";
 
 /* Filters */
@@ -238,6 +244,8 @@
 /* Sensitive item lock */
 "item.sensitive.title" = "敏感内容";
 "item.sensitive.unlockHint" = "点按以使用 Touch ID 解锁";
+"item.secret.masked" = "已脱敏";
+"item.secret.toggle" = "切换脱敏预览";
 
 "language.choose.title" = "选择语言";
 "language.choose.subtitle" = "请选择界面语言后继续";

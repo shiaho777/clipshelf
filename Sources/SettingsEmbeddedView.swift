@@ -15,6 +15,9 @@ struct SettingsEmbeddedView: View {
     @ObservedObject private var lang = LanguageManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var sectionAnimation
+    /// Slide direction for the content transition, set on every tap before the
+    /// animated `section` assignment so forward/backward feel like a tab bar.
+    @State private var forward = true
     // @AppStorage, not @State: the settings page remounts on every re-entry
     // (page = .history tears the view down), so @State reset the tab to
     // General each time. Also keeps the choice across relaunches.
@@ -101,6 +104,7 @@ struct SettingsEmbeddedView: View {
                     }
                     .contentShape(Capsule())
                     .onTapGesture {
+                        forward = i >= section
                         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78)) {
                             section = i
                         }
@@ -114,16 +118,35 @@ struct SettingsEmbeddedView: View {
     @ViewBuilder
     private var settingsContent: some View {
         ScrollView {
-            switch section {
-            case 0:
-                SettingsGeneralSectionPanel(clipboardManager: clipboardManager, snippetManager: snippetManager)
-            case 1:
-                SettingsRulesSectionPanel(clipboardManager: clipboardManager)
-            case 2:
-                SettingsDataSectionPanel(clipboardManager: clipboardManager)
-            default:
-                SettingsAboutSectionPanel(clipboardManager: clipboardManager)
-            }
+            sectionBody
+                // Keyed by section so tab switches crossfade/slide instead of
+                // hard-cutting — same spring as the switcher pill above.
+                .id(section)
+                .transition(contentTransition)
+        }
+    }
+
+    /// Slide follows navigation direction (reduce-motion gets opacity only),
+    /// matching the history filter chips' recipe.
+    private var contentTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+
+    @ViewBuilder
+    private var sectionBody: some View {
+        switch section {
+        case 0:
+            SettingsGeneralSectionPanel(clipboardManager: clipboardManager, snippetManager: snippetManager)
+        case 1:
+            SettingsRulesSectionPanel(clipboardManager: clipboardManager)
+        case 2:
+            SettingsDataSectionPanel(clipboardManager: clipboardManager)
+        default:
+            SettingsAboutSectionPanel(clipboardManager: clipboardManager)
         }
     }
 }

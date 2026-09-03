@@ -63,6 +63,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         checkAccessibilityPermission()
         
         statusItemController.install(target: self, action: #selector(togglePanel))
+        statusItemController.onOpenPanel = { [weak self] in self?.showPanel() }
+        statusItemController.onOpenSettings = { [weak self] in self?.openSettings() }
+        statusItemController.onQuit = { NSApplication.shared.terminate(nil) }
         
         clipboardManager.onItemSelected = { [weak self] in self?.pasteAndClose() }
         
@@ -218,6 +221,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func togglePanel() {
+        // Right-click on the status item shows a menu (Open / Settings / Quit)
+        // instead of toggling the panel. The button is configured with
+        // `sendAction(on: [.leftMouseUp, .rightMouseUp])` so both arrive here.
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            if panel.isVisible { hidePanel() }
+            statusItemController.popUpMenu()
+            return
+        }
         if panel.isVisible {
             hidePanel()
         } else {
