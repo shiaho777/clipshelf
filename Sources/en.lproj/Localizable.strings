@@ -51,6 +51,7 @@
 
 /* Preview */
 "preview.title" = "Preview";
+"preview.openExternally" = "Open with Default App";
 
 /* Actions */
 "action.copy" = "Copy";
@@ -65,6 +66,10 @@
 "action.colorCopy" = "Click to cycle format and copy";
 "action.transform" = "Transform";
 "status.item.normalDescription" = "Clipboard";
+
+/* Status item right-click menu */
+"status.menu.open" = "Open ClipShelf";
+"status.menu.quit" = "Quit ClipShelf";
 
 /* Transforms */
 "transform.uppercase" = "UPPERCASE";
@@ -154,7 +159,7 @@
 "onboarding.step2.title" = "Instant Search";
 "onboarding.step2.desc" = "Type to fuzzy-search your history. Use app: or type: prefixes for advanced filtering.";
 "onboarding.step3.title" = "Keyboard First";
-"onboarding.step3.desc" = "Press 1-9 to quick-paste, arrows to navigate, Tab to cycle filters, Space to preview.";
+"onboarding.step3.desc" = "Arrows to navigate, Tab to cycle filters, Space to preview, Enter to paste.";
 "onboarding.next" = "Next";
 "onboarding.done" = "Get Started";
 
@@ -220,6 +225,7 @@
 
 /* Quick Paste */
 "quickpaste.title" = "Quick Paste";
+"quickpaste.hint" = "1–9 paste · ↑↓ navigate · ↵ select · Esc close";
 "hotkey.quickPaste" = "Quick Paste Shortcut";
 
 /* Filters */
@@ -238,6 +244,8 @@
 /* Sensitive item lock */
 "item.sensitive.title" = "Sensitive";
 "item.sensitive.unlockHint" = "Tap to unlock with Touch ID";
+"item.secret.masked" = "masked";
+"item.secret.toggle" = "Toggle masked preview";
 
 "language.choose.title" = "Choose Language";
 "language.choose.subtitle" = "Select a language to continue";

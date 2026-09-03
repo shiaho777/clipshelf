@@ -308,6 +308,14 @@ struct QuickPasteView: View {
                 .padding(.vertical, 4)
                 .padding(.horizontal, 6)
             }
+
+            Divider().opacity(0.3)
+            // Keyboard hint footer so first-time users discover 1-9/↑↓/↵/Esc.
+            Text(LanguageManager.shared.l("quickpaste.hint"))
+                .font(.system(size: 10))
+                .foregroundStyle(.quaternary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
         }
         .frame(minWidth: 300)
         .background(KeyboardShortcutHandler(
@@ -349,11 +357,18 @@ struct QuickPasteView: View {
     @ViewBuilder
     private func quickRow(index: Int, item: ClipboardItem) -> some View {
         let isHovered = hoveredIndex == index
+        // Mirror the main list: masked secrets, source icon, type badges.
+        let rawText = item.displayText
+        let maskedText = (item.type == .text || item.type == .richText) && !item.isSensitive
+            ? SecretMasker.masked(rawText) : nil
+        let shownText = maskedText ?? rawText
         HStack(spacing: 8) {
             Text("\(index + 1)")
                 .font(.system(size: 10, weight: .medium, design: .rounded))
                 .foregroundStyle(.quaternary)
                 .frame(width: 16)
+
+            SourceAppIcon(bundleID: item.sourceBundleID, size: 12)
 
             if item.type == .image {
                 Image(systemName: "photo")
@@ -362,13 +377,17 @@ struct QuickPasteView: View {
                 Text(item.ocrText ?? LanguageManager.shared.l("item.image"))
                     .font(.system(size: 12))
                     .lineLimit(1)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.95))
+                if item.isScreenshot {
+                    TagBadge(LanguageManager.shared.l("item.screenshot"), color: .blue)
+                }
             } else if item.type == .fileURL {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(.orange.opacity(0.75))
                 Text(item.filePaths.first.map { URL(fileURLWithPath: $0).lastPathComponent } ?? item.content)
                     .font(.system(size: 12))
+                    .foregroundStyle(.primary.opacity(0.95))
                     .lineLimit(1)
             } else if item.isSensitive {
                 Image(systemName: "lock.fill")
@@ -379,10 +398,18 @@ struct QuickPasteView: View {
                     .lineLimit(1)
                     .foregroundStyle(.secondary)
             } else {
-                Text(item.displayText)
+                if maskedText != nil {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.orange.opacity(0.7))
+                }
+                Text(shownText)
                     .font(.system(size: 12))
                     .lineLimit(1)
-                    .foregroundStyle(.primary.opacity(0.88))
+                    .foregroundStyle(.primary.opacity(0.95))
+                if item.type == .richText {
+                    TagBadge("R", color: .blue)
+                }
             }
 
             Spacer(minLength: 4)

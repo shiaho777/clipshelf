@@ -8,6 +8,10 @@ struct SettingsView: View {
     @ObservedObject var hotKeyManager = HotKeyManager.shared
     @StateObject private var settingsVM = SettingsViewModel()
     @State private var selectedTab = 0
+    /// Slide direction for the tab content transition (see body).
+    @State private var forward = true
+    @State private var lastTab = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showClearConfirm = false
     @State private var showExportSuccess = false
     @State private var showImportSuccess = false
@@ -63,6 +67,15 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Same tab-switch language as the embedded panel: directional
+            // slide + fade on the same spring instead of a hard cut.
+            .id(selectedTab)
+            .transition(contentTransition)
+            .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78), value: selectedTab)
+            .onChange(of: selectedTab) { newValue in
+                forward = newValue >= lastTab
+                lastTab = newValue
+            }
         }
         // Grouped forms paint their own opaque background by default; hide it
         // so the window's HUD vibrancy shows through like on the main panel.
@@ -81,6 +94,15 @@ struct SettingsView: View {
         }
     }
     // MARK: - General Tab
+
+    /// Directional slide + fade shared with the embedded panel variant.
+    private var contentTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
 
     private var generalTab: some View {
         Form {
