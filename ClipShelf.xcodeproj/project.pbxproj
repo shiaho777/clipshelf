@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		36777C7BA4127EBE0F26664E /* RowHoverTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D9914FE12A5E63791AAD2D /* RowHoverTrackerTests.swift */; };
 		C7E98770C841323FFA5DD049 /* UpdateCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6BDB39F2AAEA7FE3A69404B /* UpdateCheckerTests.swift */; };
 		120610DC344CA91C70753DB0 /* UpdateSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10004D3933F77371DEF4B2EA /* UpdateSectionView.swift */; };
 		78FE8EA495B7B60F463B3863 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55076D763AAC2B4F06A86D8E /* UpdateChecker.swift */; };
@@ -129,6 +130,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D9D9914FE12A5E63791AAD2D /* RowHoverTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowHoverTrackerTests.swift; sourceTree = "<group>"; };
 		E6BDB39F2AAEA7FE3A69404B /* UpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckerTests.swift; sourceTree = "<group>"; };
 		10004D3933F77371DEF4B2EA /* UpdateSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSectionView.swift; sourceTree = "<group>"; };
 		55076D763AAC2B4F06A86D8E /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
@@ -352,6 +354,7 @@
 		1BFEE15FE0C3DDA1660B1126 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				D9D9914FE12A5E63791AAD2D /* RowHoverTrackerTests.swift */,
 				E6BDB39F2AAEA7FE3A69404B /* UpdateCheckerTests.swift */,
 				76594624D4118AE0CC103019 /* AppStoragePathsTests.swift */,
 				B0E34011F67AB366FE14CB8E /* BatchD2FixesTests.swift */,
@@ -524,6 +527,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				36777C7BA4127EBE0F26664E /* RowHoverTrackerTests.swift in Sources */,
 				C7E98770C841323FFA5DD049 /* UpdateCheckerTests.swift in Sources */,
 				895DFD5142A464592FC94BCC /* AppStoragePathsTests.swift in Sources */,
 				2C2AE4E813E6BD9035F7A199 /* BatchD2FixesTests.swift in Sources */,

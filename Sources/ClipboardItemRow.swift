@@ -38,6 +38,20 @@ enum ClipboardDragSession {
     }
 }
 
+/// Tracks which row the pointer is over without touching any SwiftUI @State.
+/// Writing hover state into the list's @State re-rendered the whole list every
+/// time the pointer crossed a row boundary — during a scroll the pointer is
+/// stationary while rows move underneath it, so that fired continuously and
+/// read as "responsive but not silky". The list consults the tracker only when
+/// a key press (Space) actually needs to know the hovered row.
+@MainActor
+final class RowHoverTracker {
+    static let shared = RowHoverTracker()
+    private(set) var itemID: UUID?
+
+    func set(_ id: UUID?) { itemID = id }
+}
+
 struct ClipboardItemRow: View {
 
     let item: ClipboardItem
@@ -64,7 +78,6 @@ struct ClipboardItemRow: View {
     /// survives LazyVStack row recycling when the user scrolls.
     var isUnlocked: Bool = false
     var onUnlock: (() -> Void)? = nil
-    var onHoverChange: ((Bool) -> Void)? = nil
     var onReorder: ((UUID, Bool) -> Void)? = nil
     var filePaths: [String] = []
     @State private var loadedImage: NSImage?
@@ -256,7 +269,10 @@ struct ClipboardItemRow: View {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
                 isHovered = hovering
             }
-            onHoverChange?(hovering)
+            // Hover highlight stays local to the row; the ID lands in the
+            // tracker so Space-to-preview still knows the hovered row without
+            // re-rendering the list on every hover change.
+            RowHoverTracker.shared.set(hovering ? item.id : nil)
         }
         .overlay(alignment: .topTrailing) {
             if isSelected {

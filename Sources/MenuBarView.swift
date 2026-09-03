@@ -77,7 +77,6 @@ struct MenuBarView: View {
 
     @State private var page: PanelPage = .history
     @State private var searchText = ""
-    @State private var hoveredItemId: UUID?
     @State private var focusedIndex: Int?
     @State private var filterType: FilterType = .all
     @State private var previewItem: ClipboardItem?
@@ -190,7 +189,7 @@ struct MenuBarView: View {
     private func moveFocus(_ direction: Int) {
         let count = filteredItems.count
         guard count > 0 else { return }
-        hoveredItemId = nil
+        RowHoverTracker.shared.set(nil)
         let newIndex: Int
         if let current = focusedIndex {
             newIndex = max(0, min(count - 1, current + direction))
@@ -341,14 +340,6 @@ struct MenuBarView: View {
             highlightIndices: highlights,
             isUnlocked: isUnlocked,
             onUnlock: { unlockedItemIDs.insert(item.id) },
-            onHoverChange: { hovering in
-                if hovering {
-                    hoveredItemId = item.id
-                    focusedIndex = nil
-                } else if hoveredItemId == item.id {
-                    hoveredItemId = nil
-                }
-            },
             onReorder: { sourceID, placeBefore in
                 ClipboardDragSession.end()
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
@@ -655,7 +646,8 @@ struct MenuBarView: View {
                 onSpacePressed: {
                     if let idx = focusedIndex, idx < filteredItems.count {
                         previewItem = filteredItems[idx]
-                    } else if let hovered = hoveredItemId, let item = filteredItems.first(where: { $0.id == hovered }) {
+                    } else if let hovered = RowHoverTracker.shared.itemID,
+                              let item = filteredItems.first(where: { $0.id == hovered }) {
                         previewItem = item
                     }
                 },
@@ -863,8 +855,8 @@ struct MenuBarView: View {
                 }
                 lastSeenItemCount = items.count
                 lastSeenFirstItemID = items.first?.id
-                if let hovered = hoveredItemId, clipboardManager.item(byID: hovered) == nil {
-                    hoveredItemId = nil
+                if let hovered = RowHoverTracker.shared.itemID, clipboardManager.item(byID: hovered) == nil {
+                    RowHoverTracker.shared.set(nil)
                 }
                 if let fi = focusedIndex, fi >= filteredItems.count {
                     focusedIndex = filteredItems.isEmpty ? nil : filteredItems.count - 1
