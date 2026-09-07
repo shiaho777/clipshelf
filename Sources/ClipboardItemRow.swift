@@ -49,7 +49,14 @@ final class RowHoverTracker {
     static let shared = RowHoverTracker()
     private(set) var itemID: UUID?
 
-    func set(_ id: UUID?) { itemID = id }
+    func set(_ id: UUID?) {
+        // Guard against no-op writes: during a scroll the pointer sits still
+        // while rows move under it, so onHover fires with the same id (or
+        // alternating nil) on every row crossing. Assigning a `let` property
+        // unconditionally still pays the @MainActor hop + KVO per call.
+        guard itemID != id else { return }
+        itemID = id
+    }
 }
 
 // MARK: - Source App Icon (cached)
@@ -121,6 +128,17 @@ enum SecretMasker {
         return String(t.prefix(3)) + "••••••" + String(t.suffix(2))
     }
 
+    /// Per-content memo. The mask verdict for a given 50-char preview never
+    /// changes, but rows re-evaluate body on hover/focus/recycle — without a
+    /// cache, 8 regex passes run on every one of those re-renders.
+    private static let maskCache: NSCache<NSString, NSString> = {
+        let c = NSCache<NSString, NSString>()
+        c.countLimit = 2_048
+        return c
+    }()
+    /// Sentinel for "content produced no mask" — NSCache can't store nil.
+    private static let noMaskSentinel: NSString = "\u{1}"
+
     private static func maskMatch(_ match: String) -> String {
         let t = match.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.count > 8 else { return "••••••" }
@@ -130,6 +148,20 @@ enum SecretMasker {
     /// Returns a masked copy when secret-looking content is found, else nil.
     /// Operates on short previews only — cheap enough to call from row body.
     static func masked(_ text: String) -> String? {
+        let key = text as NSString
+        if let hit = maskCache.object(forKey: key) {
+            return hit == noMaskSentinel ? nil : hit as String
+        }
+        let result = computeMask(text)
+        if let result {
+            maskCache.setObject(result as NSString, forKey: key)
+        } else {
+            maskCache.setObject(noMaskSentinel, forKey: key)
+        }
+        return result
+    }
+
+    private static func computeMask(_ text: String) -> String? {
         var result = text
         var didMask = false
         for regex in regexes {
@@ -179,12 +211,43 @@ struct ClipboardItemRow: View {
     var onReorder: ((UUID, Bool) -> Void)? = nil
     var filePaths: [String] = []
     @State private var loadedImage: NSImage?
-    @State private var isCode: Bool = false
     @State private var isHovered: Bool = false
     @State private var isDropTargeted: Bool = false
     /// Auto-masked secrets (non-sensitive items that look like keys) can be
     /// revealed per-row with the eye button. Resets on row recycle — safe default.
     @State private var isSecretRevealed: Bool = false
+
+    /// Per-content memo for the code verdict. `looksLikeCode` runs ~30
+    /// substring scans over the text; running it uncached in body made every
+    /// hover / recycle re-render cost scale with paste size.
+    private static let codeVerdictCache: NSCache<NSString, NSNumber> = {
+        let c = NSCache<NSString, NSNumber>()
+        c.countLimit = 2_048
+        return c
+    }()
+
+    /// Synchronous code verdict, cached per content. The previous async task
+    /// delivered it one frame after first render, so the `< >` badge popped in
+    /// late and nudged the line's layout mid-scroll.
+    private static func isCodeContent(_ content: String) -> Bool {
+        let key = content as NSString
+        if let hit = codeVerdictCache.object(forKey: key) { return hit.boolValue }
+        let verdict = PasteAdapterUtils.looksLikeCode(content)
+        codeVerdictCache.setObject(NSNumber(value: verdict), forKey: key)
+        return verdict
+    }
+
+    /// Synchronously-resolved list thumbnail from ImageCache's warm path only
+    /// (memory; never disk or decode). A cold cache returns nil and the async
+    /// task below fills the row in, exactly as before — but a warm row draws
+    /// its photo on the very first frame instead of placeholder → image one
+    /// beat later, which during a fast scroll reads as a dropped frame.
+    private var cachedRowThumbnail: NSImage? {
+        guard item.type == .image else { return nil }
+        let fileName = imageURL?.lastPathComponent ?? item.imageFileName
+        guard let fileName else { return nil }
+        return ImageCache.shared.cachedThumbnail(for: fileName, maxPixelSize: 160)
+    }
 
     /// Second line under the content: app icon + app name + relative time +
     /// use count. Shared by text/image/file rows so rows scan uniformly.
@@ -246,7 +309,7 @@ struct ClipboardItemRow: View {
                 }
             } else if item.type == .image {
                 HStack(spacing: 10) {
-                    if let nsImage = loadedImage ?? image {
+                    if let nsImage = cachedRowThumbnail ?? loadedImage ?? image {
                         Image(nsImage: nsImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -266,7 +329,11 @@ struct ClipboardItemRow: View {
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 5) {
-                            if let ocr = item.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines), !ocr.isEmpty {
+                            // Only surface OCR text that reads as real words;
+                            // stylized-UI screenshots OCR into glyph noise that
+                            // made image rows look broken — those get the plain
+                            // "[Image]" label (full OCR stays searchable).
+                            if let ocr = OCRTextQuality.usableText(from: item.ocrText) {
                                 Text(String(ocr.prefix(60)))
                                     .font(.system(size: 12))
                                     .foregroundStyle(.primary.opacity(0.95))
@@ -312,6 +379,7 @@ struct ClipboardItemRow: View {
                 let autoMasked = SecretMasker.masked(rawPreview)
                 let shownPreview = isSecretRevealed ? rawPreview : (autoMasked ?? rawPreview)
                 let isAutoMaskedRow = autoMasked != nil && !isSecretRevealed
+                let looksLikeCode = item.type == .text && Self.isCodeContent(item.content)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
                         if isAutoMaskedRow {
@@ -328,7 +396,7 @@ struct ClipboardItemRow: View {
                         if isAutoMaskedRow {
                             TagBadge(lang.l("item.secret.masked"), color: .orange, fontSize: 8)
                         }
-                        if item.type == .text && isCode {
+                        if looksLikeCode {
                             Image(systemName: "chevron.left.slash.chevron.right")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.purple.opacity(0.6))
@@ -547,33 +615,21 @@ struct ClipboardItemRow: View {
             handleDrop(providers)
         }
         .task(id: item.id) {
-            // Cache code detection asynchronously to avoid blocking body rendering.
-            if item.type == .text, !isCode {
-                let content = item.content
-                let result = await Task.detached(priority: .utility) {
-                    PasteAdapterUtils.looksLikeCode(content)
-                }.value
-                // The row may have been recycled to a different item while we
-                // awaited; don't paint a previous item's verdict onto this one.
-                if !Task.isCancelled {
-                    isCode = result
-                }
-            } else if item.type != .text {
-                // Row reused for a non-text item (edit case) — clear stale verdict.
-                isCode = false
-            }
-            guard item.type == .image, loadedImage == nil else { return }
-            if let image {
-                loadedImage = image
-                return
-            }
-            guard let imageURL else { return }
-            let fileName = imageURL.lastPathComponent
+            // Code verdict and cache-hit thumbnails are resolved synchronously
+            // in body now; this task only fills in a cold-cache image (first
+            // time the thumbnail is seen this session), so the vast majority
+            // of rows never wait a frame for content.
+            guard item.type == .image, loadedImage == nil, cachedRowThumbnail == nil, image == nil else { return }
+            let fileName = imageURL?.lastPathComponent ?? item.imageFileName
+            guard let fileName else { return }
             let imageData = await Task.detached(priority: .utility) {
                 ImageCache.shared.thumbnailData(for: fileName, maxPixelSize: 160) {
-                    try? Data(contentsOf: imageURL, options: [.mappedIfSafe])
+                    try? Data(contentsOf: AppStoragePaths.defaultStorageDirectory()
+                        .appendingPathComponent("images", isDirectory: true)
+                        .appendingPathComponent(fileName), options: [.mappedIfSafe])
                 }
             }.value
+            guard !Task.isCancelled else { return }
             loadedImage = imageData.flatMap(NSImage.init(data:))
         }
         .accessibilityElement(children: .combine)
@@ -585,7 +641,7 @@ struct ClipboardItemRow: View {
 
     private var dragPreview: some View {
         HStack(spacing: 8) {
-            if item.type == .image, let nsImage = loadedImage ?? image {
+            if item.type == .image, let nsImage = cachedRowThumbnail ?? loadedImage ?? image {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -595,7 +651,7 @@ struct ClipboardItemRow: View {
                 Image(systemName: "doc.on.clipboard")
                     .foregroundStyle(.secondary)
             }
-            Text(item.type == .image ? (item.ocrText ?? lang.l("item.image")) : String(item.content.prefix(48)))
+            Text(item.type == .image ? (OCRTextQuality.usableText(from: item.ocrText) ?? lang.l("item.image")) : String(item.content.prefix(48)))
                 .font(.system(size: 11))
                 .lineLimit(1)
         }

@@ -454,6 +454,28 @@ class ClipboardManager: ObservableObject {
     func imageFileURL(for item: ClipboardItem) -> URL? {
         imageManager.imageFileURL(for: item)
     }
+
+    /// Warms the in-memory thumbnail cache for image items about to be shown,
+    /// so list rows can resolve them synchronously on their first frame
+    /// (see `ImageCache.cachedThumbnail`). Cache hits short-circuit inside
+    /// `thumbnailData`, so calling this on every list update costs little;
+    /// actual disk reads / decodes run off the main actor.
+    func prefetchThumbnails(for items: [ClipboardItem], limit: Int = 40) {
+        let pairs: [(fileName: String, url: URL)] = items.prefix(limit).compactMap { item in
+            guard item.type == .image,
+                  let fileName = item.imageFileName,
+                  let url = imageManager.imageFileURL(for: item) else { return nil }
+            return (fileName, url)
+        }
+        guard !pairs.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            for (fileName, url) in pairs {
+                _ = ImageCache.shared.thumbnailData(for: fileName, maxPixelSize: 160) {
+                    try? Data(contentsOf: url, options: [.mappedIfSafe])
+                }
+            }
+        }
+    }
     
     // MARK: - Preferences (delegated to prefs)
     

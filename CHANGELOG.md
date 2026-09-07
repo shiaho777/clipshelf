@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-09-07
+
+### Changed
+- Smoother scrolling in the history list: image rows resolve already-cached thumbnails synchronously on their first frame instead of swapping a placeholder for the photo a beat later, and thumbnails for the visible page are prefetched whenever the list updates
+- The code badge on text rows is computed synchronously (cached per content) instead of popping in a frame after the row appears
+- Image rows, Quick Paste, and drag previews only show OCR text when it contains at least 3 usable words — screenshots of music players, games, and other stylized UI no longer show glyph soup next to the thumbnail; the full OCR text stays searchable and visible in Preview
+- New OCR results drop low-confidence (< 0.5) Vision observations before storing, so stylized fonts stop polluting saved OCR text
+
+### Fixed
+- The version string shown in Settings now matches the release version (the 1.2.0 build still reported 1.1.2)
+
 ## [1.2.0] - 2026-09-03
 
 ### Added

@@ -151,6 +151,25 @@ class ImageCache {
         }
         return result
     }
+
+    /// Cached thumbnail only — never touches disk or decodes. Lets a list row
+    /// resolve an already-warmed thumbnail synchronously on the main thread,
+    /// so a recycled row shows its photo on the very first frame instead of
+    /// one task-hop later (that one-frame placeholder swap is what reads as a
+    /// dropped frame during a fast scroll). A miss returns nil; the row then
+    /// falls back to the async load path exactly as before. A data-cache hit
+    /// is promoted into the NSImage cache so hover-driven body re-evaluations
+    /// reuse one NSImage instance rather than re-decoding PNG data each time.
+    func cachedThumbnail(for fileName: String, maxPixelSize: Int) -> NSImage? {
+        let cacheKey = "\(fileName)#thumb#\(maxPixelSize)" as NSString
+        if let cached = thumbnailCache.object(forKey: cacheKey) {
+            return cached
+        }
+        guard let data = thumbnailDataCache.object(forKey: cacheKey),
+              let image = NSImage(data: data as Data) else { return nil }
+        thumbnailCache.setObject(image, forKey: cacheKey, cost: data.length)
+        return image
+    }
     
     private func loadThumbnailDataFromDisk(fileName: String, maxPixelSize: Int) -> Data? {
         guard let url = thumbnailDiskFileURL(fileName: fileName, maxPixelSize: maxPixelSize, createDirectory: false) else {
