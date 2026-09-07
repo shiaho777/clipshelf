@@ -135,6 +135,9 @@ struct MenuBarView: View {
     private static let renderPageSize = 200
 
     private func updateFilteredItems() {
+        // Warm thumbnails for the head of the list on every recompute so image
+        // rows scrolling into view resolve from memory, not a frame late.
+        defer { clipboardManager.prefetchThumbnails(for: Array(filteredItems.prefix(40))) }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         var page: [ClipboardItem] = []
         page.reserveCapacity(visibleCount)
@@ -345,7 +348,11 @@ struct MenuBarView: View {
             },
             filePaths: rowFilePaths
         )
-        .id("\(item.id.uuidString)-\(lang.revision)")
+        // Rows already observe LanguageManager for their localized strings, so
+        // keying identity by lang.revision only forced every row to be torn
+        // down and rebuilt (dropping row @State and re-decoding thumbnails)
+        // when the language changed. Identity is just the item id now.
+        .id(item.id)
     }
 
     @ViewBuilder
@@ -367,6 +374,26 @@ struct MenuBarView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
+        // Warm the thumbnail cache for the visible page before the user ever
+        // scrolls: image rows can then resolve their photo synchronously on
+        // their first frame (see ClipboardItemRow.cachedRowThumbnail), instead
+        // of drawing a placeholder and swapping the photo in one frame later —
+        // the swap is what reads as a dropped frame mid-scroll.
+        .task(id: filteredItems.map(\.id)) {
+            let pairs: [(String, URL)] = filteredItems.compactMap { item in
+                guard item.type == .image,
+                      let url = clipboardManager.imageFileURL(for: item) else { return nil }
+                return (url.lastPathComponent, url)
+            }
+            guard !pairs.isEmpty else { return }
+            await Task.detached(priority: .utility) {
+                for (fileName, url) in pairs where !Task.isCancelled {
+                    _ = ImageCache.shared.thumbnailData(for: fileName, maxPixelSize: 160) {
+                        try? Data(contentsOf: url, options: [.mappedIfSafe])
+                    }
+                }
+            }.value
+        }
     }
 
     @ViewBuilder

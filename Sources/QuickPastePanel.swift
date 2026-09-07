@@ -374,7 +374,7 @@ struct QuickPasteView: View {
                 Image(systemName: "photo")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                Text(item.ocrText ?? LanguageManager.shared.l("item.image"))
+                Text(OCRTextQuality.usableText(from: item.ocrText) ?? LanguageManager.shared.l("item.image"))
                     .font(.system(size: 12))
                     .lineLimit(1)
                     .foregroundStyle(.primary.opacity(0.95))
