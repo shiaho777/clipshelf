@@ -15,9 +15,42 @@
 
 ---
 
-<p align="center">
-  <img src="assets/screenshot-panel.png" width="720" alt="ClipShelf panel">
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-history.png" alt="History list" />
+      <br />
+      <sub><b>History</b> — source apps, masked secrets</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-search.png" alt="Search and filters" />
+      <br />
+      <sub><b>Search</b> — fuzzy search with app filters</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-general.png" alt="Settings General" />
+      <br />
+      <sub><b>Settings · General</b> — hotkeys, history, paste</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-rules.png" alt="Settings Rules" />
+      <br />
+      <sub><b>Settings · Rules</b> — rules on copy, test drive</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-data.png" alt="Settings Data" />
+      <br />
+      <sub><b>Settings · Data</b> — backup, importers</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-about.png" alt="Settings About" />
+      <br />
+      <sub><b>Settings · About</b> — version, updates, links</sub>
+    </td>
+  </tr>
+</table>
 
 
 ## What it does

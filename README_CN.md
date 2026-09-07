@@ -9,9 +9,42 @@
 
 ---
 
-<p align="center">
-  <img src="assets/screenshot-panel.png" width="720" alt="ClipShelf 主面板">
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-history.png" alt="历史列表" />
+      <br />
+      <sub><b>历史</b> — 来源应用、脱敏密钥</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-search.png" alt="搜索与筛选" />
+      <br />
+      <sub><b>搜索</b> — 模糊搜索 + 应用筛选</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-general.png" alt="设置·通用" />
+      <br />
+      <sub><b>设置 · 通用</b> — 快捷键、历史、粘贴</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-rules.png" alt="设置·规则" />
+      <br />
+      <sub><b>设置 · 规则</b> — 复制时处理、可试运行</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-data.png" alt="设置·数据" />
+      <br />
+      <sub><b>设置 · 数据</b> — 备份与导入</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/screenshot-settings-about.png" alt="设置·关于" />
+      <br />
+      <sub><b>设置 · 关于</b> — 版本、更新、链接</sub>
+    </td>
+  </tr>
+</table>
 
 
 ## 它做什么
