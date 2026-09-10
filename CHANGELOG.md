@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.2] - 2026-09-10
+
+### Removed
+- All comments from Swift sources, tests, and Localizable.strings — the codebase is now comment-free by policy (see AGENTS.md); the only remaining `//` occurrences are inside string literals such as URLs and regex patterns
+
+### Added
+- AGENTS.md: guidance for AI coding agents covering build/test commands, the architecture map, project conventions (including the no-comments rule), and the Issue-first PR delivery loop with the CI `build-and-test` job as the merge gate
+
 ## [1.2.1] - 2026-09-07
 
 ### Changed
