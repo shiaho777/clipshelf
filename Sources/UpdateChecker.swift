@@ -1,7 +1,6 @@
 import Foundation
 import AppKit
 
-/// Parsed information about the latest GitHub release.
 struct UpdateRelease: Equatable {
     let version: String
     let assetName: String
@@ -9,12 +8,8 @@ struct UpdateRelease: Equatable {
     let size: Int64
 }
 
-/// Pure parsing and comparison helpers, kept free of the checker (and of any
-/// @MainActor isolation) so they can be unit-tested without networking or UI.
 enum UpdateReleaseParser {
 
-    /// Parse a GitHub `releases/latest` payload and pick the DMG asset.
-    /// Returns nil when the payload is malformed or has no DMG asset.
     static func parse(_ data: Data) -> UpdateRelease? {
         guard
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -26,8 +21,6 @@ enum UpdateReleaseParser {
         return UpdateRelease(version: version, assetName: asset.name, assetURL: url, size: asset.size)
     }
 
-    /// Pick the installable asset: any `.dmg`, preferring a "universal" build
-    /// when a release carries per-architecture DMGs.
     static func pickDMGAsset(_ assets: [[String: Any]]) -> (name: String, url: String, size: Int64)? {
         let dmgs = assets.filter {
             ($0["name"] as? String).map { $0.lowercased().hasSuffix(".dmg") } ?? false
@@ -40,15 +33,10 @@ enum UpdateReleaseParser {
             let name = candidate["name"] as? String,
             let url = candidate["browser_download_url"] as? String
         else { return nil }
-        // Go through NSNumber so both Int and Int64 sources (JSON payloads
-        // decode to NSNumber; test literals may be either) unify cleanly.
         let size = (candidate["size"] as? NSNumber)?.int64Value ?? 0
         return (name, url, size)
     }
 
-    /// Numeric component-wise comparison of versions like "v1.2.0".
-    /// Missing components count as zero, so "1.1" == "1.1.0"; pre-release
-    /// suffixes ("-beta") are ignored for equality purposes.
     static func compareVersions(_ lhs: String, _ rhs: String) -> Int {
         func components(_ raw: String) -> [Int] {
             var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -68,8 +56,6 @@ enum UpdateReleaseParser {
     }
 }
 
-/// Forwards URLSession download progress/completion to closures. The closures
-/// are responsible for hopping to the main actor.
 final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     private let onProgress: (Double, Int64, Int64) -> Void
     private let onFinish: (URL) -> Void
@@ -105,11 +91,6 @@ final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     }
 }
 
-/// Checks GitHub Releases for a newer build, downloads the DMG with progress
-/// and speed feedback, then opens it in Finder for installation.
-///
-/// Shared as a singleton: the settings view is torn down every time the panel
-/// closes, and an in-flight download must outlive that view.
 @MainActor
 final class UpdateChecker: ObservableObject {
     static let shared = UpdateChecker()
@@ -136,11 +117,7 @@ final class UpdateChecker: ObservableObject {
 
     private init() {}
 
-    // MARK: - Check
-
     func checkForUpdates() {
-        // Re-checking is allowed from idle/up-to-date/failed; not from
-        // in-flight download or a finished download.
         switch phase {
         case .idle, .checking, .upToDate, .failed: break
         case .available, .downloading, .ready: return
@@ -170,8 +147,6 @@ final class UpdateChecker: ObservableObject {
             phase = .upToDate
         }
     }
-
-    // MARK: - Download
 
     func startDownload() {
         guard case .available(let release) = phase else { return }
@@ -246,7 +221,6 @@ final class UpdateChecker: ObservableObject {
 
     private func didFailDownload(_ error: Error) {
         if (error as NSError?)?.code == NSURLErrorCancelled {
-            // User-initiated cancel — go back to "update available".
             if let release = pendingRelease {
                 phase = .available(release)
             } else {
@@ -257,11 +231,6 @@ final class UpdateChecker: ObservableObject {
         phase = .failed(message: error.localizedDescription)
     }
 
-    // MARK: - Install
-
-    /// Opens the downloaded DMG with its default handler (Finder mounts it
-    /// and shows the drag-to-Applications window), i.e. the same thing a
-    /// double-click would do.
     func install() {
         guard case .ready(let url, _) = phase else { return }
         NSWorkspace.shared.open(url)

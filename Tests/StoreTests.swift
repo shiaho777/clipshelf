@@ -16,8 +16,6 @@ final class JSONClipboardHistoryStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Roundtrip
-
     func testSaveAndLoadRoundtrip() throws {
         let store = JSONClipboardHistoryStore(storageDirectory: tempDir)
         let items = [
@@ -44,8 +42,6 @@ final class JSONClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(loaded[0].id, item.id)
     }
 
-    // MARK: - Skip Unchanged
-
     func testSkipUnchangedWrite() throws {
         let store = JSONClipboardHistoryStore(storageDirectory: tempDir)
         let items = [ClipboardItem(content: "stable", type: .text)]
@@ -55,16 +51,12 @@ final class JSONClipboardHistoryStoreTests: XCTestCase {
         XCTAssertFalse(wrote2, "Should skip writing identical content")
     }
 
-    // MARK: - Empty State
-
     func testLoadFromEmptyDirectory() throws {
         let store = JSONClipboardHistoryStore(storageDirectory: tempDir)
         let items = try store.loadItems()
         XCTAssertTrue(items.isEmpty)
     }
 }
-
-// MARK: - JSONAppPreferencesStoreTests
 
 final class JSONAppPreferencesStoreTests: XCTestCase {
 
@@ -88,8 +80,6 @@ final class JSONAppPreferencesStoreTests: XCTestCase {
         JSONAppPreferencesStore(storageDirectory: tempDir, userDefaults: userDefaults)
     }
 
-    // MARK: - Language
-
     func testLanguageSaveAndLoad() throws {
         let store = makeStore()
         try store.saveLanguage("zh")
@@ -107,15 +97,11 @@ final class JSONAppPreferencesStoreTests: XCTestCase {
         XCTAssertNil(try store.loadLanguage())
     }
 
-    // MARK: - Launch at Login
-
     func testLaunchAtLoginSaveAndLoad() throws {
         let store = makeStore()
         try store.saveLaunchAtLogin(true)
         XCTAssertEqual(try store.loadLaunchAtLogin(), true)
     }
-
-    // MARK: - Max History Count
 
     func testMaxHistoryCountSaveAndLoad() throws {
         let store = makeStore()
@@ -129,15 +115,11 @@ final class JSONAppPreferencesStoreTests: XCTestCase {
         XCTAssertEqual(try store.loadMaxHistoryCount(), 500)
     }
 
-    // MARK: - Auto Cleanup Interval
-
     func testAutoCleanupIntervalSaveAndLoad() throws {
         let store = makeStore()
         try store.saveAutoCleanupInterval(7)
         XCTAssertEqual(try store.loadAutoCleanupInterval(), 7)
     }
-
-    // MARK: - Excluded Bundle IDs
 
     func testExcludedBundleIDsSaveAndLoad() throws {
         let store = makeStore()

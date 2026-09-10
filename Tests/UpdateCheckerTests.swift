@@ -3,8 +3,6 @@ import XCTest
 
 final class UpdateCheckerTests: XCTestCase {
 
-    // MARK: - compareVersions
-
     func testCompareVersionsEqual() {
         XCTAssertEqual(UpdateReleaseParser.compareVersions("v1.1.1", "1.1.1"), 0)
         XCTAssertEqual(UpdateReleaseParser.compareVersions("1.1", "1.1.0"), 0)
@@ -18,8 +16,6 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(UpdateReleaseParser.compareVersions("2.0.0", "1.99.99"), 1)
         XCTAssertEqual(UpdateReleaseParser.compareVersions("1.0.0", "2.0.0"), -1)
     }
-
-    // MARK: - pickDMGAsset
 
     func testPickDMGAssetChoosesDMGOverZIP() {
         let assets: [[String: Any]] = [
@@ -48,8 +44,6 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertNil(UpdateReleaseParser.pickDMGAsset(assets))
         XCTAssertNil(UpdateReleaseParser.pickDMGAsset([]))
     }
-
-    // MARK: - parse
 
     func testParseReleasePayload() {
         let payload = """

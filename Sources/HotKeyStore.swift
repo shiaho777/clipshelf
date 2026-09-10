@@ -36,7 +36,6 @@ final class JSONHotKeyStore: HotKeyStore {
     func loadMainHotKey() throws -> HotKeyConfig? {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         let data = try Data(contentsOf: fileURL)
-        // Try new payload format first, fall back to legacy single-config
         if let payload = try? decoder.decode(HotKeyPayload.self, from: data) {
             lastConfig = payload.main
             lastQueueConfig = payload.queue
@@ -56,7 +55,6 @@ final class JSONHotKeyStore: HotKeyStore {
     }
     
     func loadQueueHotKey() throws -> HotKeyConfig? {
-        // Already loaded in loadMainHotKey
         return lastQueueConfig
     }
     

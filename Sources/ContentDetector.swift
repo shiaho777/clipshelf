@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Content Detection Helpers
 enum ColorFormat: CaseIterable {
     case hex, rgb, hsl
 }
@@ -119,12 +118,10 @@ struct ContentDetector {
     }
     
     private static func detectColor(in trimmed: String) -> NSColor? {
-        // HEX: #RGB, #RRGGBB, #RRGGBBAA
         if trimmed.hasPrefix("#") {
             let hex = String(trimmed.dropFirst())
             if let color = NSColor(hexString: hex) { return color }
         }
-        // rgb(r, g, b) or rgba(r, g, b, a)
         if let regex = rgbRegex,
            let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
             let r = min(max(Int((trimmed as NSString).substring(with: match.range(at: 1))) ?? 0, 0), 255)

@@ -2,11 +2,6 @@ import AppKit
 import SwiftUI
 import Carbon.HIToolbox
 
-/// A compact, cursor-anchored panel for quick pasting.
-///
-/// Shows the most recent clipboard items as a small list near the text cursor.
-/// Press 1-9 to paste, Esc to dismiss. Designed for zero-context-switch pasting
-/// — the panel appears where you're already typing.
 @MainActor
 class QuickPastePanel: ObservableObject {
     static let shared = QuickPastePanel()
@@ -16,24 +11,14 @@ class QuickPastePanel: ObservableObject {
     private(set) var isVisible = false
     private weak var clipboardManager: ClipboardManager?
     private var clickMonitor: Any?
-    /// The app that was frontmost when the panel was shown.
-    /// We re-activate it after paste/dismiss so the user can continue typing.
     private var targetApp: NSRunningApplication?
 
     private init() {}
 
-    /// Shows the panel at the given screen location (or near the text cursor
-    /// if Accessibility permissions allow).
     func show(clipboardManager: ClipboardManager, at cursorLocation: NSPoint? = nil) {
-        // Reentrancy guard: `isVisible` is only set at the END of show(); two
-        // rapid hotkey invocations created two panels + two click monitors,
-        // orphaning the first pair.
         guard !isVisible else { return }
         let location = cursorLocation ?? CursorLocator.shared.cursorLocation() ?? defaultLocation()
         self.clipboardManager = clipboardManager
-        // Save the current frontmost app so we can re-activate it after paste/dismiss.
-        // Note: at this point ClipboardManager is NOT yet frontmost (we haven't made
-        // the panel key yet), so this correctly captures the user's target app.
         self.targetApp = NSWorkspace.shared.frontmostApplication
 
         clipboardManager.forceRefreshClipboard()
@@ -62,7 +47,6 @@ class QuickPastePanel: ObservableObject {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
 
-        // Vibrancy background matching the main panel.
         let vibrantView = NSVisualEffectView(frame: NSRect(origin: .zero, size: panelSize))
         vibrantView.material = .hudWindow
         vibrantView.blendingMode = .behindWindow
@@ -84,11 +68,9 @@ class QuickPastePanel: ObservableObject {
         panel.maxSize = NSSize(width: 400, height: 400)
         self.panel = panel
 
-        // Position the panel near the cursor, keeping it on-screen.
         let positioned = clampToScreen(location: location, panelSize: panelSize)
         panel.setFrameOrigin(positioned)
 
-        // Entrance animation: fade + scale up.
         panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -109,7 +91,6 @@ class QuickPastePanel: ObservableObject {
 
         isVisible = true
 
-        // Dismiss when clicking elsewhere.
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.hide()
         }
@@ -117,8 +98,6 @@ class QuickPastePanel: ObservableObject {
 
     func hide() {
         guard isVisible else { return }
-        // Mark hidden immediately so re-entrant show/hide calls see a
-        // consistent state during the exit animation.
         isVisible = false
         let hidingPanel = panel
         let originalFrame = panel?.frame ?? .zero
@@ -128,8 +107,6 @@ class QuickPastePanel: ObservableObject {
             panel?.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             guard let self else { return }
-            // Only tear down if this hide is still the latest one — a quick
-            // re-show replaced `panel` and its completion must not nil it.
             guard self.panel === hidingPanel else { return }
             self.panel?.orderOut(nil)
             self.panel?.setFrame(originalFrame, display: false)
@@ -141,8 +118,6 @@ class QuickPastePanel: ObservableObject {
             NSEvent.removeMonitor(monitor)
             clickMonitor = nil
         }
-        // Reactivate the user's target app so they can continue typing.
-        // Use the saved targetApp (NOT frontmostApplication, which is ourselves).
         if let app = targetApp {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
                 app.activate(options: .activateIgnoringOtherApps)
@@ -151,21 +126,11 @@ class QuickPastePanel: ObservableObject {
         }
     }
 
-    /// Copy item to clipboard, hide panel, reactivate target app, then simulate Cmd+V.
-    /// Sensitive items require biometric auth first — same gate as the main panel.
-    /// The paste only proceeds when the clipboard write actually succeeded, so a
-    /// missing image payload never Cmd+V's stale clipboard content.
     private func pasteAndClose(item: ClipboardItem) {
         guard let cm = clipboardManager else { return }
         let finish: () -> Void = { [weak self] in
             let app = self?.targetApp
-            // Hide the panel first (triggers exit animation).
             self?.hide()
-            // After the panel is dismissed and the target app is re-activated,
-            // simulate Cmd+V. The timing must account for:
-            // 1. Panel exit animation (0.1s in hide)
-            // 2. Target app activation delay
-            // 3. monitor.acknowledgeChangeCount (called by copyToClipboard)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
                 app?.activate(options: .activateIgnoringOtherApps)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -180,7 +145,7 @@ class QuickPastePanel: ObservableObject {
                         reason: LanguageManager.shared.l("biometric.unlockSensitive")
                     )
                 } catch {
-                    return  // Auth failed/cancelled — do nothing.
+                    return
                 }
                 guard cm.copyToClipboard(item) else { return }
                 finish()
@@ -210,31 +175,19 @@ class QuickPastePanel: ObservableObject {
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
         var x = location.x + 8
         var y = location.y - panelSize.height - 4
-        // Clamp right
         if x + panelSize.width > screenFrame.maxX { x = screenFrame.maxX - panelSize.width }
-        // Clamp left
         if x < screenFrame.minX { x = screenFrame.minX }
-        // Clamp bottom
         if y < screenFrame.minY { y = location.y + 20 }
-        // Clamp top
         if y + panelSize.height > screenFrame.maxY { y = screenFrame.maxY - panelSize.height }
         return NSPoint(x: x, y: y)
     }
 }
 
-// MARK: - Cursor Locator
-
-/// Attempts to locate the text cursor position using the Accessibility API.
-/// Falls back to the mouse location when the cursor isn't available.
 final class CursorLocator {
     static let shared = CursorLocator()
 
-    /// Returns the current text insertion point in screen coordinates, or the
-    /// mouse location as a fallback.
     func cursorLocation() -> NSPoint? {
-        // Try the focused UI element's caret position via AX API.
         if let caret = axCaretLocation() { return caret }
-        // Fallback: mouse location (works without AX, less precise).
         return NSEvent.mouseLocation
     }
 
@@ -245,9 +198,6 @@ final class CursorLocator {
               let elementRef = focusedElement else { return nil }
         let element = elementRef as! AXUIElement
 
-        // Try to get the bounds of the selected text range.
-        // The caret is at the end of the selection; we use kAXBoundsForRange
-        // to get its screen position.
         var rangeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
               let rangeVal = rangeValue else { return nil }
@@ -264,12 +214,9 @@ final class CursorLocator {
 
         var rect = CGRect.zero
         guard AXValueGetValue(bounds as! AXValue, .cgRect, &rect) else { return nil }
-        // The caret is at the left edge of the selection bounds.
         return NSPoint(x: rect.minX, y: rect.maxY)
     }
 }
-
-// MARK: - Quick Paste View
 
 struct QuickPasteView: View {
     @ObservedObject var clipboardManager: ClipboardManager
@@ -283,7 +230,6 @@ struct QuickPasteView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar
             SearchField(
                 text: $searchText,
                 placeholder: LanguageManager.shared.l("search.placeholder"),
@@ -310,7 +256,6 @@ struct QuickPasteView: View {
             }
 
             Divider().opacity(0.3)
-            // Keyboard hint footer so first-time users discover 1-9/↑↓/↵/Esc.
             Text(LanguageManager.shared.l("quickpaste.hint"))
                 .font(.system(size: 10))
                 .foregroundStyle(.quaternary)
@@ -344,20 +289,17 @@ struct QuickPasteView: View {
         }
     }
 
-    /// Returns up to 9 items, filtered by search text if non-empty.
     private var displayItems: [ClipboardItem] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty {
             return Array(clipboardManager.items.prefix(maxItems))
         }
-        // Use fuzzy search for matching.
         return clipboardManager.search(query, limit: maxItems)
     }
 
     @ViewBuilder
     private func quickRow(index: Int, item: ClipboardItem) -> some View {
         let isHovered = hoveredIndex == index
-        // Mirror the main list: masked secrets, source icon, type badges.
         let rawText = item.displayText
         let maskedText = (item.type == .text || item.type == .richText) && !item.isSensitive
             ? SecretMasker.masked(rawText) : nil

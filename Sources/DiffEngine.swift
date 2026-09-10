@@ -1,19 +1,14 @@
 import Foundation
 
-// MARK: - Types
-
-/// A single line-level change in a diff.
 enum DiffOperation {
     case equal(String)
     case insert(String)
     case delete(String)
 }
 
-/// One entry in the diff output produced by `DiffEngine`.
 struct DiffHunk {
     let operation: DiffOperation
 
-    /// The line text regardless of operation kind.
     var line: String {
         switch operation {
         case .equal(let s), .insert(let s), .delete(let s): return s
@@ -21,22 +16,10 @@ struct DiffHunk {
     }
 }
 
-// MARK: - Engine
-
-/// Line-level diff engine based on the LCS (Longest Common Subsequence) algorithm.
-///
-/// - Complexity: O(n × m) time and space where n, m are line counts.
-///   A hard cap (`maxLines`) prevents excessive memory use on very large inputs.
-/// - Pure Swift, no external dependencies.
 struct DiffEngine {
 
-    /// Hard cap: lines beyond this limit are silently truncated before diffing.
     static let maxLines = 500
 
-    /// Compute a line-level diff between `old` and `new` text.
-    ///
-    /// - Returns: An array of `DiffHunk` values representing unchanged, inserted,
-    ///   and deleted lines in the order they appear in the output.
     static func diff(old: String, new: String) -> [DiffHunk] {
         let rawA = old.components(separatedBy: .newlines)
         let rawB = new.components(separatedBy: .newlines)
@@ -45,8 +28,6 @@ struct DiffEngine {
         return diffLines(a, b)
     }
 
-    // MARK: - LCS DP
-
     private static func diffLines(_ a: [String], _ b: [String]) -> [DiffHunk] {
         let n = a.count
         let m = b.count
@@ -54,7 +35,6 @@ struct DiffEngine {
         if n == 0 { return b.map { DiffHunk(operation: .insert($0)) } }
         if m == 0 { return a.map { DiffHunk(operation: .delete($0)) } }
 
-        // Build LCS table: dp[i][j] = LCS length for a[0..<i] vs b[0..<j]
         var dp = [[Int]](repeating: [Int](repeating: 0, count: m + 1), count: n + 1)
         for i in 1...n {
             for j in 1...m {
@@ -66,7 +46,6 @@ struct DiffEngine {
             }
         }
 
-        // Backtrack to reconstruct the edit sequence
         var hunks: [DiffHunk] = []
         var i = n, j = m
         while i > 0 || j > 0 {

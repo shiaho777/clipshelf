@@ -18,9 +18,9 @@ struct HotKeyConfig: Codable, Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
     
-    static let defaultMain = HotKeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | shiftKey)) // ⌘⇧V
-    static let defaultQueue = HotKeyConfig(keyCode: 0x0B, modifiers: UInt32(cmdKey | shiftKey)) // ⌘⇧B
-    static let defaultQuickPaste = HotKeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | optionKey)) // ⌘⌥V
+    static let defaultMain = HotKeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | shiftKey))
+    static let defaultQueue = HotKeyConfig(keyCode: 0x0B, modifiers: UInt32(cmdKey | shiftKey))
+    static let defaultQuickPaste = HotKeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | optionKey))
     
     var displayString: String {
         var parts: [String] = []
@@ -60,11 +60,6 @@ class HotKeyManager: ObservableObject {
     @Published var mainHotKey: HotKeyConfig = .defaultMain {
         didSet {
             guard oldValue != mainHotKey, !isRestoringFromStore else { return }
-            // Rebind to an already-taken combo (including one of this app's
-            // own other hotkeys): RegisterEventHotKey fails with
-            // eventHotKeyExistsErr and the old ref is already unregistered,
-            // so roll back in memory to keep config and registration in sync
-            // instead of persisting a key that does nothing.
             if !reregisterMainHotKey() {
                 mainHotKey = oldValue
                 return
@@ -99,10 +94,6 @@ class HotKeyManager: ObservableObject {
     private var mainHotKeyRef: EventHotKeyRef?
     private var queueHotKeyRef: EventHotKeyRef?
     private var quickPasteHotKeyRef: EventHotKeyRef?
-    /// True while `loadConfig()` assigns stored configs. Without this, the first
-    /// assignment fires `didSet`, whose `saveConfig()` persists the other two
-    /// keys as still-default values — silently clobbering the user's saved
-    /// customizations on disk before they are ever read.
     private var isRestoringFromStore = false
     var onMainHotKey: (() -> Void)?
     var onQueueHotKey: (() -> Void)?

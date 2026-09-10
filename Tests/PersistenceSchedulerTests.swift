@@ -3,8 +3,6 @@ import XCTest
 
 final class PersistenceSchedulerTests: XCTestCase {
 
-    // MARK: - testScheduleFiresAfterDebounce
-
     func testScheduleFiresAfterDebounce() {
         let exp = expectation(description: "persist called")
         var persistedValue: Int?
@@ -20,8 +18,6 @@ final class PersistenceSchedulerTests: XCTestCase {
         XCTAssertEqual(persistedValue, 42)
     }
 
-    // MARK: - testScheduleCancelsPrevious
-
     func testScheduleCancelsPrevious() {
         let exp = expectation(description: "persist called once")
         var callCount = 0
@@ -35,12 +31,10 @@ final class PersistenceSchedulerTests: XCTestCase {
             exp.fulfill()
         }
         scheduler.schedule("first")
-        // Schedule again quickly — should cancel the first
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             scheduler.schedule("second")
         }
         wait(for: [exp], timeout: 1.0)
-        // Wait a bit more to make sure no extra call fires
         let noExtra = expectation(description: "no extra call")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { noExtra.fulfill() }
         wait(for: [noExtra], timeout: 1.0)
@@ -48,22 +42,17 @@ final class PersistenceSchedulerTests: XCTestCase {
         XCTAssertEqual(lastValue, "second")
     }
 
-    // MARK: - testFlushExecutesImmediately
-
     func testFlushExecutesImmediately() {
         var persistedValue: Int?
         let scheduler = PersistenceScheduler<Int>(
             queue: DispatchQueue(label: "test.persist"),
-            debounce: 10.0 // Very long debounce — should not matter for flush
+            debounce: 10.0
         ) { value in
             persistedValue = value
         }
         scheduler.flush(99)
-        // flush is synchronous — value should be set immediately
         XCTAssertEqual(persistedValue, 99)
     }
-
-    // MARK: - testCancelPreventsPersist
 
     func testCancelPreventsPersist() {
         var called = false
@@ -80,8 +69,6 @@ final class PersistenceSchedulerTests: XCTestCase {
         wait(for: [exp], timeout: 1.0)
         XCTAssertFalse(called, "Persist should not be called after cancel")
     }
-
-    // MARK: - testHasPending
 
     func testHasPending() {
         let scheduler = PersistenceScheduler<Int>(

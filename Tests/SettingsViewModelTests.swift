@@ -28,8 +28,6 @@ final class SettingsViewModelTests: XCTestCase {
         )
     }
 
-    // MARK: - Toggle Success
-
     func testToggleOnSuccess() {
         let vm = makeViewModel()
         vm.launchAtLogin = true
@@ -49,8 +47,6 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(prefsStore.launchAtLogin, false)
     }
 
-    // MARK: - Toggle Failure
-
     func testToggleFailureRollsBack() {
         let vm = makeViewModel()
         mockService.errorToThrow = NSError(domain: "test", code: 1)
@@ -68,8 +64,6 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNil(prefsStore.launchAtLogin, "Should not persist on failure")
     }
 
-    // MARK: - Load Preference
-
     func testLoadPreferenceFromActualState() {
         mockService.isEnabled = true
         let vm = makeViewModel()
@@ -84,8 +78,6 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testLoadPreferenceActualStateOverridesStoredValue() {
-        // Stored "on" but not actually registered (login item was lost):
-        // the toggle must reflect the real system state.
         prefsStore.launchAtLogin = true
         let vm = makeViewModel()
         vm.loadLaunchAtLoginPreferenceIfNeeded()
@@ -97,8 +89,8 @@ final class SettingsViewModelTests: XCTestCase {
         let vm = makeViewModel()
         vm.loadLaunchAtLoginPreferenceIfNeeded()
         XCTAssertTrue(vm.launchAtLogin)
-        mockService.isEnabled = false  // change underlying state
-        vm.loadLaunchAtLoginPreferenceIfNeeded()  // should not reload
+        mockService.isEnabled = false
+        vm.loadLaunchAtLoginPreferenceIfNeeded()
         XCTAssertTrue(vm.launchAtLogin, "Second call should not reload")
     }
 }

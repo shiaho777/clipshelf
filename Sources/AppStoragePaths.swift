@@ -4,10 +4,6 @@ enum AppStoragePaths {
     static let productDirectoryName = "ClipShelf"
     static let legacyDirectoryName = "ClipboardManager"
 
-    /// The legacy-directory migration only ever needs to run once per process:
-    /// afterwards the destination exists and repeated `defaultStorageDirectory()`
-    /// calls (several per second on view-building paths) would otherwise hit the
-    /// filesystem twice each. Reset only in tests via `resetMigrationMemoization()`.
     private nonisolated(unsafe) static var hasResolvedMigration = false
     private static let migrationMemoizationLock = NSLock()
 
@@ -37,8 +33,6 @@ enum AppStoragePaths {
         migrationMemoizationLock.withLock { hasResolvedMigration = true }
     }
 
-    /// Test hook: clears the one-shot migration guard so migration behaviour
-    /// can be exercised repeatedly within a single process.
     static func resetMigrationMemoization() {
         migrationMemoizationLock.withLock { hasResolvedMigration = false }
     }

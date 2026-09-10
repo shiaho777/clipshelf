@@ -25,8 +25,6 @@ enum ImportMode {
 }
 
 final class DataPortService {
-    /// Only flat file names that can't escape the images directory are safe to
-    /// join onto `imagesDir`. Rejects separators, `..`, and absolute paths.
     static func isSafeImageFileName(_ name: String) -> Bool {
         !name.isEmpty
             && name != "." && name != ".."
@@ -46,23 +44,16 @@ final class DataPortService {
         self.imageStore = imageStore
     }
 
-    // MARK: - Export
-
     func exportBackup(to destinationURL: URL, items: [ClipboardItem]) throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("clipbackup-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
-        // Write history JSON
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let historyData = try encoder.encode(items)
         try historyData.write(to: tempDir.appendingPathComponent("history.json"))
 
-        // Copy image files. `fileName` comes from imported/decoded data, so it
-        // must never be trusted as a path component: a crafted backup could
-        // carry "../../.ssh/id_rsa" and exfiltrate arbitrary readable files
-        // into the export zip.
         let imagesDir = tempDir.appendingPathComponent("images")
         try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
         for item in items {
@@ -72,7 +63,6 @@ final class DataPortService {
             }
         }
 
-        // Create zip archive
         let zipTask = Process()
         zipTask.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         zipTask.arguments = ["-c", "-k", "--sequesterRsrc", tempDir.path, destinationURL.path]
@@ -83,14 +73,11 @@ final class DataPortService {
         }
     }
 
-    // MARK: - Import
-
     func importBackup(from sourceURL: URL, existingItems: [ClipboardItem], mode: ImportMode) throws -> [ClipboardItem] {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("clipimport-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
-        // Extract zip
         let unzipTask = Process()
         unzipTask.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         unzipTask.arguments = ["-x", "-k", sourceURL.path, tempDir.path]
@@ -100,7 +87,6 @@ final class DataPortService {
             throw DataPortError.importFailed("ditto exited with status \(unzipTask.terminationStatus)")
         }
 
-        // Find history.json (may be nested in a subdirectory)
         let historyURL = try findFile(named: "history.json", in: tempDir)
         guard let historyURL else {
             throw DataPortError.invalidArchive
@@ -108,9 +94,6 @@ final class DataPortService {
 
         let historyData = try Data(contentsOf: historyURL)
         var importedItems = try JSONDecoder().decode([ClipboardItem].self, from: historyData)
-        // Imported metadata is untrusted: drop imageFileName values that
-        // reference anything outside the images store (path traversal), and
-        // de-duplicate UUIDs so downstream `uniqueKeys` maps can't trap.
         var seenIDs = Set<UUID>()
         importedItems = importedItems.compactMap { item in
             guard seenIDs.insert(item.id).inserted else { return nil }
@@ -121,7 +104,6 @@ final class DataPortService {
             return item
         }
 
-        // Copy images into image store
         let imagesDir = historyURL.deletingLastPathComponent().appendingPathComponent("images")
         if FileManager.default.fileExists(atPath: imagesDir.path) {
             if let files = try? FileManager.default.contentsOfDirectory(at: imagesDir, includingPropertiesForKeys: nil) {
@@ -139,8 +121,6 @@ final class DataPortService {
             return mergeItems(existing: existingItems, imported: importedItems)
         }
     }
-
-    // MARK: - Helpers
 
     private func mergeItems(existing: [ClipboardItem], imported: [ClipboardItem]) -> [ClipboardItem] {
         var existingContentSet = Set(existing.filter { $0.type != .image }.map(\.content))
@@ -174,10 +154,6 @@ final class DataPortService {
         return nil
     }
 
-    // MARK: - CSV Export
-
-    /// Export clipboard history as a UTF-8 CSV file.
-    /// Columns: timestamp, type, content, source_app, is_pinned, ocr_text
     func exportCSV(to url: URL, items: [ClipboardItem]) throws {
         let df = ISO8601DateFormatter()
         var lines: [String] = ["timestamp,type,content,source_app,is_pinned,ocr_text"]
@@ -193,9 +169,6 @@ final class DataPortService {
         try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
     }
 
-    // MARK: - Markdown Export
-
-    /// Export clipboard history as a Markdown table.
     func exportMarkdown(to url: URL, items: [ClipboardItem]) throws {
         let df = DateFormatter()
         df.dateStyle = .short
@@ -219,11 +192,6 @@ final class DataPortService {
         try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
     }
 
-    // MARK: - Maccy Import
-
-    /// Import text items from Maccy's CoreData-backed SQLite database.
-    /// Typical location: ~/Library/Containers/org.p0deje.Maccy/Data/Library/
-    ///                   Application Support/Maccy/Storage.sqlite
     func importMaccy(from dbURL: URL, existingItems: [ClipboardItem], mode: ImportMode) throws -> [ClipboardItem] {
 #if canImport(SQLite3)
         var db: OpaquePointer?
@@ -233,7 +201,6 @@ final class DataPortService {
         }
         defer { sqlite3_close(db) }
 
-        // Verify the Maccy CoreData schema
         var chk: OpaquePointer?
         let hasTable = sqlite3_prepare_v2(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='ZHISTORYITEM'", -1, &chk, nil) == SQLITE_OK
             && sqlite3_step(chk) == SQLITE_ROW
@@ -254,7 +221,6 @@ final class DataPortService {
             guard let cStr = sqlite3_column_text(stmt, 0) else { continue }
             let title = String(cString: cStr)
             guard !title.isEmpty else { continue }
-            // CoreData stores dates as NSTimeInterval since 2001-01-01 (same as Swift Date reference date)
             let rawDate = sqlite3_column_double(stmt, 1)
             let timestamp = rawDate > 0 ? Date(timeIntervalSinceReferenceDate: rawDate) : Date()
             let useCount  = max(0, Int(sqlite3_column_int(stmt, 2)))
@@ -271,10 +237,6 @@ final class DataPortService {
 #endif
     }
 
-    // MARK: - Alfred Import
-
-    /// Import text items from Alfred's clipboard SQLite database.
-    /// Typical location: ~/Library/Application Support/Alfred/Databases/clipboard.alfdb
     func importAlfred(from dbURL: URL, existingItems: [ClipboardItem], mode: ImportMode) throws -> [ClipboardItem] {
 #if canImport(SQLite3)
         var db: OpaquePointer?
@@ -322,14 +284,8 @@ final class DataPortService {
     }
 }
 
-// MARK: - CSV escape helper
-
 extension String {
-    /// Wraps the string in double-quotes and escapes internal quotes if needed for CSV.
     var csvEscaped: String {
-        // Neutralize spreadsheet formula injection: clipboard content is
-        // attacker-influenceable, and a cell beginning with = + - @ or a tab
-        // would execute as a formula when the export opens in Excel/Numbers.
         let sanitized: String
         if let first = unicodeScalars.first,
            first == "=" || first == "+" || first == "-" || first == "@" || first == "\t" || first == "\r" {

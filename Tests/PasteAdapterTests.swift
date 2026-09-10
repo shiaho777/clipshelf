@@ -2,9 +2,7 @@ import XCTest
 @testable import ClipShelf
 
 final class PasteAdapterTests: XCTestCase {
-    
-    // MARK: - MarkdownAdapter
-    
+
     func testMarkdownAdapterFormatsURL() {
         let adapter = MarkdownAdapter()
         let result = adapter.adapt("https://www.swift.org/documentation", type: .text)
@@ -37,8 +35,6 @@ final class PasteAdapterTests: XCTestCase {
         XCTAssertTrue(adapter.targetBundleIDs.contains("md.obsidian"))
     }
     
-    // MARK: - TerminalAdapter
-    
     func testTerminalAdapterEscapesDangerousChars() {
         let adapter = TerminalAdapter()
         let result = adapter.adapt("echo $HOME", type: .text)
@@ -63,8 +59,6 @@ final class PasteAdapterTests: XCTestCase {
         XCTAssertTrue(adapter.targetBundleIDs.contains("com.googlecode.iterm2"))
         XCTAssertTrue(adapter.targetBundleIDs.contains("dev.warp.Warp-Stable"))
     }
-    
-    // MARK: - MessagingAdapter (replaces former SlackAdapter)
     
     func testMessagingAdapterWrapsMultiLineCodeForSlack() {
         let adapter = MessagingAdapter()
@@ -91,8 +85,6 @@ final class PasteAdapterTests: XCTestCase {
         XCTAssertTrue(adapter.targetBundleIDs.contains("com.tinyspeck.slackmacgap"))
     }
     
-    // MARK: - PasteAdapterManager
-    
     func testManagerReturnsPayloadForMatchingApp() {
         let manager = PasteAdapterManager.shared
         let result = manager.adaptedPayload(for: "com.microsoft.VSCode", content: "https://swift.org", type: .text)
@@ -108,12 +100,9 @@ final class PasteAdapterTests: XCTestCase {
     
     func testManagerReturnsNilWhenContentUnchanged() {
         let manager = PasteAdapterManager.shared
-        // MarkdownAdapter won't change plain text
         let result = manager.adaptedPayload(for: "com.microsoft.VSCode", content: "just text", type: .text)
         XCTAssertNil(result)
     }
-
-    // MARK: - PasteAdapterUtils
 
     func testLooksLikeCodeDetectsSwift() {
         XCTAssertTrue(PasteAdapterUtils.looksLikeCode("func hello() {\n    return 1\n}"))
@@ -143,8 +132,6 @@ final class PasteAdapterTests: XCTestCase {
         XCTAssertEqual(PasteAdapterUtils.shellEscape("it's"), "'it'\\''s'")
     }
 
-    // MARK: - Merged TerminalAdapter targets
-
     func testTerminalAdapterIncludesHyper() {
         let adapter = TerminalAdapter()
         XCTAssertTrue(adapter.targetBundleIDs.contains("co.zeit.hyper"))
@@ -159,8 +146,6 @@ final class PasteAdapterTests: XCTestCase {
         let adapter = TerminalAdapter()
         XCTAssertTrue(adapter.targetBundleIDs.contains("com.github.wez.wezterm"))
     }
-
-    // MARK: - MessagingAdapter
 
     func testMessagingAdapterWrapsMultiLineCodeInTripleBackticks() {
         let adapter = MessagingAdapter()

@@ -4,8 +4,6 @@ import XCTest
 final class AppStoragePathsTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        // defaultStorageDirectory() memoizes the migration as one-shot per process;
-        // reset so each test exercises the real migration path.
         AppStoragePaths.resetMigrationMemoization()
     }
 

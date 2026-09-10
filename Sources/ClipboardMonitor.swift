@@ -14,14 +14,10 @@ struct CapturedContent {
     let kind: Kind
     let sourceBundleID: String?
     let sourceAppName: String?
-    /// True when the content originates from a system screenshot or screen recording
-    /// (`⌘⇧3`, `⌘⇧4`, `⌘⇧5`). Used by the UI to show a badge and group screenshots.
     var isScreenshot: Bool = false
 }
 
 extension Notification.Name {
-    /// Posted by SnippetExpansionMonitor before it writes to the pasteboard.
-    /// ClipboardMonitor listens for this and skips the next change-count tick.
     static let clipboardSuppressCapture = Notification.Name("ClipboardSuppressCapture")
 }
 
@@ -41,13 +37,7 @@ final class ClipboardMonitor {
 
     var onCapture: ((CapturedContent) -> Void)?
     var excludedBundleIDs: Set<String> = []
-    /// Pending suppressions (snippet expansion writes twice per expansion:
-    /// the snippet itself and the delayed restore). A simple Bool was consumed
-    /// by the first changed tick, letting the second write be captured as a
-    /// duplicate history entry — and swallowing a genuine user copy that
-    /// landed between the two writes.
     private var suppressionsRemaining = 0
-    /// When true, the next pasteboard change is skipped (used to suppress snippet-expansion writes).
     var suppressNextCapture: Bool {
         get { suppressionsRemaining > 0 }
         set { suppressionsRemaining = max(0, suppressionsRemaining + (newValue ? 1 : -1)) }
@@ -69,8 +59,6 @@ final class ClipboardMonitor {
     init(pasteboard: NSPasteboard = .general) {
         self.pasteboard = pasteboard
     }
-
-    // MARK: - Lifecycle
 
     func start() {
         lastChangeCount = pasteboard.changeCount
@@ -98,12 +86,9 @@ final class ClipboardMonitor {
         }
     }
 
-    /// Call after programmatically writing to the pasteboard so the monitor doesn't recapture it.
     func acknowledgeChangeCount() {
         lastChangeCount = pasteboard.changeCount
     }
-
-    // MARK: - Timer
 
     private func scheduleTimer(interval: TimeInterval) {
         timer?.invalidate()
@@ -119,8 +104,6 @@ final class ClipboardMonitor {
         guard abs(monitorInterval - interval) > 0.01 else { return }
         scheduleTimer(interval: interval)
     }
-
-    // MARK: - Tick
 
     private func tick() {
         switch checkClipboard() {
@@ -142,10 +125,6 @@ final class ClipboardMonitor {
         }
     }
 
-    // MARK: - App Activation Boost
-
-    /// When the user switches apps, a copy is likely imminent.
-    /// Temporarily boost to active cadence so we capture it promptly.
     private func observeAppActivation() {
         appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -165,14 +144,10 @@ final class ClipboardMonitor {
         currentAppName = frontApp?.localizedName
     }
 
-    // MARK: - Clipboard Check
-
     @discardableResult
     func checkClipboard() -> CheckOutcome {
         guard pasteboard.changeCount != lastChangeCount else { return .noChange }
         lastChangeCount = pasteboard.changeCount
-        // Swallow snippet-expansion pasteboard writes. Both the expansion write
-        // and the delayed restore must be consumed.
         if suppressionsRemaining > 0 {
             suppressionsRemaining -= 1
             return .ignored
@@ -214,10 +189,6 @@ final class ClipboardMonitor {
                         onCapture?(CapturedContent(kind: .text(content: string), sourceBundleID: bundleID, sourceAppName: appName))
                         return .captured
                     } else if string.count < lastContent.count {
-                        // Shrinking copy (e.g. copying one word out of a URL
-                        // just copied): it's a deliberate new copy, not an
-                        // editor autosave artifact. Previously it was dropped
-                        // here, silently losing the item.
                         lastContent = string
                         lastAddTime = now
                         onCapture?(CapturedContent(kind: .text(content: string), sourceBundleID: bundleID, sourceAppName: appName))
@@ -248,16 +219,7 @@ final class ClipboardMonitor {
             }
         }
 
-        // System screenshots (`⌘⇧3/4`) may also place image data directly on the
-        // pasteboard (without a file URL). We can't definitively detect this,
-        // but we check if the source is the system screenshot service.
         if let capturedImage = captureImageData() {
-            // The system screenshot service has bundle ID "com.apple.screencapture".
-            // When the user uses ⌘⇧3/4 and the screenshot is saved to clipboard,
-            // the source app is typically the one that was frontmost (not the
-            // screenshot service itself), so we can't rely on bundleID here.
-            // Instead, we check if the pasteboard has the screenshot annotation
-            // UTI that macOS adds to screenshot captures.
             let isScreenshot = Self.hasScreenshotMetadata(pasteboard: pasteboard)
             onCapture?(CapturedContent(kind: capturedImage, sourceBundleID: bundleID, sourceAppName: appName, isScreenshot: isScreenshot))
             return .captured
@@ -302,36 +264,22 @@ final class ClipboardMonitor {
         return Data(referencing: mutableData)
     }
 
-    // MARK: - Screenshot Detection
-
-    /// Returns true when `path` looks like a macOS screenshot or screen recording file.
-    /// macOS names these "Screenshot 2024-01-15 at 10.30.00.png" or
-    /// "Screen Recording 2024-01-15 at 10.30.00.mov" on the Desktop by default.
     private static func isScreenshotPath(_ path: String) -> Bool {
         let url = URL(fileURLWithPath: path)
         let name = url.lastPathComponent
         let lowerName = name.lowercased()
-        // English prefixes — compare in lowercase.
         let englishPrefixes = ["screenshot", "screen recording", "screen shot"]
         if englishPrefixes.contains(where: { lowerName.hasPrefix($0) }) { return true }
-        // Chinese prefixes — compare directly (lowercased doesn't affect CJK).
         let chinesePrefixes = ["截屏", "屏幕录制", "屏幕快照"]
         if chinesePrefixes.contains(where: { name.hasPrefix($0) }) { return true }
         return false
     }
 
-    /// Returns true when the pasteboard content has macOS screenshot metadata.
-    /// macOS screenshots captured via ⌘⇧3/4 may include special UTIs like
-    /// `com.apple.pasteboard.promised-file-url` or the screenshot annotation type.
-    /// Also checks for the `org.nspasteboard.ConcealedType` which password managers
-    /// use (we DON'T want to flag those as screenshots).
     private static func hasScreenshotMetadata(pasteboard: NSPasteboard) -> Bool {
         guard let types = pasteboard.types else { return false }
         for type in types {
             let raw = type.rawValue
-            // macOS screenshot annotations
             if raw.contains("com.apple.screenshot") || raw.contains("screenshot") { return true }
-            // Promised file URL (screenshot dragged to clipboard)
             if raw == "com.apple.pasteboard.promised-file-url" { return true }
         }
         return false

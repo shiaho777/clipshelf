@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// The "Updates" block on the About page, shared by the in-panel settings and
-/// the standalone settings window. Neutral styling to match the rest of the
-/// settings UI: secondary text for status, one action per state, no icons.
 struct UpdateSectionView: View {
     @ObservedObject private var checker = UpdateChecker.shared
     @ObservedObject private var lang = LanguageManager.shared

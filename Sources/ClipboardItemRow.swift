@@ -7,10 +7,6 @@ import UniformTypeIdentifiers
 enum ClipboardDragSession {
     static var sourceItemID: UUID?
     static var isActive = false
-    /// When the session began; a session stuck longer than this (cancelled
-    /// drag with no mouse-up observed) is treated as dead. Without expiry,
-    /// `isActive == true` made the main panel's outside-click dismiss ignore
-    /// every click until relaunch.
     static var startedAt: Date?
 
     private static let staleThreshold: TimeInterval = 15
@@ -27,7 +23,6 @@ enum ClipboardDragSession {
         startedAt = nil
     }
 
-    /// True when `isActive` and the session has not obviously gone stale.
     static var isAlive: Bool {
         guard isActive else { return false }
         if let startedAt, Date().timeIntervalSince(startedAt) > staleThreshold {
@@ -38,31 +33,17 @@ enum ClipboardDragSession {
     }
 }
 
-/// Tracks which row the pointer is over without touching any SwiftUI @State.
-/// Writing hover state into the list's @State re-rendered the whole list every
-/// time the pointer crossed a row boundary — during a scroll the pointer is
-/// stationary while rows move underneath it, so that fired continuously and
-/// read as "responsive but not silky". The list consults the tracker only when
-/// a key press (Space) actually needs to know the hovered row.
 @MainActor
 final class RowHoverTracker {
     static let shared = RowHoverTracker()
     private(set) var itemID: UUID?
 
     func set(_ id: UUID?) {
-        // Guard against no-op writes: during a scroll the pointer sits still
-        // while rows move under it, so onHover fires with the same id (or
-        // alternating nil) on every row crossing. Assigning a `let` property
-        // unconditionally still pays the @MainActor hop + KVO per call.
         guard itemID != id else { return }
         itemID = id
     }
 }
 
-// MARK: - Source App Icon (cached)
-
-/// Small app icon for the row metadata line. Resolves via NSWorkspace and
-/// caches per bundleID — lookup hits disk, never do it per render uncached.
 struct SourceAppIcon: View {
     let bundleID: String?
     var size: CGFloat = 12
@@ -95,11 +76,6 @@ struct SourceAppIcon: View {
     }
 }
 
-// MARK: - Secret Masking for list previews
-
-/// Masks secret-looking substrings in short list previews so API keys pasted
-/// from a terminal don't sit in plaintext in the panel. Full content is still
-/// available via preview/edit/unlock — this only affects the 50-char row text.
 enum SecretMasker {
     private static let patterns: [String] = [
         #"sk-[A-Za-z0-9_\-]{8,}"#,
@@ -117,8 +93,6 @@ enum SecretMasker {
         patterns.compactMap { try? NSRegularExpression(pattern: $0) }
     }
 
-    /// Long single-token strings with mixed letters+digits (e.g. pasted tokens
-    /// without a known prefix) — mask the middle, keep prefix/suffix for ID.
     private static func maskLongToken(_ token: String) -> String? {
         let t = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.contains(" "), !t.contains("\n"), t.count >= 20, t.count <= 256 else { return nil }
@@ -128,15 +102,11 @@ enum SecretMasker {
         return String(t.prefix(3)) + "••••••" + String(t.suffix(2))
     }
 
-    /// Per-content memo. The mask verdict for a given 50-char preview never
-    /// changes, but rows re-evaluate body on hover/focus/recycle — without a
-    /// cache, 8 regex passes run on every one of those re-renders.
     private static let maskCache: NSCache<NSString, NSString> = {
         let c = NSCache<NSString, NSString>()
         c.countLimit = 2_048
         return c
     }()
-    /// Sentinel for "content produced no mask" — NSCache can't store nil.
     private static let noMaskSentinel: NSString = "\u{1}"
 
     private static func maskMatch(_ match: String) -> String {
@@ -145,8 +115,6 @@ enum SecretMasker {
         return String(t.prefix(3)) + "••••••" + String(t.suffix(2))
     }
 
-    /// Returns a masked copy when secret-looking content is found, else nil.
-    /// Operates on short previews only — cheap enough to call from row body.
     static func masked(_ text: String) -> String? {
         let key = text as NSString
         if let hit = maskCache.object(forKey: key) {
@@ -174,8 +142,6 @@ enum SecretMasker {
             }
         }
         if !didMask, let single = maskLongToken(result) {
-            // Only auto-mask single-token rows (API key pastes). Multi-word
-            // prose that happens to contain a long word stays readable.
             let words = result.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
             if words.count == 1 { result = single; didMask = true }
         }
@@ -198,14 +164,8 @@ struct ClipboardItemRow: View {
     var isSelected: Bool = false
     var onSelect: (() -> Void)? = nil
     var highlightIndices: Set<Int>? = nil
-    // Use LanguageManager.shared directly instead of @ObservedObject to avoid
-    // every row subscribing to language changes — language only changes at app
-    // startup or via Settings, not during scrolling.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var lang = LanguageManager.shared
-    /// Whether this sensitive item has been unlocked in the current panel session.
-    /// Managed by the parent view (MenuBarView) via `unlockedItemIDs` so the state
-    /// survives LazyVStack row recycling when the user scrolls.
     var isUnlocked: Bool = false
     var onUnlock: (() -> Void)? = nil
     var onReorder: ((UUID, Bool) -> Void)? = nil
@@ -213,22 +173,14 @@ struct ClipboardItemRow: View {
     @State private var loadedImage: NSImage?
     @State private var isHovered: Bool = false
     @State private var isDropTargeted: Bool = false
-    /// Auto-masked secrets (non-sensitive items that look like keys) can be
-    /// revealed per-row with the eye button. Resets on row recycle — safe default.
     @State private var isSecretRevealed: Bool = false
 
-    /// Per-content memo for the code verdict. `looksLikeCode` runs ~30
-    /// substring scans over the text; running it uncached in body made every
-    /// hover / recycle re-render cost scale with paste size.
     private static let codeVerdictCache: NSCache<NSString, NSNumber> = {
         let c = NSCache<NSString, NSNumber>()
         c.countLimit = 2_048
         return c
     }()
 
-    /// Synchronous code verdict, cached per content. The previous async task
-    /// delivered it one frame after first render, so the `< >` badge popped in
-    /// late and nudged the line's layout mid-scroll.
     private static func isCodeContent(_ content: String) -> Bool {
         let key = content as NSString
         if let hit = codeVerdictCache.object(forKey: key) { return hit.boolValue }
@@ -237,11 +189,6 @@ struct ClipboardItemRow: View {
         return verdict
     }
 
-    /// Synchronously-resolved list thumbnail from ImageCache's warm path only
-    /// (memory; never disk or decode). A cold cache returns nil and the async
-    /// task below fills the row in, exactly as before — but a warm row draws
-    /// its photo on the very first frame instead of placeholder → image one
-    /// beat later, which during a fast scroll reads as a dropped frame.
     private var cachedRowThumbnail: NSImage? {
         guard item.type == .image else { return nil }
         let fileName = imageURL?.lastPathComponent ?? item.imageFileName
@@ -249,8 +196,6 @@ struct ClipboardItemRow: View {
         return ImageCache.shared.cachedThumbnail(for: fileName, maxPixelSize: 160)
     }
 
-    /// Second line under the content: app icon + app name + relative time +
-    /// use count. Shared by text/image/file rows so rows scan uniformly.
     @ViewBuilder
     private var metaLine: some View {
         HStack(spacing: 4) {
@@ -274,9 +219,6 @@ struct ClipboardItemRow: View {
     }
 
     var body: some View {
-        // Only evaluate detection for types that render detection-driven UI;
-        // image rows never show color swatches, URL or folder affordances, and
-        // ContentDetector.analyze() is non-trivial for text content.
         let detection = (item.type == .text || item.type == .richText) ? item.detection : .empty
         
         HStack(spacing: 8) {
@@ -286,14 +228,11 @@ struct ClipboardItemRow: View {
                     .foregroundColor(.orange.opacity(0.75))
             }
             
-            // Color swatch with format cycling
             if detection.color != nil {
                 ColorSwatchView(detection: detection)
             }
             
-            // Content
             if item.isSensitive && !isUnlocked {
-                // ── Sensitive lock placeholder ──────────────────
                 HStack(spacing: 8) {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 12))
@@ -329,10 +268,6 @@ struct ClipboardItemRow: View {
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 5) {
-                            // Only surface OCR text that reads as real words;
-                            // stylized-UI screenshots OCR into glyph noise that
-                            // made image rows look broken — those get the plain
-                            // "[Image]" label (full OCR stays searchable).
                             if let ocr = OCRTextQuality.usableText(from: item.ocrText) {
                                 Text(String(ocr.prefix(60)))
                                     .font(.system(size: 12))
@@ -418,8 +353,6 @@ struct ClipboardItemRow: View {
 
             Spacer(minLength: 4)
 
-            // Action buttons — visible on hover AND keyboard focus so
-            // keyboard-first users discover pin/preview without a mouse.
             if isHovered || isFocused {
                 HStack(spacing: 4) {
                     if (item.type == .text || item.type == .richText)
@@ -488,9 +421,6 @@ struct ClipboardItemRow: View {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
                 isHovered = hovering
             }
-            // Hover highlight stays local to the row; the ID lands in the
-            // tracker so Space-to-preview still knows the hovered row without
-            // re-rendering the list on every hover change.
             RowHoverTracker.shared.set(hovering ? item.id : nil)
         }
         .overlay(alignment: .topTrailing) {
@@ -518,7 +448,6 @@ struct ClipboardItemRow: View {
                         )
                         onUnlock?()
                     } catch {
-                        // Authentication failed or was cancelled — stay locked
                     }
                 }
                 return
@@ -531,7 +460,6 @@ struct ClipboardItemRow: View {
             }
         }
         .contextMenu {
-            // Sensitive items: show Unlock when locked, normal actions when unlocked.
             if item.isSensitive && !isUnlocked {
                 Button {
                     Task { @MainActor in
@@ -603,7 +531,7 @@ struct ClipboardItemRow: View {
             Button(role: .destructive) { onDelete() } label: {
                 Label(lang.l("action.delete"), systemImage: "trash")
             }
-            } // end sensitive else
+            }
         }
         .onDrag {
             ClipboardDragSession.begin(id: item.id)
@@ -615,10 +543,6 @@ struct ClipboardItemRow: View {
             handleDrop(providers)
         }
         .task(id: item.id) {
-            // Code verdict and cache-hit thumbnails are resolved synchronously
-            // in body now; this task only fills in a cold-cache image (first
-            // time the thumbnail is seen this session), so the vast majority
-            // of rows never wait a frame for content.
             guard item.type == .image, loadedImage == nil, cachedRowThumbnail == nil, image == nil else { return }
             let fileName = imageURL?.lastPathComponent ?? item.imageFileName
             guard let fileName else { return }
@@ -700,9 +624,6 @@ struct ClipboardItemRow: View {
         let resolvedImage = loadedImage ?? image ?? loadImageForDrag()
         let provider: NSItemProvider
 
-        // Prefer a concrete image object so rich-text / image destinations can accept it.
-        // Also attach PNG/TIFF data and a real image-file representation for apps that
-        // only accept filesystem images (Finder, Mail, many chat clients).
         if let img = resolvedImage {
             provider = NSItemProvider(object: img)
             registerImageDataRepresentations(for: img, fileURL: fileURL, on: provider)
@@ -737,7 +658,6 @@ struct ClipboardItemRow: View {
                 return nil
             }
             if typeIdentifier != UTType.png.identifier {
-                // Many destinations still prefer PNG even when the source is JPEG/HEIC.
                 if let tiff = img.tiffRepresentation,
                    let rep = NSBitmapImageRep(data: tiff),
                    let png = rep.representation(using: .png, properties: [:]) {
@@ -775,7 +695,6 @@ struct ClipboardItemRow: View {
             fileOptions: [],
             visibility: .all
         ) { completion in
-            // Coordinated copies are safer for sandboxed receivers than in-place loads.
             completion(stableURL, true, nil)
             return nil
         }
@@ -921,10 +840,6 @@ struct ClipboardItemRow: View {
             return Text(text)
                 .foregroundColor(.primary.opacity(0.95))
         }
-        // Only highlight within the first 50 chars (displayText is already truncated).
-        // Build contiguous runs (highlighted vs plain) instead of appending per
-        // character — Text + Text allocation cost scales with run count, not
-        // character count.
         let chars = Array(text)
         var result: Text?
         var i = 0
@@ -966,7 +881,6 @@ private struct RowActionButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Color Swatch with Format Cycling
 struct ColorSwatchView: View {
     let detection: ContentDetectionResult
     @State private var currentFormat: ColorFormat = .hex
@@ -1004,8 +918,6 @@ struct ColorSwatchView: View {
     }
 }
 
-// MARK: - Shared tick publisher
-// Internal so MenuBarView can subscribe once and pass `now` down to rows.
 class TimeTickPublisher {
     static let shared = TimeTickPublisher()
     let publisher: AnyPublisher<Date, Never>
@@ -1016,10 +928,6 @@ class TimeTickPublisher {
     }
 }
 
-// MARK: - TimeAgoText
-/// Renders a relative-time label.
-/// Self-subscribes to TimeTickPublisher so time updates only re-render this
-/// tiny label — not the entire parent view or list.
 struct TimeAgoText: View {
     let date: Date
     @ObservedObject private var lang = LanguageManager.shared
@@ -1034,9 +942,6 @@ struct TimeAgoText: View {
             }
     }
 
-    /// Formatter construction is expensive (locale resolution), and every row
-    /// rebuilt its own on every 15s tick. Cache per language — the language
-    /// only changes at app startup or via Settings, so two entries max.
     private static let formatterLock = NSLock()
     private static var formatterCache: [String: RelativeDateTimeFormatter] = [:]
 

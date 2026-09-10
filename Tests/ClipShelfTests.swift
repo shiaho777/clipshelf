@@ -45,8 +45,6 @@ final class ClipboardManagerTests: XCTestCase {
         XCTFail("Timed out waiting for OCR completion", file: file, line: line)
     }
 
-    // MARK: - addTextItem
-
     func testAddTextItem() {
         let mgr = makeManager()
         mgr.addTextItem(content: "hello")
@@ -127,8 +125,6 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertEqual(mgr.items.first?.content, "duplicate")
     }
 
-    // MARK: - addRichTextItem
-
     func testAddRichTextItem() {
         let mgr = makeManager()
         let rtf = "rtf data".data(using: .utf8)!
@@ -147,8 +143,6 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertEqual(mgr.items.count, 1)
         XCTAssertEqual(mgr.items.first?.rtfData, rtf2, "Newer RTF data should replace older")
     }
-
-    // MARK: - addImageItem
 
     func testAddImageItem() {
         let mgr = makeManager()
@@ -201,13 +195,11 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertEqual(mgr.item(byID: nextQueued.id)?.ocrText, "recognized")
     }
 
-    // MARK: - togglePin
-
     func testTogglePin() {
         let mgr = makeManager()
         mgr.addTextItem(content: "a")
         mgr.addTextItem(content: "b")
-        let itemB = mgr.items.first!  // "b" is newest, at top
+        let itemB = mgr.items.first!
         mgr.togglePin(itemB)
         XCTAssertTrue(mgr.items[0].isPinned, "Pinned item should be at top")
         XCTAssertEqual(mgr.items[0].content, "b")
@@ -221,8 +213,6 @@ final class ClipboardManagerTests: XCTestCase {
         mgr.togglePin(mgr.items[0])
         XCTAssertFalse(mgr.items[0].isPinned)
     }
-
-    // MARK: - deleteItem
 
     func testDeleteItem() {
         let mgr = makeManager()
@@ -243,8 +233,6 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertTrue(imageStore.deletedFileNames.contains(fileName))
     }
 
-    // MARK: - clearAll
-
     func testClearAllKeepsPinned() {
         let mgr = makeManager()
         mgr.addTextItem(content: "keep")
@@ -262,8 +250,6 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertTrue(mgr.items.isEmpty)
     }
 
-    // MARK: - trimToLimit
-
     func testTrimToLimit() {
         prefsStore.maxHistoryCount = 3
         let mgr = makeManager()
@@ -271,7 +257,6 @@ final class ClipboardManagerTests: XCTestCase {
             mgr.addTextItem(content: "item \(i)")
         }
         XCTAssertEqual(mgr.items.count, 3)
-        // Newest items should survive
         XCTAssertEqual(mgr.items[0].content, "item 5")
         XCTAssertEqual(mgr.items[2].content, "item 3")
     }
@@ -283,21 +268,17 @@ final class ClipboardManagerTests: XCTestCase {
         mgr.togglePin(mgr.items[0])
         mgr.addTextItem(content: "mid")
         mgr.addTextItem(content: "new")
-        // pinned "old" + 1 unpinned = 2 total
         XCTAssertEqual(mgr.items.count, 2)
         XCTAssertTrue(mgr.items[0].isPinned)
         XCTAssertEqual(mgr.items[1].content, "new")
     }
 
-    // MARK: - cleanupOldItems
-
     func testCleanupOldItems() {
         let mgr = makeManager()
-        // Insert an item with old timestamp
         let oldItem = ClipboardItem(content: "old", type: .text, timestamp: Date().addingTimeInterval(-8 * 86400))
         let newItem = ClipboardItem(content: "new", type: .text)
         mgr.items = [newItem, oldItem]
-        mgr.autoCleanupInterval = 7  // 7 days
+        mgr.autoCleanupInterval = 7
         mgr.cleanupOldItems()
         XCTAssertEqual(mgr.items.count, 1)
         XCTAssertEqual(mgr.items[0].content, "new")
@@ -334,8 +315,6 @@ final class ClipboardManagerTests: XCTestCase {
             "unpinned old"
         ])
     }
-
-    // MARK: - search
 
     func testSearchSingleKeyword() {
         let mgr = makeManager()
@@ -389,8 +368,6 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertEqual(item.filePaths, paths)
     }
 
-    // MARK: - copyToClipboard useCount
-
     func testCopyToClipboardIncrementsUseCount() {
         let mgr = makeManager()
         mgr.addTextItem(content: "test")
@@ -401,21 +378,16 @@ final class ClipboardManagerTests: XCTestCase {
         XCTAssertEqual(mgr.items[0].useCount, 2)
     }
 
-    // MARK: - Persistence
-
     func testSaveCalledOnAdd() {
         let mgr = makeManager()
         let initialCount = historyStore.saveCallCount
         mgr.addTextItem(content: "test")
-        // Give debounce time to fire
         let expectation = expectation(description: "persist")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { expectation.fulfill() }
         wait(for: [expectation], timeout: 2)
         XCTAssertGreaterThan(historyStore.saveCallCount, initialCount)
     }
 
-
-    // MARK: - Hot Window
 
     func testHotWindowLimitsMemoryItems() {
         prefsStore.hotWindowCount = 500
@@ -519,8 +491,6 @@ final class ClipboardManagerTests: XCTestCase {
         mgr.addTextItem(content: "4")
         XCTAssertEqual(mgr.items.count, 3)
         XCTAssertEqual(mgr.items.map(\.content), ["4", "3", "2"])
-        // Deletes/upserts land on a background persistence queue; give it a
-        // moment so the synchronous itemCount check doesn't race (CI flake).
         mgr.flushPendingWrites()
         XCTAssertEqual(try historyStore.itemCount(), 3)
     }

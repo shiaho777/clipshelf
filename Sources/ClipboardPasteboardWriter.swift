@@ -5,9 +5,6 @@ enum ClipboardPasteboardWriter {
     struct WriteResult {
         let smartPasteDescription: String?
         let retainedProviders: [NSPasteboardItemDataProvider]
-        /// False when nothing could be placed on the pasteboard (e.g. image
-        /// payload unavailable). The pasteboard is left untouched in that
-        /// case, so callers must not treat this as a successful copy.
         let didWrite: Bool
     }
 
@@ -22,10 +19,6 @@ enum ClipboardPasteboardWriter {
     ) -> WriteResult {
         var retainedProviders: [NSPasteboardItemDataProvider] = []
         var smartPasteDescription: String?
-
-        // Resolve everything that can fail *before* clearing the pasteboard.
-        // Clearing first and failing later would destroy the user's current
-        // clipboard content while writing nothing in its place.
 
         if autoPaste, smartPasteEnabled, item.type != .image,
            let bundleID = targetBundleID,
@@ -67,10 +60,6 @@ enum ClipboardPasteboardWriter {
                 }
                 retainedProviders.append(provider)
                 pasteboard.clearContents()
-                // writeObjects has no direct success flag, but the write is only
-                // good if the pasteboard actually now contains our type with our
-                // change count bumped. Verify via contents to catch a failed
-                // clearContents/writeObjects before callers fire Cmd+V.
                 pasteboard.writeObjects([pasteboardItem])
                 let wrote = pasteboard.types?.contains(payload.type) == true
                 guard wrote else {

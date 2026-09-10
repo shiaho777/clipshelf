@@ -59,7 +59,6 @@ final class RuleStoreImportExportTests: XCTestCase {
 
         let data = try Data(contentsOf: exportURL)
         let json = String(data: data, encoding: .utf8) ?? ""
-        // Pretty printed JSON contains newlines and indentation
         XCTAssertTrue(json.contains("\n"))
         XCTAssertTrue(json.contains("  "))
     }

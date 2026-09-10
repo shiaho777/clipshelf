@@ -3,10 +3,7 @@ import XCTest
 
 final class SnippetVariableTests: XCTestCase {
 
-    // Fixed reference date: 2024-01-15 10:30:00 UTC
     private let refDate = Date(timeIntervalSince1970: 1_705_314_600)
-
-    // MARK: - {{date:format}}
 
     func testDateFormatExpansion() {
         let result = SnippetVariableEngine.expand(
@@ -30,8 +27,6 @@ final class SnippetVariableTests: XCTestCase {
         XCTAssertEqual(result.cursorBackCount, 0)
     }
 
-    // MARK: - {{time:format}}
-
     func testTimeFormatExpansion() {
         let result = SnippetVariableEngine.expand(
             template: "{{time:HH:mm}}",
@@ -42,8 +37,6 @@ final class SnippetVariableTests: XCTestCase {
         XCTAssertEqual(result.cursorBackCount, 0)
     }
 
-    // MARK: - {{datetime}}
-
     func testDatetimeExpansion() {
         let result = SnippetVariableEngine.expand(
             template: "{{datetime}}",
@@ -51,11 +44,8 @@ final class SnippetVariableTests: XCTestCase {
             now: refDate
         )
         XCTAssertFalse(result.expanded.contains("{{datetime}}"))
-        // ISO 8601 output always contains the year
         XCTAssertTrue(result.expanded.contains("2024"))
     }
-
-    // MARK: - {{clipboard}}
 
     func testClipboardExpansion() {
         let result = SnippetVariableEngine.expand(
@@ -76,11 +66,7 @@ final class SnippetVariableTests: XCTestCase {
         XCTAssertEqual(result.expanded, "")
     }
 
-    // MARK: - {{cursor}}
-
     func testCursorPlacementMiddle() {
-        // "SELECT * FROM {{cursor}} WHERE id = 1;"
-        // After cursor:  " WHERE id = 1;" = 14 chars
         let result = SnippetVariableEngine.expand(
             template: "SELECT * FROM {{cursor}} WHERE id = 1;",
             clipboardText: "",
@@ -109,8 +95,6 @@ final class SnippetVariableTests: XCTestCase {
         XCTAssertEqual(result.cursorBackCount, 0)
     }
 
-    // MARK: - {{random:N}}
-
     func testRandomLength() {
         let result = SnippetVariableEngine.expand(
             template: "{{random:12}}",
@@ -131,8 +115,6 @@ final class SnippetVariableTests: XCTestCase {
         XCTAssertTrue(result.expanded.unicodeScalars.allSatisfy { alphanumeric.contains($0) })
     }
 
-    // MARK: - No variables
-
     func testNoVariablesPassThrough() {
         let result = SnippetVariableEngine.expand(
             template: "plain text snippet",
@@ -142,8 +124,6 @@ final class SnippetVariableTests: XCTestCase {
         XCTAssertEqual(result.expanded, "plain text snippet")
         XCTAssertEqual(result.cursorBackCount, 0)
     }
-
-    // MARK: - Combinations
 
     func testMultipleVariables() {
         let result = SnippetVariableEngine.expand(

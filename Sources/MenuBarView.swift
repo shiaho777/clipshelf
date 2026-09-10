@@ -68,8 +68,6 @@ struct MenuBarView: View {
     @ObservedObject var snippetManager: SnippetManager
     @ObservedObject var lang = LanguageManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Which in-panel page is showing. Settings renders inside the panel —
-    /// no separate window — toggled by the footer gear button.
     private enum PanelPage {
         case history
         case settings
@@ -88,8 +86,6 @@ struct MenuBarView: View {
     @State private var filteredItems: [ClipboardItem] = []
     @State private var isMultiSelectMode = false
     @State private var selectedItemIDs: Set<UUID> = []
-    /// Selection click order, so Compare diffs in the order the user picked
-    /// rather than list order (which inverted old/new).
     @State private var selectionOrder: [UUID] = []
     @State private var showAppFilters = false
     @State private var filterByCurrentApp = false
@@ -101,20 +97,14 @@ struct MenuBarView: View {
     @State private var lastSeenFirstItemID: UUID?
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     @State private var diffPair: DiffPair?
-    /// IDs of sensitive items the user has unlocked in the current panel session.
-    /// Cleared when the panel is shown so unlock state doesn't persist across opens.
     @State private var unlockedItemIDs: Set<UUID> = []
-    /// Cached so the computed value isn't rebuilt on every view re-render (hover, animation, etc.).
     @State private var cachedAppFilters: [FilterType] = []
-    /// Total number of items that match the current search + filter, including those not yet shown.
     @State private var totalMatchCount: Int = 0
     @State private var hasMoreFilteredItems = false
-    /// How many matching items are currently loaded into `filteredItems`.
     @State private var visibleCount: Int = Self.renderPageSize
     @FocusState private var isSearchFocused: Bool
     @Namespace private var filterAnimation
     var onOpenSettings: () -> Void = {}
-    /// Callback to open Settings directly on the Rules \u2192 Test section.
     var onOpenRulesTest: () -> Void = {}
     @ObservedObject private var pasteQueue = PasteQueue.shared
     @EnvironmentObject private var frontmostApp: FrontmostAppInfo
@@ -131,12 +121,9 @@ struct MenuBarView: View {
         return filters
     }
 
-    /// Maximum items shown in one page; tapping "load more" adds another page.
     private static let renderPageSize = 200
 
     private func updateFilteredItems() {
-        // Warm thumbnails for the head of the list on every recompute so image
-        // rows scrolling into view resolve from memory, not a frame late.
         defer { clipboardManager.prefetchThumbnails(for: Array(filteredItems.prefix(40))) }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         var page: [ClipboardItem] = []
@@ -165,8 +152,6 @@ struct MenuBarView: View {
         }
         hasMoreFilteredItems = searched.count > visibleCount
         page.append(contentsOf: searched.prefix(visibleCount))
-        // When results are capped, the count is a lower bound — show it as such
-        // ("%d+ found") instead of presenting an exact total that's wrong.
         totalMatchCount = hasMoreFilteredItems ? page.count + 1 : page.count
         filteredItems = page
         var map: [UUID: Set<Int>] = [:]
@@ -207,7 +192,6 @@ struct MenuBarView: View {
         pasteItem(filteredItems[idx], asPlainText: asPlainText)
     }
 
-    /// Gate paste through BiometricAuth for sensitive items; pass through immediately for non-sensitive.
     private func pasteItem(_ item: ClipboardItem, asPlainText: Bool = false) {
         if item.isSensitive {
             Task { @MainActor in
@@ -217,7 +201,6 @@ struct MenuBarView: View {
                     )
                     clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
                 } catch {
-                    // Auth failed or was cancelled — do nothing
                 }
             }
         } else {
@@ -258,8 +241,6 @@ struct MenuBarView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(merged, forType: .string)
-        // The merged text is added explicitly below; acknowledge the write so
-        // the monitor doesn't ALSO capture it (duplicate entry).
         clipboardManager.acknowledgePasteboardWrite()
         clipboardManager.addTextItem(content: merged)
         isMultiSelectMode = false
@@ -280,17 +261,12 @@ struct MenuBarView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(result, forType: .string)
-        // The app just wrote the pasteboard itself; without acknowledging, the
-        // next poll recaptured this write as a new history entry.
         clipboardManager.acknowledgePasteboardWrite()
         clipboardManager.addTextItem(content: result)
     }
 
     @ViewBuilder
     private func historyRow(index: Int, item: ClipboardItem) -> some View {
-        // imageFileURL and filePaths are only consumed by image / fileURL rows;
-        // skip the path construction (and file-path JSON parsing) for the far
-        // more common text rows.
         let isImageRow = item.type == .image
         let isFileURLRow = item.type == .fileURL
         let imageURL = isImageRow ? clipboardManager.imageFileURL(for: item) : nil
@@ -348,10 +324,6 @@ struct MenuBarView: View {
             },
             filePaths: rowFilePaths
         )
-        // Rows already observe LanguageManager for their localized strings, so
-        // keying identity by lang.revision only forced every row to be torn
-        // down and rebuilt (dropping row @State and re-decoding thumbnails)
-        // when the language changed. Identity is just the item id now.
         .id(item.id)
     }
 
@@ -374,11 +346,6 @@ struct MenuBarView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
-        // Warm the thumbnail cache for the visible page before the user ever
-        // scrolls: image rows can then resolve their photo synchronously on
-        // their first frame (see ClipboardItemRow.cachedRowThumbnail), instead
-        // of drawing a placeholder and swapping the photo in one frame later —
-        // the swap is what reads as a dropped frame mid-scroll.
         .task(id: filteredItems.map(\.id)) {
             let pairs: [(String, URL)] = filteredItems.compactMap { item in
                 guard item.type == .image,
@@ -465,9 +432,6 @@ struct MenuBarView: View {
             }
             .padding(.trailing, 14)
 
-            // Single compact filter strip: static filters + current app + recent
-            // apps in one horizontal scroll. Previously this was two stacked rows
-            // (static + expandable app list) costing ~90px before the list.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
                     ForEach(FilterType.staticCases, id: \.self) { type in
@@ -522,9 +486,6 @@ struct MenuBarView: View {
 
             Divider().opacity(0.3)
 
-            // MARK: Paste Queue panel
-            // Shown inline above the history list when the queue is active
-            // OR when stack mode is enabled (even with empty queue).
             if pasteQueue.isActive || pasteQueue.stackMode {
                 VStack(spacing: 0) {
                     HStack {
@@ -542,10 +503,8 @@ struct MenuBarView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        // Toggle stack mode
                         Button {
                             if pasteQueue.stackMode && pasteQueue.remaining > 0 {
-                                // Ask before clearing remaining items.
                                 showStackModeClearConfirm = true
                             } else {
                                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
@@ -615,9 +574,6 @@ struct MenuBarView: View {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78)) {
                             showOnboarding = false
                         }
-                        // Mark complete even when dismissed via the dismiss
-                        // path — otherwise the tutorial reappears the next
-                        // time the list becomes empty (e.g. after Clear All).
                         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     }
                     .frame(maxWidth: .infinity)
@@ -680,10 +636,6 @@ struct MenuBarView: View {
                     HStack(spacing: 6) {
                         if selectedItemIDs.count == 2 {
                             Button(lang.l("multiselect.compare")) {
-                                // Order by selection time, not list order — the
-                                // diff always shows list-order "old vs new",
-                                // which inverted the diff when the user picked
-                                // newer-first. Track click order.
                                 let ordered = selectionOrder.compactMap { id in
                                     filteredItems.first { $0.id == id }
                                 }
@@ -708,7 +660,6 @@ struct MenuBarView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    // Show match count when searching, total count otherwise.
                     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if query.isEmpty {
                         Text(lang.l("items.count", clipboardManager.items.count))
@@ -745,7 +696,6 @@ struct MenuBarView: View {
                         BottomBarButton(icon: "checklist", tint: .accentColor, label: lang.l("multiselect.title")) { toggleMultiSelect() }
                             .help(lang.l("multiselect.title"))
                             .accessibilityLabel(lang.l("multiselect.title"))
-                        // Settings button with context menu for destructive / secondary actions.
                         BottomBarButton(icon: "gearshape", label: lang.l("settings.title"), action: {
                             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                                 page = .settings
@@ -755,10 +705,6 @@ struct MenuBarView: View {
                             .accessibilityLabel(lang.l("settings.title"))
                             .contextMenu {
                                 Button {
-                                    // The gear only calls AppDelegate.openSettings
-                                    // (showPanel + tab request) — it does not
-                                    // switch this view's internal page, so the
-                                    // tab request must be applied here too.
                                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                                         page = .settings
                                     }
@@ -788,14 +734,14 @@ struct MenuBarView: View {
             filterType = .all
             filterByCurrentApp = false
             showAppFilters = false
-            unlockedItemIDs = []  // Reset unlock state on every panel open
+            unlockedItemIDs = []
             cachedAppFilters = buildAppFilters(from: clipboardManager.items)
             updateFilteredItems()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isSearchFocused = true
             }
         }
-        .onChange(of: showAppFilters) { _ in /* no-op, just triggers re-layout */ }
+        .onChange(of: showAppFilters) { _ in }
         .onChange(of: searchText) { _ in
             searchDebounceTask?.cancel()
             searchGeneration &+= 1
@@ -818,10 +764,8 @@ struct MenuBarView: View {
         .onChange(of: filterType) { newFilter in
             focusedIndex = nil
             visibleCount = Self.renderPageSize
-            // If user switched to a non-current-app filter, reset the toggle
             if filterByCurrentApp {
                 if case .app(let bid, _) = newFilter, bid == frontmostApp.bundleID {
-                    // still filtering by current app — keep toggle on
                 } else {
                     filterByCurrentApp = false
                 }
@@ -834,10 +778,6 @@ struct MenuBarView: View {
                 let items = clipboardManager.items
                 let needsFilterRebuild: Bool
                 if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    // Cheap change detection: count + head ID + the visible page's
-                    // IDs compared directly. Building a joined UUID string per
-                    // revision was O(visibleCount) string allocations on every
-                    // history mutation even when nothing visible changed.
                     var orderChanged = items.count != lastSeenItemCount
                     if !orderChanged, items.first?.id != lastSeenFirstItemID {
                         orderChanged = true
@@ -857,9 +797,6 @@ struct MenuBarView: View {
                     cachedAppFilters = buildAppFilters(from: items)
                     updateFilteredItems()
                 } else {
-                    // Same count and order, but content may have been edited in
-                    // place (EditSheet → updateItemContent). Refresh the visible
-                    // rows' data without rebuilding the whole filtered list.
                     filteredItems = items
                 }
                 lastSeenItemCount = items.count

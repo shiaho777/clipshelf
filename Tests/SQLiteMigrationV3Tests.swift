@@ -16,8 +16,6 @@ final class SQLiteMigrationV3Tests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Schema version
-
     func testCurrentSchemaVersion() {
         XCTAssertEqual(SQLiteHistoryStore.currentSchemaVersion, 6)
     }
@@ -25,8 +23,6 @@ final class SQLiteMigrationV3Tests: XCTestCase {
     func testMigrationsCount() {
         XCTAssertEqual(SQLiteHistoryStore.migrations.count, 6)
     }
-
-    // MARK: - Fresh database
 
     func testFreshDatabaseLoadsWithoutError() throws {
         let store = SQLiteHistoryStore(storageDirectory: tmpDir)
@@ -39,8 +35,6 @@ final class SQLiteMigrationV3Tests: XCTestCase {
         XCTAssertTrue(items.isEmpty)
     }
 
-    // MARK: - Basic roundtrip
-
     func testBasicItemRoundtrip() throws {
         let store = SQLiteHistoryStore(storageDirectory: tmpDir)
         let item = ClipboardItem(content: "hello sqlite", type: .text)
@@ -49,8 +43,6 @@ final class SQLiteMigrationV3Tests: XCTestCase {
         XCTAssertEqual(loaded.count, 1)
         XCTAssertEqual(loaded.first?.content, "hello sqlite")
     }
-
-    // MARK: - v3 columns
 
     func testSensitiveItemRoundtrip() throws {
         let store = SQLiteHistoryStore(storageDirectory: tmpDir)
@@ -73,10 +65,7 @@ final class SQLiteMigrationV3Tests: XCTestCase {
         XCTAssertEqual(sensitiveCount, 1)
     }
 
-    // MARK: - Idempotency
-
     func testMigrationsAreIdempotent() throws {
-        // Opening two stores against the same DB file must not corrupt it
         let store1 = SQLiteHistoryStore(storageDirectory: tmpDir)
         let item = ClipboardItem(content: "idempotent", type: .text)
         _ = try store1.saveItems([item])
@@ -85,8 +74,6 @@ final class SQLiteMigrationV3Tests: XCTestCase {
         let loaded = try store2.loadItems()
         XCTAssertEqual(loaded.first?.content, "idempotent")
     }
-
-    // MARK: - FTS search (v2 column)
 
     func testFTSSearchReturnsMatchingID() throws {
         let store = SQLiteHistoryStore(storageDirectory: tmpDir)

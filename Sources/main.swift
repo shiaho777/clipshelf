@@ -27,8 +27,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var clickMonitor: Any?
     private var pasteObserver: NSObjectProtocol?
     private var didPaste = false
-    /// Increments per paste attempt; stale timeout/observer callbacks from a
-    /// superseded attempt must not inject keystrokes.
     private var pasteGeneration: UInt64 = 0
     private var isPanelAnimating = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "App")
@@ -39,12 +37,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let defaultPanelSize = NSSize(width: WindowLayout.mainPanelSize.width, height: WindowLayout.mainPanelSize.height)
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Single-instance guard. The LaunchAgent fallback's `launchctl
-        // bootstrap` starts the job immediately (RunAtLoad), and double
-        // launches happen from Finder too; two menu-bar instances would fight
-        // over the pasteboard and status item. Hand off to the existing
-        // instance and exit quietly. Skipped under unit tests, where another
-        // copy of the app may legitimately be running on this machine.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             let bundleID = Bundle.main.bundleIdentifier ?? "com.nicebro.ClipShelf"
             let currentApp = NSRunningApplication.current
@@ -76,10 +68,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        // The bordered-but-transparent titlebar renders traffic-light buttons;
-        // without this NSPanel keeps them disabled (visible but not clickable).
-        // Close routes to hidePanel() so clicking ✕ hides the panel instead of
-        // terminating the app; Esc / hotkey / outside-click still work too.
         panel.isReleasedWhenClosed = false
         panel.standardWindowButton(.closeButton)?.isEnabled = true
         panel.standardWindowButton(.miniaturizeButton)?.isEnabled = false
@@ -93,15 +81,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.isFloatingPanel = true
         panel.minSize = minPanelSize
         panel.maxSize = maxPanelSize
-        // Vibrancy: full background material for the panel content area.
         if let contentView = panel.contentView {
-            // Apply a vibrant background that blurs the content behind the panel.
             let vibrantView = NSVisualEffectView(frame: contentView.bounds)
             vibrantView.material = .hudWindow
             vibrantView.blendingMode = .behindWindow
             vibrantView.state = .active
             vibrantView.autoresizingMask = [.width, .height]
-            // The hosting controller's view goes on top of the vibrancy view.
             let hostingView = NSHostingController(
                 rootView: MenuBarView(
                     clipboardManager: clipboardManager,
@@ -145,7 +130,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         registerGlobalHotKey()
 
-        // Start snippet text expansion monitor if enabled
         if UserDefaults.standard.object(forKey: "snippetExpansionEnabled") == nil {
             UserDefaults.standard.set(true, forKey: "snippetExpansionEnabled")
         }
@@ -154,7 +138,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             snippetExpansionMonitor?.start()
         }
 
-        // Observe queue changes to update status bar badge
         queueObserver = NotificationCenter.default.addObserver(
             forName: .init("PasteQueueChanged"), object: nil, queue: .main
         ) { [weak self] _ in self?.updateStatusBarBadge() }
@@ -162,7 +145,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             DispatchQueue.main.async { self?.updateStatusBarBadge() }
         }.store(in: &cancellables)
 
-        // Observe app-aware paste events and show a brief status-bar badge.
         clipboardManager.$lastSmartPasteDescription
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
@@ -172,9 +154,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
     
-    /// Show settings inside the main panel, optionally requesting a tab.
-    /// `tab`: 0=General, 1=Rules, 2=Sync, 3=About. The panel switches to its
-    /// embedded settings page — no separate window is created.
     func openSettings(tab: Int = 0) {
         if tab > 0 {
             UserDefaults.standard.set(tab, forKey: "_settingsRequestedTab")
@@ -221,9 +200,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func togglePanel() {
-        // Right-click on the status item shows a menu (Open / Settings / Quit)
-        // instead of toggling the panel. The button is configured with
-        // `sendAction(on: [.leftMouseUp, .rightMouseUp])` so both arrive here.
         if NSApp.currentEvent?.type == .rightMouseUp {
             if panel.isVisible { hidePanel() }
             statusItemController.popUpMenu()
@@ -236,9 +212,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// NSWindowDelegate close hook for the panel's ✕ button. Returning an
-    /// order-out instead of the default close keeps the panel object alive;
-    /// AppKit calls `windowShouldClose` before performing a real close.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender === panel else { return true }
         hidePanel()
@@ -247,35 +220,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showPanel() {
         guard let button = statusItemController.statusItem?.button, !isPanelAnimating else { return }
-        // Re-show while already visible (e.g. gear → "Test Rules" when the
-        // panel is open): just bring it front. Running the entrance animation
-        // again would install a SECOND global click monitor — the old one is
-        // only removed in hidePanel(), so every duplicate show leaked one
-        // monitor and each fired hidePanel once.
         guard !panel.isVisible else {
             panel.makeKeyAndOrderFront(nil)
             return
         }
         previousApp = NSWorkspace.shared.frontmostApplication
 
-        // Record frontmost app info for the "filter by current app" feature.
         FrontmostAppInfo.shared.bundleID = previousApp?.bundleIdentifier
         FrontmostAppInfo.shared.appName = previousApp?.localizedName
 
-        // Force-refresh clipboard so newly copied content appears immediately
         clipboardManager.forceRefreshClipboard()
-        // Enforce sensitive-item expiry immediately so TTL is honoured even
-        // if the background timer hasn't fired yet.
         clipboardManager.cleanupOldItems()
 
-        // Position below the status bar button
         let buttonRect = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) ?? .zero
         let panelSize = panel.frame.size
         let x = buttonRect.midX - panelSize.width / 2
         let y = buttonRect.minY - panelSize.height - 4
         panel.setFrameOrigin(NSPoint(x: x, y: y))
 
-        // Entrance animation: scale up from 0.96 + fade in, anchored at the top edge.
         panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -299,7 +261,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             guard let self, self.panel.isVisible else { return }
             if event.type == .leftMouseUp || event.type == .rightMouseUp {
                 if ClipboardDragSession.isActive {
-                    // End session after a short delay so an in-panel drop can still read source id.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         if NSEvent.pressedMouseButtons == 0 {
                             ClipboardDragSession.end()
@@ -308,10 +269,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
                 return
             }
-            // Keep the panel open during an active drag session so users can
-            // drop clipboard items into other apps. isAlive() expires stale
-            // sessions — a drag cancelled outside the panel used to leave
-            // isActive true forever, silently disabling outside-click dismiss.
             if ClipboardDragSession.isAlive || NSEvent.pressedMouseButtons != 0 { return }
             if !NSMouseInRect(NSEvent.mouseLocation, self.panel.frame, false) {
                 self.hidePanel()
@@ -323,12 +280,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard !isPanelAnimating else { return }
         isPanelAnimating = true
         savePanelSize(panel.frame.size)
-        // Remove click monitor immediately so the exit animation isn't interrupted.
         if let monitor = clickMonitor {
             NSEvent.removeMonitor(monitor)
             clickMonitor = nil
         }
-        // Exit animation: quick fade + slight scale down.
         let originalFrame = panel.frame
         let shrunkFrame = NSRect(
             x: originalFrame.midX - originalFrame.width * 0.48,
@@ -356,11 +311,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         clipboardManager.targetBundleID = targetApp.bundleIdentifier
 
         cleanupPasteObserver()
-        // Generation token: a second pasteAndClose before the first completes
-        // used to reset didPaste=false while the first call's 0.5s timeout was
-        // still pending — both the stale timeout and the new observer fired
-        // simulateCmdV, double-pasting. Each attempt owns a generation; stale
-        // callbacks check theirs and bail.
         pasteGeneration &+= 1
         let generation = pasteGeneration
         didPaste = false
@@ -383,14 +333,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         targetApp.activate(options: .activateIgnoringOtherApps)
 
-        // Timeout fallback
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self, !self.didPaste, self.pasteGeneration == generation else { return }
             self.didPaste = true
             self.cleanupPasteObserver()
-            // Inject Cmd+V only once the target app is actually frontmost.
-            // If activation failed, pasting would insert clipboard content —
-            // potentially sensitive — into whatever window happens to have focus.
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApp.processIdentifier else {
                 self.logger.warning("Paste target failed to activate; skipping fallback Cmd+V")
                 return
@@ -420,26 +366,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let item = pasteQueue.dequeueNext() else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
         clipboardManager.targetBundleID = previousApp?.bundleIdentifier
-        // Only fire Cmd+V when the clipboard write actually succeeded; a failed
-        // write (missing image file) would otherwise paste stale content.
         guard clipboardManager.copyToClipboard(item) else {
             updateStatusBarBadge()
             return
         }
         guard let targetApp = previousApp else { return }
-        // Simulate paste directly since app is already frontmost
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.simulateCmdV()
         }
     }
 
-    // MARK: - Quick Paste (cursor-anchored panel)
-
     func toggleQuickPaste() {
         if QuickPastePanel.shared.isVisible {
             QuickPastePanel.shared.hide()
         } else {
-            // Don't show if the main panel is open — would be confusing.
             if panel.isVisible { hidePanel() }
             previousApp = NSWorkspace.shared.frontmostApplication
             clipboardManager.targetBundleID = previousApp?.bundleIdentifier
@@ -449,10 +389,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     private func updateStatusBarBadge() {
         guard let button = statusItemController.statusItem?.button else { return }
-        // Don't fight the transient smart-paste badge: while it's showing, its
-        // own reset task will restore the correct state when done. Writing the
-        // queue icon here and having the badge reset wipe it left the status
-        // item showing the wrong state until the next queue event.
         guard !statusItemController.isShowingSmartPasteBadge else { return }
         if pasteQueue.stackMode {
             button.image = NSImage(
@@ -493,8 +429,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         _ = AXIsProcessTrustedWithOptions(options)
     }
     
-    // MARK: - URL Scheme
-    
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             guard url.scheme == "clipshelf" else { continue }
@@ -518,23 +452,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Termination can happen before launch completes (e.g. the
-        // single-instance guard), so nothing here may assume setup ran.
         if let panel, panel.isVisible { savePanelSize(panel.frame.size) }
         clipboardManager?.prepareForTermination()
     }
 
-    // MARK: - Launch at Login Self-Heal
-
-    /// Re-registers the login item when the stored preference says "on" but
-    /// the system registration is missing. App reinstalls, signature changes,
-    /// and system cleanup can silently drop login items, so without this the
-    /// app would stop launching at login even though the toggle stays on.
     private func restoreLaunchAtLoginIfNeeded() {
-        // The fallback service's isEnabled probe shells out to `launchctl
-        // print` and blocks until the subprocess exits — never run that on
-        // the main thread during launch. Nothing here needs to complete
-        // before the UI is up; the heal is idempotent.
         DispatchQueue.global(qos: .utility).async {
             let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "App")
             let service = LaunchAtLoginServiceFactory.defaultService()
@@ -548,8 +470,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
     }
-
-    // MARK: - Panel Size Persistence
 
     private func loadPanelSize() -> NSSize {
         let w = UserDefaults.standard.double(forKey: "panelWidth")

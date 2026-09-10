@@ -53,7 +53,6 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var sourceAppName: String?
     var isSensitive: Bool
     var expiresAt: Date?
-    /// True for system screenshots and screen recordings captured via `⌘⇧3/4/5`.
     var isScreenshot: Bool
     
     enum ItemType: String, Codable { case text, image, richText, fileURL }

@@ -52,18 +52,7 @@ final class VisionOCRService: OCRServiceProtocol {
     }
 }
 
-// MARK: - Candidate Confidence Filter
-
-/// Joins Vision's top candidates into the stored OCR string, dropping
-/// observations below a confidence floor. Stylized UI text (art fonts in
-/// music players, game HUDs, decorative glyphs) recognizes at low confidence
-/// and used to land in `ocrText` as glyph soup — polluting not just the list
-/// row but search and preview too, since the stored text was never filtered.
-/// Pure function over (string, confidence) tuples so it is unit-testable:
-/// VNRecognizedTextObservation cannot be constructed in tests.
 enum OCRCandidateFilter {
-    /// Observations below this Vision confidence are dropped. 0.5 keeps clear
-    /// rendered text (typically 0.8–1.0) while cutting art-font noise.
     static let minimumConfidence: Float = 0.5
 
     static func joinedText(from candidates: [(string: String, confidence: Float)]) -> String? {
@@ -76,10 +65,7 @@ enum OCRCandidateFilter {
     }
 }
 
-// MARK: - Async/Await Extension
-
 extension OCRServiceProtocol {
-    /// Async wrapper around the callback-based `recognizeText(in:completion:)`.
     func recognizeText(in imageData: Data) async -> String? {
         await withCheckedContinuation { continuation in
             recognizeText(in: imageData) { result in
@@ -89,15 +75,6 @@ extension OCRServiceProtocol {
     }
 }
 
-// MARK: - OCR Text Quality Gate
-
-/// Decides whether an image's OCR text is worth showing in list rows.
-/// Stylized UI text (music players, game HUDs, art fonts) OCRs into glyph
-/// soup like "e13· = 4 140₿ +J" — technically tokens, practically noise.
-/// A token only counts as a word when it is clean letters/digits (a few
-/// interior marks like ":" "/" "." allowed so times and paths qualify);
-/// rows fall back to the plain "[Image]" label below the word threshold.
-/// Display-only: the full OCR text stays stored for search and preview.
 enum OCRTextQuality {
     private static let allowedInteriorMarks: Set<Character> = [":", "/", ".", "-", "'", "@", "_"]
 

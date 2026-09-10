@@ -12,7 +12,6 @@ enum TextTransform: String, CaseIterable {
     case jsonFormat
     case base64Encode
     case base64Decode
-    // Developer tools (Phase 3)
     case jsonEscape
     case swiftStringLiteral
     case jsStringLiteral
@@ -94,8 +93,6 @@ enum TextTransform: String, CaseIterable {
         }
     }
 
-    // MARK: - Private helpers
-
     private static func formatJSON(_ input: String) -> String? {
         guard let data = input.data(using: .utf8) else { return nil }
         do {
@@ -108,11 +105,9 @@ enum TextTransform: String, CaseIterable {
     }
 
     private static func jsonEscapeString(_ input: String) -> String? {
-        // Wrap in array so JSONSerialization accepts a String value
         guard let data = try? JSONSerialization.data(withJSONObject: [input]),
               let json = String(data: data, encoding: .utf8),
               json.count >= 4 else { return nil }
-        // Strip surrounding [" ... "]
         let start = json.index(json.startIndex, offsetBy: 2)
         let end   = json.index(json.endIndex,   offsetBy: -2)
         guard start <= end else { return nil }
@@ -144,7 +139,6 @@ enum TextTransform: String, CaseIterable {
         for (entity, char) in namedEntities {
             result = result.replacingOccurrences(of: entity, with: char)
         }
-        // Numeric entities: &#NNN; and &#xHHH;
         if let regex = try? NSRegularExpression(pattern: "&#(\\d+);|&#x([0-9a-fA-F]+);") {
             let ns = result as NSString
             let matches = regex.matches(in: result, range: NSRange(location: 0, length: ns.length))

@@ -1,8 +1,6 @@
 import Foundation
 import AppKit
 
-// MARK: - Protocol & Payload
-
 struct PastePayload {
     let string: String?
     let rtf: Data?
@@ -11,30 +9,20 @@ struct PastePayload {
 
 protocol PasteAdapter {
     var targetBundleIDs: Set<String> { get }
-    /// Human-readable name shown in the app-aware paste status bar badge.
     var adapterName: String { get }
     func adapt(_ content: String, type: ClipboardItem.ItemType) -> PastePayload
 }
 
-// MARK: - Shared Utilities
-
 enum PasteAdapterUtils {
-    // MARK: Code detection
-
-    /// Returns true only when the text is very likely source code.
-    /// Explicitly rejects JSON/plist structures to avoid false positives.
     static func looksLikeCode(_ text: String) -> Bool {
         let lines = text.components(separatedBy: .newlines)
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        // Single-line content is never auto-wrapped as a code block.
         guard lines.count >= 2 else { return false }
 
-        // Bail out early for JSON / plist — these are data, not code.
         if isLikelyJSON(text) { return false }
 
         let lower = text.lowercased()
 
-        // Strong signals: any one match is sufficient.
         let strong = [
             "func ", "def ", "export ", "const ",
             "return ", "if (", "for (", "while (",
@@ -48,13 +36,11 @@ enum PasteAdapterUtils {
         ]
         if strong.contains(where: { lower.contains($0) }) { return true }
 
-        // Weak signals: require at least 3 co-occurring indicators.
         let weak = ["->", "=>", "//", "/*", "*/", "};", ":: "]
         let weakCount = weak.filter { text.contains($0) }.count
         return weakCount >= 3
     }
 
-    /// Returns true when the text is parseable JSON or looks like a JSON structure.
     static func isLikelyJSON(_ text: String) -> Bool {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (t.hasPrefix("{") && t.hasSuffix("}")) ||
@@ -62,10 +48,6 @@ enum PasteAdapterUtils {
         return (try? JSONSerialization.jsonObject(with: Data(t.utf8))) != nil
     }
 
-    /// Returns true when a single-line string looks like a code expression.
-    /// Used by MessagingAdapter to wrap brief code snippets in backticks.
-    /// Deliberately excludes `let ` and `var ` to avoid false-positives on
-    /// English prose like "let me know" or "var $100 increase".
     static func looksLikeSingleLineCode(_ text: String) -> Bool {
         guard !text.contains("\n") else { return false }
         if isLikelyJSON(text) { return false }
@@ -78,26 +60,17 @@ enum PasteAdapterUtils {
         return strong.contains(where: { lower.contains($0) })
     }
 
-    // MARK: Shell helpers
-
-    /// Does the text contain shell-special characters that need escaping?
     static func needsShellEscaping(_ text: String) -> Bool {
         let dangerChars: Set<Character> = ["$", "`", "\\", "!", "\"", "(", ")", "{", "}", "|", ";", "&", "<", ">"]
         return text.contains(where: { dangerChars.contains($0) })
     }
 
-    /// Wrap text in single quotes, escaping existing single quotes for safe shell paste.
     static func shellEscape(_ text: String) -> String {
         let escaped = text.replacingOccurrences(of: "'", with: "'\\''")
         return "'\(escaped)'"
     }
 }
 
-// MARK: - Markdown Adapter
-
-/// Targets: VSCode, Obsidian, Typora, iA Writer
-/// - URLs → `[domain](url)`
-/// - Multi-line code → wrapped in ```
 struct MarkdownAdapter: PasteAdapter {
     let adapterName = "Markdown"
     let targetBundleIDs: Set<String> = [
@@ -113,13 +86,11 @@ struct MarkdownAdapter: PasteAdapter {
         
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // URL → Markdown link
         if let url = URL(string: trimmed), let host = url.host, url.scheme?.hasPrefix("http") == true {
             let domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
             return PastePayload(string: "[\(domain)](\(trimmed))", rtf: nil, html: nil)
         }
         
-        // Multi-line content that looks like code → wrap in fences
         let lines = trimmed.components(separatedBy: .newlines)
         if lines.count >= 3, PasteAdapterUtils.looksLikeCode(trimmed) {
             return PastePayload(string: "```\n\(trimmed)\n```", rtf: nil, html: nil)
@@ -129,15 +100,6 @@ struct MarkdownAdapter: PasteAdapter {
     }
 }
 
-// MARK: - Terminal Adapter
-
-/// Targets: Terminal.app, iTerm2, Warp, Alacritty, kitty, Hyper, Rio, WezTerm
-/// Rules:
-///  - Multi-line content: never escape (could be a script intended for paste as-is)
-///  - Long content (>200 chars): never escape
-///  - Starts with "$ " or "% ": strip the prompt marker, pass through
-///  - Content that looks like code: pass through without escaping
-///  - Short single-line with shell-special chars: wrap in single quotes
 struct TerminalAdapter: PasteAdapter {
     let adapterName = "Terminal"
     let targetBundleIDs: Set<String> = [
@@ -156,17 +118,14 @@ struct TerminalAdapter: PasteAdapter {
 
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Multi-line: preserve as-is (user is pasting a script or block of text)
         guard !trimmed.contains("\n") else {
             return PastePayload(string: trimmed, rtf: nil, html: nil)
         }
 
-        // Long content: not a shell command, skip escaping
         guard trimmed.count <= 200 else {
             return PastePayload(string: trimmed, rtf: nil, html: nil)
         }
 
-        // Strip common shell prompt prefixes
         if trimmed.hasPrefix("$ ") {
             return PastePayload(string: String(trimmed.dropFirst(2)), rtf: nil, html: nil)
         }
@@ -174,12 +133,10 @@ struct TerminalAdapter: PasteAdapter {
             return PastePayload(string: String(trimmed.dropFirst(2)), rtf: nil, html: nil)
         }
 
-        // No dangerous characters — pass through unchanged
         guard PasteAdapterUtils.needsShellEscaping(trimmed) else {
             return PastePayload(string: trimmed, rtf: nil, html: nil)
         }
 
-        // Looks like a code expression, not a shell argument — don't quote it
         if PasteAdapterUtils.looksLikeCode(trimmed) {
             return PastePayload(string: trimmed, rtf: nil, html: nil)
         }
@@ -188,10 +145,6 @@ struct TerminalAdapter: PasteAdapter {
     }
 }
 
-// MARK: - Xcode Adapter
-
-/// Targets: Xcode
-/// - Strip rich text formatting — Xcode works best with plain text paste.
 struct XcodeAdapter: PasteAdapter {
     let adapterName = "Xcode"
     let targetBundleIDs: Set<String> = [
@@ -199,15 +152,10 @@ struct XcodeAdapter: PasteAdapter {
     ]
 
     func adapt(_ content: String, type: ClipboardItem.ItemType) -> PastePayload {
-        // Force plain text to avoid Xcode interpreting RTF attributes
         return PastePayload(string: content, rtf: nil, html: nil)
     }
 }
 
-// MARK: - Email Adapter
-
-/// Targets: Mail.app, Spark, Airmail, Mimestream
-/// - URLs → clickable HTML link
 struct EmailAdapter: PasteAdapter {
     let adapterName = "Email"
     let targetBundleIDs: Set<String> = [
@@ -229,11 +177,6 @@ struct EmailAdapter: PasteAdapter {
     }
 }
 
-// MARK: - Messaging Adapter
-
-/// Targets: Discord, Telegram, WhatsApp, Signal, Messages
-/// - Multi-line code → wrapped in ```
-/// - Single-line code → wrapped in `
 struct MessagingAdapter: PasteAdapter {
     let adapterName = "Messaging"
     let targetBundleIDs: Set<String> = [
@@ -242,7 +185,7 @@ struct MessagingAdapter: PasteAdapter {
         "net.whatsapp.WhatsApp",
         "org.whispersystems.signal-desktop",
         "com.apple.MobileSMS",
-        "com.tinyspeck.slackmacgap"  // Slack also fits messaging pattern
+        "com.tinyspeck.slackmacgap"
     ]
     
     func adapt(_ content: String, type: ClipboardItem.ItemType) -> PastePayload {
@@ -259,11 +202,6 @@ struct MessagingAdapter: PasteAdapter {
     }
 }
 
-// MARK: - Note-Taking Adapter
-
-/// Targets: Bear, Craft, Ulysses, Apple Notes, Notion, Joplin
-/// - URLs → `[domain](url)`
-/// - Multi-line code → wrapped in ```
 struct NoteAdapter: PasteAdapter {
     let adapterName = "Notes"
     let targetBundleIDs: Set<String> = [
@@ -290,10 +228,6 @@ struct NoteAdapter: PasteAdapter {
     }
 }
 
-// MARK: - iWork Adapter
-
-/// Targets: Pages, Numbers, Keynote
-/// - Always strip to plain text for clean paste.
 struct IWorkAdapter: PasteAdapter {
     let adapterName = "iWork"
     let targetBundleIDs: Set<String> = [
@@ -303,15 +237,10 @@ struct IWorkAdapter: PasteAdapter {
     ]
     
     func adapt(_ content: String, type: ClipboardItem.ItemType) -> PastePayload {
-        // Force plain text — iWork apps handle their own formatting
         return PastePayload(string: content, rtf: nil, html: nil)
     }
 }
 
-// MARK: - Plain Text Editor Adapter
-
-/// Targets: TextEdit, BBEdit, Sublime Text, Nova, CotEditor, Vim (MacVim)
-/// - Strip RTF to ensure clean plain text paste.
 struct PlainTextEditorAdapter: PasteAdapter {
     let adapterName = "Plain Text"
     let targetBundleIDs: Set<String> = [
@@ -338,20 +267,17 @@ struct PlainTextEditorAdapter: PasteAdapter {
     }
 }
 
-// MARK: - Paste Adapter Manager
-
 final class PasteAdapterManager {
     static let shared = PasteAdapterManager()
 
-    /// Bundle-ID → adapter mapping built once at init for O(1) lookup.
     private let adapterMap: [String: any PasteAdapter]
 
     init() {
         let allAdapters: [any PasteAdapter] = [
             MarkdownAdapter(),
-            TerminalAdapter(),       // includes Hyper, Rio, WezTerm
-            MessagingAdapter(),      // Discord, Telegram, WhatsApp, Signal, Messages, Slack
-            NoteAdapter(),           // Bear, Craft, Ulysses, Notes, Notion, Joplin
+            TerminalAdapter(),
+            MessagingAdapter(),
+            NoteAdapter(),
             EmailAdapter(),
             XcodeAdapter(),
             IWorkAdapter(),
@@ -366,18 +292,15 @@ final class PasteAdapterManager {
         adapterMap = map
     }
 
-    /// Returns the adapted payload if a matching adapter is found, nil otherwise.
     func adaptedPayload(for bundleID: String, content: String, type: ClipboardItem.ItemType) -> PastePayload? {
         guard let adapter = adapterMap[bundleID] else { return nil }
         let payload = adapter.adapt(content, type: type)
-        // Only return if the adapter actually changed the content
         if payload.string == content && payload.rtf == nil && payload.html == nil {
             return nil
         }
         return payload
     }
 
-    /// Returns the display name of the adapter that would apply to the given bundle ID, or nil.
     func adapterName(for bundleID: String) -> String? {
         adapterMap[bundleID]?.adapterName
     }

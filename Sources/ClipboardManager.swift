@@ -34,8 +34,6 @@ class ClipboardManager: ObservableObject {
             prefs.saveSmartPasteEnabled(smartPasteEnabled)
         }
     }
-    /// Set to the adapter name when Smart Paste transforms a copy; reset to nil after the consumer
-    /// (AppDelegate) handles it. Used to drive the status-bar feedback badge.
     @Published var lastSmartPasteDescription: String?
     @Published private(set) var historyRevision: UInt64 = 0
     @Published private(set) var totalStoredCount: Int = 0
@@ -78,17 +76,11 @@ class ClipboardManager: ObservableObject {
     private let historyIndex = ClipboardHistoryIndex()
     private var ocrQueue: ClipboardOCRQueue!
 
-    // Extracted sub-managers (facade pattern)
     let imageManager: ClipboardImageManager
     private let prefs: ClipboardPreferencesManager
     private var ingestPipeline: ClipboardIngestPipeline!
     private var captureDispatcher: ClipboardCaptureDispatcher!
     private var isInitializing = true
-    /// IDs of items the user deleted in this session. Guards against a stale
-    /// SQLite row (surviving a lost incremental delete) being resurrected by
-    /// `resolveItemIncludingColdStorage`. Kept bounded by dropping the oldest
-    /// third rather than replacing wholesale — replacing re-admitted up to
-    /// 5,000 deleted ids and made "permanently deleted" items readable again.
     private var deletedIDTombstones: Set<UUID> = []
     private var suppressItemsPublish = false
 
@@ -175,8 +167,6 @@ class ClipboardManager: ObservableObject {
             let removedIDs = Set(removed.map(\.id))
             removeIDsFromIndexes(removedIDs)
             ocrQueue?.remove(ids: ids)
-            // Evict deleted items' vectors; the cache is otherwise unbounded
-            // and grows ~2KB per text item for the process lifetime.
             for id in removedIDs {
                 embeddingCache.removeValue(forKey: id)
             }
@@ -338,9 +328,6 @@ class ClipboardManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            // Snapshot the referenced set at prune time, not at init: an init-
-            // time snapshot misses images captured in the first 5 seconds, and
-            // the pruner would delete their backing files as "orphans".
             let orphanRefs = Set(self.items.compactMap(\.imageFileName))
             self.imageManager.pruneOrphanedFiles(referencedFileNames: orphanRefs)
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -424,8 +411,6 @@ class ClipboardManager: ObservableObject {
         cleanupTimer?.invalidate()
     }
     
-    // MARK: - Monitor Callback
-    
     private func handleCapturedContent(_ content: CapturedContent) {
         ingestPipeline.handle(content)
     }
@@ -445,8 +430,6 @@ class ClipboardManager: ObservableObject {
         }
     }
     
-    // MARK: - Image Helpers (delegated to imageManager)
-    
     func resolvedImage(for item: ClipboardItem) -> NSImage? {
         imageManager.resolvedImage(for: item)
     }
@@ -455,11 +438,6 @@ class ClipboardManager: ObservableObject {
         imageManager.imageFileURL(for: item)
     }
 
-    /// Warms the in-memory thumbnail cache for image items about to be shown,
-    /// so list rows can resolve them synchronously on their first frame
-    /// (see `ImageCache.cachedThumbnail`). Cache hits short-circuit inside
-    /// `thumbnailData`, so calling this on every list update costs little;
-    /// actual disk reads / decodes run off the main actor.
     func prefetchThumbnails(for items: [ClipboardItem], limit: Int = 40) {
         let pairs: [(fileName: String, url: URL)] = items.prefix(limit).compactMap { item in
             guard item.type == .image,
@@ -476,8 +454,6 @@ class ClipboardManager: ObservableObject {
             }
         }
     }
-    
-    // MARK: - Preferences (delegated to prefs)
     
     private func loadExcludedBundleIDs() {
         if let stored = prefs.loadExcludedBundleIDs() {
@@ -526,8 +502,6 @@ class ClipboardManager: ObservableObject {
         prefs.saveExcludedBundleIDs(cachedExcludedBundleIDs)
     }
     
-    // MARK: - Add Items
-
     private func insertionIndexForNewItem(isPinned: Bool) -> Int {
         if isPinned { return 0 }
         return min(max(0, cachedPinnedCount), items.count)
@@ -632,14 +606,6 @@ class ClipboardManager: ObservableObject {
         return insertNewHistoryItem(item, duplicateIDs: duplicateIDs)
     }
 
-    // MARK: - Actions
-
-    /// Called whenever `pasteboardDataProviders` changes. Replacing the array
-    /// drops our last strong reference to the PREVIOUS write's lazy providers;
-    /// if anyone then clears the pasteboard (snippet restore, preview copy,
-    /// color-format copy…), macOS asks the deallocated provider for data and
-    /// the image copy silently breaks. Release the old providers only AFTER
-    /// the pasteboard no longer advertises a lazily-provided image type.
     private func invalidateDataProvidersIfNeeded(oldValue: [NSPasteboardItemDataProvider]) {
         guard !oldValue.isEmpty else { return }
         if let types = pasteboard.types, types.contains(.png) || types.contains(.tiff) {
@@ -650,9 +616,6 @@ class ClipboardManager: ObservableObject {
         }
     }
 
-    /// Writes the item to the pasteboard. Returns false when nothing reached
-    /// the pasteboard (e.g. missing image data) — callers that auto-paste must
-    /// check this so a failed copy never Cmd+V's stale clipboard content.
     @discardableResult
     func copyToClipboard(_ item: ClipboardItem, autoPaste: Bool = false, asPlainText: Bool = false) -> Bool {
         let result = ClipboardPasteboardWriter.write(
@@ -670,8 +633,6 @@ class ClipboardManager: ObservableObject {
         if let description = result.smartPasteDescription {
             lastSmartPasteDescription = description
         }
-        // Nothing reached the pasteboard (e.g. missing image data): the change
-        // count is untouched, so don't acknowledge it or count this as a use.
         guard result.didWrite else { return false }
         incrementUseCount(for: item.id)
         monitor.acknowledgeChangeCount()
@@ -765,31 +726,18 @@ class ClipboardManager: ObservableObject {
         items[index].content = newContent
         updateIndexedItem(items[index], at: index)
         persistItemIncrementally(items[index])
-        // Spotlight holds the old content; without reindexing, search kept
-        // surfacing the pre-edit text. Also bump the history revision so the
-        // list's cheap change detection (count + head ID only) re-renders the
-        // edited row.
         SpotlightIndexService.shared.indexItem(items[index])
         noteHistoryMutation()
     }
-    
-    // MARK: - Refresh
-    
-    /// Force an immediate clipboard check. Call when the panel is shown
-    /// to ensure newly copied content appears without waiting for the next poll.
+
     func forceRefreshClipboard() {
         monitor.checkClipboard()
     }
 
-    /// Acknowledge a pasteboard write made by the app itself outside
-    /// `copyToClipboard` (transform results, merged multi-select, snippet
-    /// restore) so the monitor doesn't recapture it as a new history entry.
     func acknowledgePasteboardWrite() {
         monitor.acknowledgeChangeCount()
     }
     
-    // MARK: - Search
-
     func search(_ query: String, limit: Int? = nil, where predicate: ((ClipboardItem) -> Bool)? = nil) -> [ClipboardItem] {
         let store = historyStore
         return ClipboardSearchService.search(
@@ -808,9 +756,6 @@ class ClipboardManager: ObservableObject {
         )
     }
 
-    // MARK: - AppIntents helpers
-
-    /// Look up an item by its UUID without mutating state.
     func item(byID id: UUID) -> ClipboardItem? {
         if deletedIDTombstones.contains(id) { return nil }
         return itemByID[id]
@@ -834,7 +779,6 @@ class ClipboardManager: ObservableObject {
         ClipboardHistoryQueries.recentContents(from: items, limit: limit)
     }
 
-    /// Recent items as full models (used by AppIntents to filter sensitive).
     func recentItems(limit: Int) -> [ClipboardItem] {
         Array(items.prefix(max(0, min(limit, items.count))))
     }
@@ -848,15 +792,11 @@ class ClipboardManager: ObservableObject {
         deleteItem(item)
     }
 
-    /// Toggle the pin state of an item by UUID.
     func pinItem(byID id: UUID) {
         guard let item = itemByID[id] else { return }
         togglePin(item)
     }
     
-    // MARK: - Persistence
-
-    /// Compute and persist an NLEmbedding vector for a newly added item, then update the in-memory cache.
     private func scheduleEmbedding(for item: ClipboardItem) {
         guard ClipboardEmbeddingPolicy.isEligible(item),
               SemanticSearchService.shared.isAvailable,
@@ -998,21 +938,12 @@ class ClipboardManager: ObservableObject {
         }
     }
     
-    // MARK: - Smart Paste
-    
     private func loadSmartPasteEnabled() {
         if let v = prefs.loadSmartPasteEnabled() { smartPasteEnabled = v }
     }
-    
-    // MARK: - History Merge
 
     func mergeFetchedSyncItems(_ newItems: [ClipboardItem]) {
         guard !newItems.isEmpty else { return }
-        // Drop incoming ids already present (duplicate sync deliveries would
-        // otherwise double-count and desync the item index) and ids the user
-        // deleted. Then rebuild the pinned count: the merge reorders the
-        // array, so a stale cachedPinnedCount corrupts insertion indexing and
-        // trimming afterwards.
         let existingIDs = Set(items.map(\.id))
         var seenIncoming = Set<UUID>()
         let fresh = newItems.filter { item in
@@ -1032,11 +963,6 @@ class ClipboardManager: ObservableObject {
         noteHistoryMutation()
     }
 
-    /// Replace the in-memory history with an externally produced array
-    /// (backup/Maccy/Alfred import). Restores the pinned-first ordering
-    /// invariant and rebuilds every derived index so trim/dedupe/image
-    /// refcounting stay correct — assigning `items` directly left the index
-    /// stale and let `trimToLimit` delete pinned items.
     func replaceHistoryForImport(with merged: [ClipboardItem]) {
         let ordered = ClipboardHistoryOrdering.reorderedByPinState(merged)
         items = ordered.items
@@ -1049,8 +975,6 @@ class ClipboardManager: ObservableObject {
         noteHistoryMutation()
     }
 
-    // MARK: - Rules
-    
     private func loadRules() {
         do { ruleEngine.rules = try ruleStore.loadRules() }
         catch { logger.error("Failed to load rules: \(error.localizedDescription)") }

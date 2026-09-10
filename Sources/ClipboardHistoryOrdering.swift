@@ -168,9 +168,6 @@ enum ClipboardHistoryOrdering {
         return stampOrder(next)
     }
 
-    /// History is loaded with `ORDER BY is_pinned DESC, timestamp DESC`.
-    /// After a manual reorder, rewrite timestamps so the new visual order is stable
-    /// across saves/reloads while keeping relative spacing.
     static func stampOrder(_ items: [ClipboardItem]) -> [ClipboardItem] {
         guard !items.isEmpty else { return items }
         var next = items

@@ -41,7 +41,7 @@ final class ScriptRuleRunnerTests: XCTestCase {
     }
 
     func testSyntaxErrorReturnsNil() async {
-        let script = "function process(content { return content; }"  // missing )
+        let script = "function process(content { return content; }"
         let result = await runner.evaluate(script: script, content: "hello", sourceBundleID: nil)
         XCTAssertNil(result)
     }

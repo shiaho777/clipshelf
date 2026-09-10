@@ -15,8 +15,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Helpers
-
     private func makeItems(count: Int) -> [ClipboardItem] {
         (0..<count).map { i in
             ClipboardItem(
@@ -27,7 +25,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
         }
     }
 
-    /// Creates and populates a fresh SQLiteHistoryStore in its own subdirectory.
     private func populatedStore(count: Int) throws -> SQLiteHistoryStore {
         let dir = tempDir.appendingPathComponent("store-\(count)-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -54,8 +51,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
             .representation(using: .png, properties: [:]) ?? Data()
     }
 
-    // MARK: - FTS Benchmarks
-
     func testFTSSearchPerformance_1k() throws {
         let store = try populatedStore(count: 1_000)
         measure {
@@ -75,8 +70,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
         let results = store.searchFTS("keyword", limit: 200)
         XCTAssertEqual(results.count, 200)
     }
-
-    // MARK: - Fuzzy Search Fallback Benchmarks (comparison baseline)
 
     func testFuzzySearchFallback_1k() {
         let items = makeItems(count: 1_000)
@@ -119,8 +112,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
         XCTAssertTrue(page.hasMore)
         XCTAssertEqual(evaluated, 201)
     }
-
-    // MARK: - ClipboardManager Hot Path Benchmarks
 
     @MainActor
     func testManagerAddTextDedupPerformance_50k() {
@@ -233,8 +224,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
             ClipboardItem(
                 content: "local \(i)",
                 type: .text,
-                // All local items strictly older than the newest incoming item,
-                // so mergeFetchedSyncItems must place every incoming item on top.
                 timestamp: now.addingTimeInterval(-Double(i + 20))
             )
         })
@@ -388,8 +377,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
         XCTAssertLessThan(elapsed, 0.3)
     }
 
-    // MARK: - Export Benchmarks
-
     func testCSVExportPerformance_1k() {
         let items = makeItems(count: 1_000)
         let service = makeDataPortService()
@@ -407,8 +394,6 @@ final class PerformanceBenchmarkTests: XCTestCase {
             try? service.exportMarkdown(to: destURL, items: items)
         }
     }
-
-    // MARK: - FTS Unit Tests
 
     func testFTSMigrationProducesResults() throws {
         let store = SQLiteHistoryStore(storageDirectory: tempDir)
@@ -436,12 +421,9 @@ final class PerformanceBenchmarkTests: XCTestCase {
     func testFTSSanitizesMetacharacters() throws {
         let store = SQLiteHistoryStore(storageDirectory: tempDir)
         try store.saveItems([ClipboardItem(content: "safe content", type: .text)])
-        // These must not crash or throw
         _ = store.searchFTS("query:*-(unsafe)^")
         _ = store.searchFTS("\"quoted\" OR (AND)")
     }
-
-    // MARK: - CSV Export Unit Tests
 
     func testCSVExportHeaderAndRowCount() throws {
         let items = makeItems(count: 5)
@@ -478,12 +460,9 @@ final class PerformanceBenchmarkTests: XCTestCase {
 
         let csv = try String(contentsOf: destURL, encoding: .utf8)
         let lines = csv.components(separatedBy: "\n")
-        // is_pinned is the 5th column (0-indexed: 4); trailing comma from empty ocr_text
         XCTAssertTrue(lines[1].contains(",1,"), "Pinned row should have is_pinned=1")
         XCTAssertTrue(lines[2].contains(",0,"), "Unpinned row should have is_pinned=0")
     }
-
-    // MARK: - Markdown Export Unit Tests
 
     func testMarkdownExportContainsTableHeader() throws {
         let items = makeItems(count: 3)
@@ -509,10 +488,7 @@ final class PerformanceBenchmarkTests: XCTestCase {
         XCTAssertEqual(dataRows.count, count, "Markdown should contain one data row per item")
     }
 
-    // MARK: - Maccy Import Unit Tests
-
     func testMaccyImportRejectsNonMaccyDatabase() throws {
-        // Write a plain text file — not a valid Maccy CoreData SQLite DB
         let invalidDBURL = tempDir.appendingPathComponent("invalid.sqlite")
         try "not a sqlite database".write(to: invalidDBURL, atomically: true, encoding: .utf8)
 

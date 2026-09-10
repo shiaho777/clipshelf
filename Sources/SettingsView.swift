@@ -8,7 +8,6 @@ struct SettingsView: View {
     @ObservedObject var hotKeyManager = HotKeyManager.shared
     @StateObject private var settingsVM = SettingsViewModel()
     @State private var selectedTab = 0
-    /// Slide direction for the tab content transition (see body).
     @State private var forward = true
     @State private var lastTab = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,11 +15,8 @@ struct SettingsView: View {
     @State private var showExportSuccess = false
     @State private var showImportSuccess = false
     @State private var importExportError: String?
-    /// 0 = ZIP backup, 1 = CSV, 2 = Markdown. Persisted (matches the embedded panel).
     @AppStorage("settings.exportFormat") private var exportFormat = 0
     @State private var accessibilityTrusted = AXIsProcessTrusted()
-    /// Embedded mode (inside the main panel) hides the window-only header
-    /// handling and starts on the caller-chosen section.
     var initialTab: Int = 0
     var showsOwnHeader: Bool = true
 
@@ -47,9 +43,6 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .padding(.horizontal, 16)
-                // The settings window uses full-size content view, so content starts
-                // under the titlebar (28pt). 40pt clears it; at 12pt the segmented
-                // control's top 2pt was clipped by the traffic-light row.
                 .padding(.top, 40)
                 .padding(.bottom, 8)
             }
@@ -67,8 +60,6 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // Same tab-switch language as the embedded panel: directional
-            // slide + fade on the same spring instead of a hard cut.
             .id(selectedTab)
             .transition(contentTransition)
             .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78), value: selectedTab)
@@ -77,8 +68,6 @@ struct SettingsView: View {
                 lastTab = newValue
             }
         }
-        // Grouped forms paint their own opaque background by default; hide it
-        // so the window's HUD vibrancy shows through like on the main panel.
         .scrollContentBackground(.hidden)
         .accessibilityIdentifier("settingsView")
         .onAppear {
@@ -93,9 +82,6 @@ struct SettingsView: View {
             }
         }
     }
-    // MARK: - General Tab
-
-    /// Directional slide + fade shared with the embedded panel variant.
     private var contentTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
         return .asymmetric(
@@ -170,7 +156,6 @@ struct SettingsView: View {
                 Text(lang.l("settings.snippetExpansion.description"))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                // Show a quiet hint if expansion is enabled but Accessibility is not granted.
                 if UserDefaults.standard.bool(forKey: "snippetExpansionEnabled") && !accessibilityTrusted {
                     HStack {
                         Text(lang.l("snippet.accessibilityRequired"))
@@ -190,16 +175,12 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .id("settings-general-tab")
     }
-    // MARK: - Rules Tab
-
     private var rulesTab: some View {
         Form {
             RulesSettingsView(clipboardManager: clipboardManager)
         }
         .formStyle(.grouped)
     }
-
-    // MARK: - Sync Tab
 
     private var dataTab: some View {
         Form {
@@ -230,8 +211,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .id("settings-data-tab")
     }
-
-    // MARK: - About Tab
 
     private var aboutTab: some View {
         Form {
@@ -301,10 +280,6 @@ struct SettingsView: View {
         .id("settings-about-tab")
     }
 
-    // MARK: - Embedded Sections (in-panel settings)
-
-    /// Settings sections reused by `SettingsEmbeddedView`, which renders them
-    /// inside the main panel instead of a separate window.
     var embeddedSections: [some View] {
         [AnyView(generalTab), AnyView(rulesTab), AnyView(dataTab), AnyView(aboutTab)]
     }

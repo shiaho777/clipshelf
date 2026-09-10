@@ -25,7 +25,6 @@ final class JSONClipboardRuleStore: ClipboardRuleStore {
         }
         let data = try Data(contentsOf: fileURL)
         var rules = try decoder.decode([ClipboardRule].self, from: data)
-        // Ensure built-in rules always exist
         let existing = Set(rules.filter(\.isBuiltIn).map(\.name))
         for builtin in Self.builtInRules() where !existing.contains(builtin.name) {
             rules.append(builtin)
@@ -40,8 +39,6 @@ final class JSONClipboardRuleStore: ClipboardRuleStore {
         return true
     }
     
-    // MARK: - Import / Export
-
     func exportRules(to url: URL, rules: [ClipboardRule]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -52,7 +49,6 @@ final class JSONClipboardRuleStore: ClipboardRuleStore {
     func importRules(from url: URL) throws -> [ClipboardRule] {
         let data = try Data(contentsOf: url)
         var imported = try JSONDecoder().decode([ClipboardRule].self, from: data)
-        // Assign new IDs to avoid collisions, mark as non-built-in
         imported = imported.map { rule in
             var r = rule
             r = ClipboardRule(id: UUID(), name: r.name, isEnabled: r.isEnabled, isBuiltIn: false, trigger: r.trigger, actions: r.actions, order: r.order)
@@ -61,8 +57,6 @@ final class JSONClipboardRuleStore: ClipboardRuleStore {
         return imported
     }
 
-    // MARK: - Built-in Rules
-    
     static func builtInRules() -> [ClipboardRule] {
         [
             ClipboardRule(

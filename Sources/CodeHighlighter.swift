@@ -1,21 +1,11 @@
 import AppKit
 
-/// Lightweight, dependency-free syntax highlighter for the clipboard preview.
-///
-/// Uses a token-based approach with language-agnostic keyword sets covering
-/// 30+ languages well enough for at-a-glance code identification in a preview panel.
-/// For full-fidelity highlighting the user should paste into their editor.
 enum CodeHighlighter {
 
-    // MARK: - Language Detection
-
-    /// A best-effort guess at the source language of `text`.
-    /// Returns `nil` when the text does not look like code.
     static func detectLanguage(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        // Shebang → shell / script
         if trimmed.hasPrefix("#!") {
             if trimmed.contains("python") { return "python" }
             if trimmed.contains("ruby") { return "ruby" }
@@ -23,25 +13,18 @@ enum CodeHighlighter {
             return "shell"
         }
 
-        // XML / HTML
         if trimmed.hasPrefix("<?xml") { return "xml" }
         if trimmed.hasPrefix("<!DOCTYPE html") || (trimmed.hasPrefix("<html") && trimmed.contains("</html>")) { return "html" }
 
-        // Swift
         if trimmed.contains("import Foundation") || trimmed.contains("import SwiftUI") || trimmed.contains("import UIKit") { return "swift" }
         if containsAny(trimmed, ["func ", "let ", "var ", "guard let", "import "]) && containsAny(trimmed, ["{", "}", "->"]) {
             return "swift"
         }
 
-        // Rust
         if containsAny(trimmed, ["fn ", "impl ", "let mut ", "use std::", "pub fn "]) { return "rust" }
 
-        // Go
         if containsAny(trimmed, ["package main", "func main()", "import ("]) { return "go" }
 
-        // Python — require strong signals: `def ` followed by an identifier, or
-        // `import`/`from` combined with another Python-specific signal.
-        // Using regex to avoid false positives like "def initely" in English prose.
         if let regex = try? NSRegularExpression(pattern: #"\bdef\s+\w+\s*\("#) {
             let range = NSRange(trimmed.startIndex..., in: trimmed)
             if regex.firstMatch(in: trimmed, range: range) != nil { return "python" }
@@ -53,43 +36,35 @@ enum CodeHighlighter {
             return "python"
         }
 
-        // JavaScript / TypeScript
         if containsAny(trimmed, ["const ", "export ", "require(", "console.log", "function ", "=>"]) {
             if containsAny(trimmed, [": string", ": number", ": boolean", "interface ", "type "]) { return "typescript" }
             return "javascript"
         }
 
-        // Java / Kotlin / C#
         if containsAny(trimmed, ["public class", "public static void main", "System.out"]) { return "java" }
         if containsAny(trimmed, ["fun ", "val ", "when ("]) { return "kotlin" }
         if containsAny(trimmed, ["using System", "namespace ", "public void "]) { return "csharp" }
 
-        // C / C++
         if containsAny(trimmed, ["#include", "#import", "int main(", "std::"]) { return "cpp" }
 
-        // Shell — require shebang or 2+ signals to avoid false positives.
         if trimmed.hasPrefix("#!/bin/") { return "shell" }
         let shellSignals = ["echo ", "export ", "grep ", "sed ", "awk ", "$(", "${", "|| ", "&& "]
         let shellCount = shellSignals.reduce(0) { $0 + (trimmed.contains($1) ? 1 : 0) }
         if shellCount >= 2 { return "shell" }
 
-        // SQL
         let lower = trimmed.lowercased()
         if containsAny(lower, ["select ", "from ", "where ", "insert into ", "create table "]) { return "sql" }
 
-        // CSS
         if trimmed.contains("{") && trimmed.contains("}") && trimmed.contains(":") && trimmed.contains(";") && !trimmed.contains("//") {
             if containsAny(lower, ["color:", "background", "margin:", "padding:", "font-size:"]) { return "css" }
         }
 
-        // JSON
         if (trimmed.hasPrefix("{") || trimmed.hasPrefix("[")),
            let data = trimmed.data(using: .utf8),
            (try? JSONSerialization.jsonObject(with: data, options: [])) != nil {
             return "json"
         }
 
-        // YAML
         if trimmed.contains(":\n") && !trimmed.contains("{") && !trimmed.contains("}") {
             if containsAny(lower, ["version:", "services:", "name:", "description:"]) { return "yaml" }
         }
@@ -100,8 +75,6 @@ enum CodeHighlighter {
     private static func containsAny(_ text: String, _ needles: [String]) -> Bool {
         needles.contains { text.contains($0) }
     }
-
-    // MARK: - Theme
 
     struct Theme {
         let plain: NSColor
@@ -114,19 +87,15 @@ enum CodeHighlighter {
 
         static let `default` = Theme(
             plain: NSColor.labelColor,
-            keyword: NSColor(red: 0.69, green: 0.18, blue: 0.38, alpha: 1),   // pinkish red
-            string: NSColor(red: 0.20, green: 0.55, blue: 0.30, alpha: 1),    // green
-            number: NSColor(red: 0.78, green: 0.45, blue: 0.10, alpha: 1),    // orange
+            keyword: NSColor(red: 0.69, green: 0.18, blue: 0.38, alpha: 1),
+            string: NSColor(red: 0.20, green: 0.55, blue: 0.30, alpha: 1),
+            number: NSColor(red: 0.78, green: 0.45, blue: 0.10, alpha: 1),
             comment: NSColor.secondaryLabelColor,
-            type: NSColor(red: 0.30, green: 0.40, blue: 0.75, alpha: 1),      // blue-purple
-            attribute: NSColor(red: 0.50, green: 0.35, blue: 0.65, alpha: 1)  // purple
+            type: NSColor(red: 0.30, green: 0.40, blue: 0.75, alpha: 1),
+            attribute: NSColor(red: 0.50, green: 0.35, blue: 0.65, alpha: 1)
         )
     }
 
-    // MARK: - Highlight
-
-    /// Returns a syntax-highlighted `NSAttributedString` for the given code text.
-    /// If `text` doesn't look like code, returns a plain attributed string.
     static func highlighted(_ text: String, font: NSFont = .monospacedSystemFont(ofSize: 12, weight: .regular), theme: Theme = .default) -> NSAttributedString {
         guard let language = detectLanguage(text) else {
             return NSAttributedString(string: text, attributes: [
@@ -148,10 +117,7 @@ enum CodeHighlighter {
         return result
     }
 
-    // MARK: - Pattern Application
-
     private static func applyComments(_ attr: NSMutableAttributedString, text: String, language: String, theme: Theme) {
-        // Line comments — only apply the patterns relevant to the detected language.
         let slashCommentLanguages: Set<String> = [
             "swift", "javascript", "typescript", "java", "kotlin", "csharp",
             "cpp", "c", "rust", "go", "css", "php"
@@ -161,7 +127,6 @@ enum CodeHighlighter {
 
         var patterns: [String] = []
         if slashCommentLanguages.contains(language) {
-            // Match // but NOT :// (URLs)
             patterns.append(#"(?<!:)//[^\n]*"#)
         }
         if hashCommentLanguages.contains(language) {
@@ -176,7 +141,6 @@ enum CodeHighlighter {
             let range = NSRange(text.startIndex..., in: text)
             regex.enumerateMatches(in: text, range: range) { match, _, _ in
                 guard let match else { return }
-                // For # comments, avoid coloring hex colors like #FF0000
                     let matched = (text as NSString).substring(with: match.range)
                     if matched.hasPrefix("#") && matched.count <= 9 {
                         let hex = matched.dropFirst()
@@ -186,7 +150,6 @@ enum CodeHighlighter {
             }
         }
 
-        // Block comments: /* ... */
         if let regex = try? NSRegularExpression(pattern: #"/\*[\s\S]*?\*/"#, options: []) {
             let range = NSRange(text.startIndex..., in: text)
             regex.enumerateMatches(in: text, range: range) { match, _, _ in
@@ -197,11 +160,10 @@ enum CodeHighlighter {
     }
 
     private static func applyStrings(_ attr: NSMutableAttributedString, text: String, theme: Theme) {
-        // Double-quoted and single-quoted strings
         let patterns = [
             #""(?:[^"\\]|\\.)*""#,
             #"'(?:[^'\\]|\\.)*'"#,
-            #"`(?:[^`\\]|\\.)*`"#,  // template literals / backtick strings
+            #"`(?:[^`\\]|\\.)*`"#,
         ]
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
@@ -248,7 +210,6 @@ enum CodeHighlighter {
         let options: NSRegularExpression.Options = isCaseInsensitive ? [.caseInsensitive] : []
 
         for keyword in keywords {
-            // Match whole word only
             let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { continue }
             let range = NSRange(text.startIndex..., in: text)
@@ -258,12 +219,10 @@ enum CodeHighlighter {
             }
         }
 
-        // Type-like identifiers: CapitalizedWords
         if let regex = try? NSRegularExpression(pattern: #"\b[A-Z][a-zA-Z0-9]*\b"#) {
             let range = NSRange(text.startIndex..., in: text)
             regex.enumerateMatches(in: text, range: range) { match, _, _ in
                 guard let match else { return }
-                // Don't override already-colored strings / comments
                 let existing = attr.attribute(.foregroundColor, at: match.range.location, effectiveRange: nil) as? NSColor
                 if existing == theme.string || existing == theme.comment || existing == theme.number { return }
                 attr.addAttribute(.foregroundColor, value: theme.type, range: match.range)
@@ -271,9 +230,6 @@ enum CodeHighlighter {
         }
     }
 
-    // MARK: - UITextView wrapper for SwiftUI
-
-    /// SwiftUI wrapper that renders syntax-highlighted code in a scrollable text view.
     static func makeScrollView(for text: String) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false

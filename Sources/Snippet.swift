@@ -5,7 +5,7 @@ struct Snippet: Identifiable, Codable, Equatable {
     var title: String
     var content: String
     var category: String
-    var shortcut: String?  // e.g. "/email" for text expansion
+    var shortcut: String?
     let createdAt: Date
     var updatedAt: Date
 

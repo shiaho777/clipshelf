@@ -3,15 +3,11 @@ import AppKit
 
 enum WindowLayout {
     static let mainPanelSize = CGSize(width: 340, height: 480)
-    /// Popups (preview/edit/snippets/diff) sit BESIDE the main panel instead
-    /// of exactly on top of it — see `PopupPlacement`.
     static let popupSize = CGSize(width: 360, height: 440)
     static let previewSize = CGSize(width: 400, height: 380)
     static let editorSize = CGSize(width: 380, height: 400)
 }
 
-/// Positions popup sheets beside their parent panel so content stays visible
-/// for comparison. Falls back to a slight cascade when there is no room.
 enum PopupPlacement {
     static func origin(parentFrame: CGRect, size: CGSize) -> NSPoint {
         if let screen = NSScreen.main?.visibleFrame {
@@ -351,25 +347,14 @@ extension View {
     }
 }
 
-// MARK: - Design System
-//
-// A single source of truth for the spacing, sizing, typography, and colour
-// values used across the app's panels and sheets. Before this existed, each
-// sheet re-declared its own paddings and font sizes, which drifted apart over
-// time (headers ranged from 10–14pt vertical padding, close buttons from 16–18pt,
-// search fields used four different fonts). Route new UI through these tokens so
-// the app stays visually consistent.
-
 enum DesignSystem {
-    /// Corner radii used throughout the app.
     enum Radius {
-        static let badge: CGFloat = 3        // small tag pills
-        static let control: CGFloat = 6      // small buttons, chips
-        static let card: CGFloat = 8         // list rows, cards
-        static let editor: CGFloat = 10      // text editors, larger surfaces
+        static let badge: CGFloat = 3
+        static let control: CGFloat = 6
+        static let card: CGFloat = 8
+        static let editor: CGFloat = 10
     }
 
-    /// Standard spacing increments (4pt grid).
     enum Spacing {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
@@ -380,16 +365,14 @@ enum DesignSystem {
         static let xxl: CGFloat = 20
     }
 
-    /// Font sizes. Named by role rather than raw number so intent is clear.
     enum FontSize {
-        static let sheetTitle: CGFloat = 14  // sheet/panel header titles
-        static let body: CGFloat = 13        // primary body text, list titles
-        static let secondary: CGFloat = 12   // secondary text, buttons
-        static let caption: CGFloat = 11     // captions, counts, metadata
-        static let footnote: CGFloat = 10    // timestamps, badges, hints
+        static let sheetTitle: CGFloat = 14
+        static let body: CGFloat = 13
+        static let secondary: CGFloat = 12
+        static let caption: CGFloat = 11
+        static let footnote: CGFloat = 10
     }
 
-    /// Sheet header layout constants (shared by every SheetHeader).
     enum Header {
         static let horizontalPadding: CGFloat = 20
         static let verticalPadding: CGFloat = 14
@@ -397,19 +380,12 @@ enum DesignSystem {
         static let actionIconSize: CGFloat = 16
     }
 
-    /// Sheet footer layout constants (shared by every SheetFooter).
     enum Footer {
         static let horizontalPadding: CGFloat = 20
         static let verticalPadding: CGFloat = 12
     }
 }
 
-// MARK: - Shared UI Components
-
-/// A consistent header bar for popup sheets: a leading title, optional trailing
-/// action buttons, and a trailing close button. Every sheet in the app should
-/// use this instead of hand-rolling its own HStack + close button so titles,
-/// paddings, and the close affordance stay identical everywhere.
 struct SheetHeader<Trailing: View>: View {
     let title: String
     var onClose: (() -> Void)?
@@ -451,8 +427,6 @@ struct SheetHeader<Trailing: View>: View {
     }
 }
 
-/// A circular icon button styled to match the header close button — used for
-/// secondary header actions such as "add" (`plus.circle.fill`).
 struct SheetHeaderIconButton: View {
     let icon: String
     var help: String?
@@ -470,9 +444,6 @@ struct SheetHeaderIconButton: View {
     }
 }
 
-/// A consistent footer bar for popup sheets. Wraps content in a leading divider
-/// and the standard horizontal/vertical padding so action bars line up across
-/// every sheet.
 struct SheetFooter<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
@@ -488,13 +459,10 @@ struct SheetFooter<Content: View>: View {
     }
 }
 
-/// A unified inline search field. Consolidates the four slightly different
-/// search bars that existed across the app (main panel, quick paste, snippets,
-/// app picker) into one component with a couple of size variants.
 struct SearchField: View {
     enum Size {
-        case regular   // main panel
-        case compact   // popovers, quick paste
+        case regular
+        case compact
 
         var iconSize: CGFloat {
             switch self {
@@ -563,13 +531,6 @@ struct SearchField: View {
     }
 }
 
-// MARK: - Tag Badge
-
-/// A small colored pill used to tag list items — "R" for rich text, "Screenshot"
-/// for screenshots, "+N" for extra file counts, etc. Before this existed, the same
-/// styling (h4/v1.5 padding, radius-3 corners, 10% tint background, 75% tint
-/// foreground) was copy-pasted in five places in ClipboardItemRow with subtly
-/// different font sizes. Use this so every badge looks identical.
 struct TagBadge: View {
     let text: String
     var systemImage: String?
@@ -600,11 +561,6 @@ struct TagBadge: View {
     }
 }
 
-// MARK: - Empty State
-
-/// A centered empty/placeholder state: a large light icon, a message, and an
-/// optional action button. Consolidates the near-identical empty views that the
-/// main history list and the snippets list each hand-rolled.
 struct EmptyStateView: View {
     let icon: String
     let message: String

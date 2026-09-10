@@ -196,16 +196,13 @@ final class JSONClipboardHistoryStore: ClipboardHistoryStore {
         return try saveItems(current)
     }
     
-    // MARK: - Backup Rotation
-    
     func backupURL(_ index: Int) -> URL {
         fileURL.appendingPathExtension("bak.\(index)")
     }
-    
+
     private func rotateBackups() {
         let fm = FileManager.default
         guard fm.fileExists(atPath: fileURL.path) else { return }
-        // Rotate: delete .bak.3, move .bak.2 -> .bak.3, .bak.1 -> .bak.2, copy current -> .bak.1
         for i in stride(from: Self.backupCount, through: 2, by: -1) {
             let dst = backupURL(i)
             let src = backupURL(i - 1)

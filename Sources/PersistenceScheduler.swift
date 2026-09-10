@@ -4,8 +4,6 @@ final class PersistenceScheduler<T> {
     private let queue: DispatchQueue
     private let debounce: TimeInterval
     private let persist: (T) -> Void
-    /// Guards `pendingWorkItem`: `schedule`/`flush` run on the caller's thread
-    /// (main) while the work-item body clears it on `queue`.
     private let lock = NSLock()
     private var pendingWorkItem: DispatchWorkItem?
 
@@ -46,8 +44,6 @@ final class PersistenceScheduler<T> {
             pendingWorkItem?.cancel()
             pendingWorkItem = nil
         }
-        // Use DispatchGroup instead of queue.sync to avoid deadlock when
-        // flush() is called from the main thread while the queue targets main.
         let group = DispatchGroup()
         group.enter()
         queue.async { [persist] in

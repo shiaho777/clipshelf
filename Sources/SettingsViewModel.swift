@@ -43,14 +43,8 @@ final class SettingsViewModel: ObservableObject {
     func loadLaunchAtLoginPreferenceIfNeeded() {
         guard !didLoadLaunchAtLoginPreference else { return }
         didLoadLaunchAtLoginPreference = true
-        // The system is the source of truth: the toggle mirrors the actual
-        // registration state, not just the stored preference. A stored "on"
-        // with no registration means the login item was lost (reinstall,
-        // signature change, system cleanup) — the app re-registers at launch.
         suppressLaunchAtLoginChange = true
         launchAtLogin = launchAtLoginService.isEnabled
-        // Reset immediately: if the value didn't change, onChange never fires
-        // and must not swallow the user's next toggle.
         suppressLaunchAtLoginChange = false
     }
     

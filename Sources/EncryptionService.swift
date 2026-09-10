@@ -3,9 +3,6 @@ import CryptoKit
 import Security
 import os
 
-/// AES-256-GCM encryption service for sensitive clipboard content.
-/// The 256-bit symmetric key is generated once and stored in the macOS Keychain
-/// with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` — it never leaves the device.
 final class EncryptionService {
     static let shared = EncryptionService()
 
@@ -14,11 +11,6 @@ final class EncryptionService {
     private let keychainService = "com.clipshelf.encryption"
     private let keychainAccount = "masterKey-v1"
 
-    // Key is loaded from the Keychain on first use, not at app start.
-    // Accessed concurrently from the persistence and incremental-persistence
-    // queues (SQLite bind/read), so initialization must be synchronized —
-    // a plain `lazy var` would race on first access, and so would an
-    // unlocked fast-path read (`SymmetricKey` is a struct; a torn read is UB).
     private let keyLock = NSLock()
     private var _key: SymmetricKey?
     private var key: SymmetricKey? {
@@ -32,10 +24,6 @@ final class EncryptionService {
 
     private init() {}
 
-    // MARK: - Public API
-
-    /// Encrypt `data` using AES-256-GCM. Returns the combined nonce+ciphertext+tag blob.
-    /// Throws `keyUnavailable` when no persisted key could be established.
     func encrypt(_ data: Data) throws -> Data {
         guard let key else { throw EncryptionError.keyUnavailable }
         let sealedBox = try AES.GCM.seal(data, using: key)
@@ -45,14 +33,11 @@ final class EncryptionService {
         return combined
     }
 
-    /// Decrypt a combined nonce+ciphertext+tag blob produced by `encrypt(_:)`.
     func decrypt(_ combined: Data) throws -> Data {
         guard let key else { throw EncryptionError.keyUnavailable }
         let sealedBox = try AES.GCM.SealedBox(combined: combined)
         return try AES.GCM.open(sealedBox, using: key)
     }
-
-    // MARK: - String Convenience
 
     func encryptString(_ string: String) throws -> Data {
         guard let data = string.data(using: .utf8) else {
@@ -69,10 +54,6 @@ final class EncryptionService {
         return string
     }
 
-    // MARK: - Key Management
-
-    /// Returns nil when no usable persisted key exists (Keychain write failed);
-    /// callers fall back to plaintext so items stay recoverable.
     private func loadOrCreateKey() -> SymmetricKey? {
         if let data = loadFromKeychain() {
             guard data.count == 32 else {
@@ -90,11 +71,6 @@ final class EncryptionService {
         if saveToKeychain(keyData) {
             return key
         }
-        // Keychain write failed. With only an ephemeral key, ciphertext written
-        // this session becomes undecryptable after relaunch — sensitive items
-        // would silently turn into the "[🔒 Sensitive]" placeholder. Return nil
-        // instead; the `try?` call sites fall back to plaintext, which keeps
-        // the item recoverable.
         logger.error("Failed to persist encryption key to Keychain — refusing ephemeral key so sensitive items fall back to plaintext instead of becoming unrecoverable")
         return nil
     }
@@ -135,8 +111,6 @@ final class EncryptionService {
         return status == errSecSuccess
     }
 }
-
-// MARK: - Errors
 
 enum EncryptionError: LocalizedError {
     case sealFailed

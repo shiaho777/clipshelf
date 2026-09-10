@@ -21,15 +21,10 @@ final class ClipboardMonitorTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - No Change
-
     func testNoChangeReturnsNoChange() {
-        // No content written — changeCount unchanged after start
         let result = monitor.checkClipboard()
         XCTAssertEqual(result, .noChange)
     }
-
-    // MARK: - Text Capture
 
     func testTextCaptureCallsOnCapture() {
         var captured: CapturedContent?
@@ -51,14 +46,9 @@ final class ClipboardMonitorTests: XCTestCase {
         }
     }
 
-    // MARK: - Excluded App
-
     func testExcludedAppReturnsIgnored() {
-        // The frontmost app during tests is the test runner (Xcode / xctest).
-        // We add its bundleID to excluded list to test the exclusion path.
         let testRunnerBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         guard !testRunnerBundleID.isEmpty else {
-            // Can't determine frontmost app in CI — skip
             return
         }
         monitor.excludedBundleIDs = [testRunnerBundleID]
@@ -70,8 +60,6 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertEqual(result, .ignored)
     }
 
-    // MARK: - Duplicate Within Threshold
-
     func testDuplicateTextWithinThresholdIgnored() {
         var captureCount = 0
         monitor.onCapture = { _ in captureCount += 1 }
@@ -82,15 +70,12 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertEqual(r1, .captured)
         XCTAssertEqual(captureCount, 1)
 
-        // Write the same text again (simulates re-copy within 3 seconds)
         testPasteboard.clearContents()
         testPasteboard.setString("duplicate", forType: .string)
         let r2 = monitor.checkClipboard()
         XCTAssertEqual(r2, .ignored)
         XCTAssertEqual(captureCount, 1, "Duplicate text within threshold should be ignored")
     }
-
-    // MARK: - Acknowledge Change Count
 
     func testAcknowledgeChangeCountPreventsCapture() {
         testPasteboard.clearContents()
@@ -100,8 +85,6 @@ final class ClipboardMonitorTests: XCTestCase {
         let result = monitor.checkClipboard()
         XCTAssertEqual(result, .noChange, "After acknowledgeChangeCount, checkClipboard should see no change")
     }
-
-    // MARK: - Distinct Text Captured
 
     func testDistinctTextCapturedSequentially() {
         var texts: [String] = []
@@ -113,7 +96,6 @@ final class ClipboardMonitorTests: XCTestCase {
         testPasteboard.setString("first", forType: .string)
         _ = monitor.checkClipboard()
 
-        // Wait to exceed the 3-second dedup window
         Thread.sleep(forTimeInterval: 3.1)
 
         testPasteboard.clearContents()
@@ -123,14 +105,11 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertEqual(texts, ["first", "second"])
     }
 
-    // MARK: - Text Preferred Over Image
-
     func testTextPreferredOverImage() {
         var captured: CapturedContent?
         monitor.onCapture = { captured = $0 }
 
         testPasteboard.clearContents()
-        // Write both text and TIFF image — text should win
         let tinyImage = NSImage(size: NSSize(width: 1, height: 1))
         testPasteboard.writeObjects(["hello from text" as NSString, tinyImage])
         let result = monitor.checkClipboard()
@@ -169,8 +148,6 @@ final class ClipboardMonitorTests: XCTestCase {
         }
     }
 
-    // MARK: - File URL Capture
-
     func testFileURLCapture() {
         var captured: CapturedContent?
         monitor.onCapture = { captured = $0 }
@@ -193,7 +170,6 @@ final class ClipboardMonitorTests: XCTestCase {
     }
 }
 
-// MARK: - CheckOutcome Equatable
 extension ClipboardMonitor.CheckOutcome: @retroactive Equatable {
     public static func == (lhs: ClipboardMonitor.CheckOutcome, rhs: ClipboardMonitor.CheckOutcome) -> Bool {
         switch (lhs, rhs) {

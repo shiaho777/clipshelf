@@ -18,8 +18,6 @@ enum RuleEngineResult: Equatable {
     }
 }
 
-// MARK: - CapturedContent Equatable
-
 extension CapturedContent: Equatable {
     static func == (lhs: CapturedContent, rhs: CapturedContent) -> Bool {
         guard lhs.sourceBundleID == rhs.sourceBundleID,
@@ -34,8 +32,6 @@ extension CapturedContent: Equatable {
     }
 }
 
-// MARK: - Rule Engine
-
 @MainActor
 final class ClipboardRuleEngine {
     var rules: [ClipboardRule] = [] {
@@ -43,8 +39,6 @@ final class ClipboardRuleEngine {
     }
     private let scriptRunner = ScriptRuleRunner()
     private var enabledRules: [ClipboardRule] = []
-    /// Bounded: rule patterns are user-supplied and unlimited caching retained
-    /// compiled regexes for the process lifetime.
     private let regexCache: NSCache<NSString, NSRegularExpression> = {
         let cache = NSCache<NSString, NSRegularExpression>()
         cache.countLimit = 64
@@ -104,9 +98,6 @@ final class ClipboardRuleEngine {
         }
 
         if isSensitive {
-            // A sensitive item hit by an autoPin rule must keep BOTH flags:
-            // returning .storeSensitive here without the pin silently dropped
-            // the user's autoPin request.
             return .storeSensitive(current, ttl: sensitiveTTL, pin: shouldPin)
         }
         if shouldPin {
@@ -115,15 +106,11 @@ final class ClipboardRuleEngine {
         return .store(current)
     }
 
-    // MARK: - Test / Preview
-
-    /// One execution step in the debug trace: captures the state before and after each action.
     struct TraceStep {
         let ruleName: String
         let actionName: String
         let inputText: String
         let outputText: String
-        /// True when this action caused early termination (discard).
         let isTerminal: Bool
 
         var didChange: Bool { !isTerminal && inputText != outputText }
@@ -132,7 +119,7 @@ final class ClipboardRuleEngine {
     struct TestResult {
         let output: String
         let matchedRules: [String]
-        let outcome: String  // "store", "discard", "sensitive", "pin"
+        let outcome: String
         let steps: [TraceStep]
 
         init(output: String, matchedRules: [String], outcome: String, steps: [TraceStep] = []) {
@@ -143,8 +130,6 @@ final class ClipboardRuleEngine {
         }
     }
 
-    /// Test all enabled rules against sample text, returning the processed result,
-    /// matched rules, and a per-action execution trace. Does not modify any state.
     func testProcess(text: String, sourceBundleID: String? = nil) async -> TestResult {
         let content = CapturedContent(kind: .text(content: text), sourceBundleID: sourceBundleID, sourceAppName: nil)
         var current = content
@@ -239,8 +224,6 @@ final class ClipboardRuleEngine {
                           outcome: outcome, steps: traceSteps)
     }
 
-    // MARK: - Trigger Matching
-    
     private func triggerMatches(_ trigger: RuleTrigger, content: CapturedContent) -> Bool {
         switch trigger {
         case .always:
@@ -260,8 +243,6 @@ final class ClipboardRuleEngine {
             }
         }
     }
-    
-    // MARK: - Actions
     
     private static let trackingParams: Set<String> = [
         "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
@@ -329,8 +310,6 @@ final class ClipboardRuleEngine {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed != text ? replaceText(in: content, with: trimmed) : content
     }
-    
-    // MARK: - Helpers
     
     private func textContent(_ content: CapturedContent) -> String? {
         switch content.kind {

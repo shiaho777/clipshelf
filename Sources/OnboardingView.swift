@@ -23,7 +23,7 @@ struct OnboardingView: View {
                     .font(.system(size: 36, weight: .light))
                     .foregroundStyle(.secondary)
                     .frame(height: 44)
-                    .id(currentStep) // force transition on step change
+                    .id(currentStep)
 
                 Text(lang.l(step.titleKey))
                     .font(.system(size: 15, weight: .semibold))
@@ -41,7 +41,6 @@ struct OnboardingView: View {
 
             Spacer()
 
-            // Dots
             HStack(spacing: 8) {
                 ForEach(0..<steps.count, id: \.self) { i in
                     Circle()
@@ -51,7 +50,6 @@ struct OnboardingView: View {
             }
             .padding(.bottom, 16)
 
-            // Button
             Button {
                 if currentStep < steps.count - 1 {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78)) {

@@ -18,8 +18,6 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Basic CRUD
-
     func testEmptyLoad() throws {
         let items = try store.loadItems()
         XCTAssertTrue(items.isEmpty)
@@ -67,12 +65,10 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         XCTAssertNotNil(l.expiresAt)
     }
 
-    // MARK: - Diff-based save
-
     func testNoChangeReturnsFalse() throws {
         let items = [ClipboardItem(content: "hello", type: .text)]
         try store.saveItems(items)
-        _ = try store.loadItems()  // snapshot
+        _ = try store.loadItems()
         let changed = try store.saveItems(items)
         XCTAssertFalse(changed, "No-op save should return false")
     }
@@ -180,8 +176,6 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         XCTAssertEqual(counts[item2.id], 7)
     }
 
-    // MARK: - Migration
-
     func testMigrateFromJSON() throws {
         let jsonURL = tempDir.appendingPathComponent("history.json")
         let items = [ClipboardItem(content: "migrated", type: .text)]
@@ -196,7 +190,6 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         XCTAssertEqual(loaded.count, 1)
         XCTAssertEqual(loaded[0].content, "migrated")
 
-        // Original file should be renamed
         XCTAssertFalse(FileManager.default.fileExists(atPath: jsonURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: jsonURL.appendingPathExtension("migrated").path))
     }
@@ -205,8 +198,6 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         let result = store.migrateFromJSON(storageDirectory: tempDir)
         XCTAssertFalse(result)
     }
-
-    // MARK: - Ordering
 
     func testPinnedItemsFirst() throws {
         let pinned = ClipboardItem(content: "pinned", type: .text, timestamp: Date().addingTimeInterval(-100), isPinned: true)
@@ -240,8 +231,6 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         XCTAssertEqual(loaded.filter(\.isPinned).count, 2)
         XCTAssertTrue(loaded.contains(where: { $0.content == "u0" }))
     }
-
-    // MARK: - Cold cleanup
 
     func testDeleteExpiredRemovesOnlyExpiredRows() throws {
         let now = Date()

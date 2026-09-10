@@ -1,15 +1,9 @@
 import XCTest
 @testable import ClipShelf
 
-/// Regression tests for batch D3 fixes.
 @MainActor
 final class BatchD3FixesTests: XCTestCase {
 
-    // MARK: - D3-2: sensitive detection + autoPin must not lose the pin
-
-    /// A rule set where detectSensitive and autoPin both fire must produce a
-    /// storeSensitive result that CARRIES the pin. Previously the sensitive
-    /// branch returned first and silently discarded shouldPin.
     func testSensitiveContentWithAutoPinRuleKeepsPin() async {
         let engine = ClipboardRuleEngine()
         engine.rules = [
@@ -27,7 +21,6 @@ final class BatchD3FixesTests: XCTestCase {
         XCTAssertTrue(pin, "autoPin fired alongside detectSensitive — the stored item must be pinned")
     }
 
-    /// The pin must NOT appear when autoPin never fired.
     func testSensitiveContentWithoutAutoPinIsNotPinned() async {
         let engine = ClipboardRuleEngine()
         engine.rules = [
@@ -44,10 +37,6 @@ final class BatchD3FixesTests: XCTestCase {
         XCTAssertFalse(pin)
     }
 
-    // MARK: - D3-1: content edit re-renders rows
-
-    /// updateItemContent must bump historyRevision so the list's cheap change
-    /// detection (which only compares count + head ID) re-renders the row.
     func testUpdateItemContentBumpsHistoryRevision() {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -70,8 +59,6 @@ final class BatchD3FixesTests: XCTestCase {
                              "content edit must publish a history revision")
         XCTAssertEqual(mgr.items[0].content, "after")
     }
-
-    // MARK: - D3-4: rule engine testProcess reports combined outcomes
 
     func testTestProcessReportsSensitivePlusPin() async {
         let engine = ClipboardRuleEngine()

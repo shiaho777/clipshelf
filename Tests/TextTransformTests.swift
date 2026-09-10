@@ -35,7 +35,7 @@ final class TextTransformTests: XCTestCase {
         let input = "{\"b\":2,\"a\":1}"
         let result = TextTransform.jsonFormat.apply(input)
         XCTAssertNotNil(result)
-        XCTAssertTrue(result!.contains("\n"))  // pretty printed
+        XCTAssertTrue(result!.contains("\n"))
     }
 
     func testJsonFormatInvalid() {

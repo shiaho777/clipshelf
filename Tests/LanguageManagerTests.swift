@@ -23,8 +23,6 @@ final class LanguageManagerTests: XCTestCase {
         return LanguageManager(storageDirectory: tempDir, preferencesStore: prefsStore)
     }
 
-    // MARK: - Normalization
-
     func testChineseVariantsNormalizeToZh() {
         let mgr = makeManager(savedLanguage: "zh-Hans")
         XCTAssertEqual(mgr.language, "zh")
@@ -50,8 +48,6 @@ final class LanguageManagerTests: XCTestCase {
         XCTAssertEqual(mgr.language, "zh")
     }
 
-    // MARK: - Persistence
-
     func testSwitchLanguagePersists() {
         let mgr = makeManager(savedLanguage: "en")
         mgr.language = "zh"
@@ -60,9 +56,7 @@ final class LanguageManagerTests: XCTestCase {
 
     func testSameLanguageDoesNotPersist() {
         let mgr = makeManager(savedLanguage: "en")
-        prefsStore.language = nil  // clear to detect writes
+        prefsStore.language = nil
         mgr.language = "en"
-        // Setting same value should be a no-op (guard oldValue != language)
-        // prefsStore.language may or may not be written depending on didSet guard
     }
 }

@@ -46,8 +46,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         self.userDefaults = userDefaults
     }
     
-    // MARK: - Language
-    
     func loadLanguage() throws -> String? {
         if FileManager.default.fileExists(atPath: languageURL.path) {
             let data = try Data(contentsOf: languageURL)
@@ -62,8 +60,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         try encoded.write(to: languageURL, options: .atomic)
         return true
     }
-    
-    // MARK: - Launch at Login
     
     func loadLaunchAtLogin() throws -> Bool? {
         if FileManager.default.fileExists(atPath: launchAtLoginURL.path) {
@@ -80,8 +76,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         return true
     }
     
-    // MARK: - Max History Count
-    
     func loadMaxHistoryCount() throws -> Int? {
         if FileManager.default.fileExists(atPath: maxHistoryCountURL.path) {
             let data = try Data(contentsOf: maxHistoryCountURL)
@@ -97,8 +91,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         return true
     }
     
-    // MARK: - Auto Cleanup Interval
-    
     func loadAutoCleanupInterval() throws -> Int? {
         if FileManager.default.fileExists(atPath: autoCleanupIntervalURL.path) {
             let data = try Data(contentsOf: autoCleanupIntervalURL)
@@ -113,8 +105,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         try encoded.write(to: autoCleanupIntervalURL, options: .atomic)
         return true
     }
-    
-    // MARK: - Excluded Bundle IDs
     
     func loadExcludedBundleIDs() throws -> Set<String>? {
         if FileManager.default.fileExists(atPath: excludedAppsURL.path) {
@@ -137,8 +127,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         return true
     }
     
-    // MARK: - App-aware Paste
-    
     func loadSmartPasteEnabled() throws -> Bool? {
         if FileManager.default.fileExists(atPath: smartPasteURL.path) {
             let data = try Data(contentsOf: smartPasteURL)
@@ -153,8 +141,6 @@ final class JSONAppPreferencesStore: AppPreferencesStore {
         try encoded.write(to: smartPasteURL, options: .atomic)
         return true
     }
-
-    // MARK: - Hot Window Count
 
     func loadHotWindowCount() throws -> Int? {
         if FileManager.default.fileExists(atPath: hotWindowCountURL.path) {

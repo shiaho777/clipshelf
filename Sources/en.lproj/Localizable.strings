@@ -1,9 +1,7 @@
-/* Filters */
 "filter.all" = "All";
 "filter.text" = "Text";
 "filter.image" = "Image";
 
-/* Main View */
 "search.placeholder" = "Search...";
 "search.noResults" = "No matching results";
 "search.clearSearch" = "Clear Search";
@@ -16,12 +14,10 @@
 "button.back" = "Back";
 "button.cancel" = "Cancel";
 
-/* Item */
 "item.image" = "[Image]";
 "item.richtext" = "[Rich Text]";
 "chars" = "chars";
 
-/* Settings */
 "settings.title" = "Settings";
 "settings.language" = "Language";
 "settings.launchAtLogin" = "Launch at Login";
@@ -45,15 +41,12 @@
 "settings.tab.data" = "Data";
 "settings.tab.about" = "About";
 
-/* HotKey */
 "hotkey.main" = "Main Shortcut";
 "hotkey.recording" = "Recording...";
 
-/* Preview */
 "preview.title" = "Preview";
 "preview.openExternally" = "Open with Default App";
 
-/* Actions */
 "action.copy" = "Copy";
 "action.paste" = "Paste";
 "action.pastePlain" = "Paste as Plain Text";
@@ -67,11 +60,9 @@
 "action.transform" = "Transform";
 "status.item.normalDescription" = "Clipboard";
 
-/* Status item right-click menu */
 "status.menu.open" = "Open ClipShelf";
 "status.menu.quit" = "Quit ClipShelf";
 
-/* Transforms */
 "transform.uppercase" = "UPPERCASE";
 "transform.lowercase" = "lowercase";
 "transform.capitalize" = "Capitalize";
@@ -83,19 +74,16 @@
 "transform.base64Encode" = "Base64 Encode";
 "transform.base64Decode" = "Base64 Decode";
 
-/* Multi-select */
 "multiselect.title" = "Multi-select";
 "multiselect.count" = "%d selected";
 "multiselect.merge" = "Merge & Paste";
 
-/* Settings - Export/Import */
 "settings.export" = "Export Backup";
 "settings.import" = "Import Backup";
 "settings.exportSuccess" = "Export successful";
 "settings.importSuccess" = "Import successful";
 
 
-/* Rules */
 "rules.title" = "Rules";
 "rules.addRule" = "Add Rule";
 "rules.name" = "Rule Name";
@@ -123,25 +111,20 @@
 "rule.Detect Sensitive Content" = "Detect Sensitive Content";
 "rule.Trim Trailing Whitespace" = "Trim Trailing Whitespace";
 
-/* App-aware Paste */
 "settings.smartPaste" = "App-aware Paste";
 "settings.smartPaste.description" = "Auto-format when pasting to specific apps";
 
-/* Edit */
 "action.edit" = "Edit";
 "edit.title" = "Edit";
 "edit.saveAndPaste" = "Save & Paste";
 
-/* Paste Queue */
 "multiselect.queue" = "Queue Paste";
 "hotkey.queue" = "Queue Paste Shortcut";
 
-/* Script Rules */
 "rules.action.customScript" = "Custom Script";
 "rules.script.formatJSON" = "Format JSON";
 "rules.script.extractEmails" = "Extract Emails";
 
-/* Snippets */
 "snippets.title" = "Snippets";
 "snippets.add" = "Add Snippet";
 "snippets.edit" = "Edit Snippet";
@@ -153,7 +136,6 @@
 "settings.snippetExpansion" = "Snippet Text Expansion";
 "settings.snippetExpansion.description" = "Auto-expand snippet shortcuts as you type (e.g. /email → content)";
 
-/* Onboarding */
 "onboarding.step1.title" = "Clipboard History";
 "onboarding.step1.desc" = "Everything you copy is automatically saved. Text, images, rich text — all searchable.";
 "onboarding.step2.title" = "Instant Search";
@@ -163,11 +145,9 @@
 "onboarding.next" = "Next";
 "onboarding.done" = "Get Started";
 
-/* List */
 "list.loadMore" = "%d more";
 "list.loadMorePage" = "Load more";
 
-/* Rules Test */
 "rules.test.title" = "Test Rules";
 "rules.test.placeholder" = "Enter test text...";
 "rules.test.run" = "Run Test";
@@ -175,23 +155,17 @@
 "rules.test.matched" = "Matched";
 "rules.test.noMatch" = "No rules matched";
 
-/* Biometric */
 "biometric.unlockSensitive" = "Unlock sensitive clipboard item";
 
-/* Settings - History */
 "settings.maxHistory.unlimited" = "Unlimited";
 
-/* Rules - App Picker */
 "rules.trigger.chooseApp" = "Choose from running apps";
 
-/* Rules - Error */
 "rules.error.title" = "Operation Failed";
 
-/* Snippet Expansion - Accessibility */
 "snippet.accessibilityRequired" = "Requires Accessibility permission";
 "snippet.openPrivacy" = "Open Settings";
 
-/* Sync Tab */
 "settings.exportFormat" = "Export Format";
 "settings.exportFormat.zip" = "ZIP Backup (.clipbackup)";
 "settings.exportFormat.csv" = "CSV (.csv)";
@@ -199,10 +173,8 @@
 "settings.importMaccy" = "Import from Maccy";
 "settings.importAlfred" = "Import from Alfred";
 
-/* Multi-select */
 "multiselect.compare" = "Compare";
 
-/* About Tab */
 "about.platform" = "Platform";
 "about.platformValue" = "macOS 13.0+ · Apple Silicon & Intel";
 "about.itemsStored" = "Items stored";
@@ -212,7 +184,6 @@
 "about.contributing" = "Contributing";
 "about.reportBug" = "Report a Bug";
 
-/* Queue */
 "queue.title" = "Paste Queue";
 "queue.clear" = "Clear Queue";
 "queue.remaining" = "%d pending";
@@ -223,25 +194,19 @@
 "queue.clearAndExit" = "Clear & Exit";
 "preview.imageFailed" = "Image could not be loaded";
 
-/* Quick Paste */
 "quickpaste.title" = "Quick Paste";
 "quickpaste.hint" = "1–9 paste · ↑↓ navigate · ↵ select · Esc close";
 "hotkey.quickPaste" = "Quick Paste Shortcut";
 
-/* Filters */
 "filter.currentApp" = "Filter by current app";
 
-/* Item */
 "item.screenshot" = "Screenshot";
 
-/* Diff Viewer */
 "diff.title" = "Compare";
 "diff.copy" = "Copy Diff";
 
-/* Rules Test - Execution Trace */
 "rules.test.trace" = "Execution Trace · %d steps";
 
-/* Sensitive item lock */
 "item.sensitive.title" = "Sensitive";
 "item.sensitive.unlockHint" = "Tap to unlock with Touch ID";
 "item.secret.masked" = "masked";
@@ -251,7 +216,6 @@
 "language.choose.subtitle" = "Select a language to continue";
 "language.switch" = "Language";
 
-/* Accessibility */
 "a11y.type.text" = "Text";
 "a11y.type.richText" = "Rich text";
 "a11y.type.image" = "Image";
@@ -259,16 +223,13 @@
 "a11y.pinned" = "pinned";
 "a11y.sensitive" = "sensitive";
 
-/* Snippets */
 "snippets.variables" = "Variables: {{date}} · {{time}} · {{datetime}} · {{clipboard}} · {{random:8}} · {{cursor}}";
 
-/* Import panels */
 "settings.importMaccy.panelTitle" = "Select Maccy Database";
 "settings.importMaccy.panelMessage" = "Typical location: ~/Library/Containers/org.p0deje.Maccy/";
 "settings.importAlfred.panelTitle" = "Select Alfred Clipboard Database";
 "settings.importAlfred.panelMessage" = "Typical location: ~/Library/Application Support/Alfred/Databases/";
 
-/* Updates */
 "update.section" = "Updates";
 "update.check" = "Check for Updates";
 "update.checking" = "Checking…";

@@ -5,8 +5,6 @@ final class EncryptionServiceTests: XCTestCase {
 
     private let service = EncryptionService.shared
 
-    // MARK: - Roundtrip
-
     func testStringRoundtrip() throws {
         let plaintext = "Hello, World! 🔐"
         let encrypted = try service.encryptString(plaintext)
@@ -34,17 +32,13 @@ final class EncryptionServiceTests: XCTestCase {
         XCTAssertEqual(decrypted, unicode)
     }
 
-    // MARK: - Security properties
-
     func testEncryptedDiffersFromPlaintext() throws {
         let plaintext = "sensitive data"
         let encrypted = try service.encryptString(plaintext)
-        // The raw encrypted blob should not be decodable as the original UTF-8
         XCTAssertNotEqual(String(data: encrypted, encoding: .utf8), plaintext)
     }
 
     func testNonDeterministicEncryption() throws {
-        // AES-GCM uses a fresh random nonce each call → two encryptions must differ
         let plaintext = "same input"
         let enc1 = try service.encryptString(plaintext)
         let enc2 = try service.encryptString(plaintext)
@@ -54,11 +48,8 @@ final class EncryptionServiceTests: XCTestCase {
     func testEncryptedLengthExceedsPlaintext() throws {
         let plaintext = "hello"
         let encrypted = try service.encryptString(plaintext)
-        // AES-GCM output = nonce (12 B) + ciphertext + tag (16 B) > plaintext
         XCTAssertGreaterThan(encrypted.count, plaintext.utf8.count)
     }
-
-    // MARK: - Error handling
 
     func testDecryptInvalidDataThrows() {
         XCTAssertThrowsError(try service.decrypt(Data("garbage".utf8)))
@@ -66,14 +57,12 @@ final class EncryptionServiceTests: XCTestCase {
 
     func testDecryptTruncatedBlobThrows() throws {
         let encrypted = try service.encrypt(Data("hello".utf8))
-        // Truncate to an invalid length
         let truncated = encrypted.prefix(8)
         XCTAssertThrowsError(try service.decrypt(Data(truncated)))
     }
 
     func testDecryptBitFlipThrows() throws {
         var encrypted = try service.encrypt(Data("hello world".utf8))
-        // Flip a bit in the ciphertext (after the 12-byte nonce)
         if encrypted.count > 15 {
             encrypted[13] ^= 0xFF
         }

@@ -1,8 +1,6 @@
 import SwiftUI
 import AppKit
 
-// MARK: - RTF Preview (NSViewRepresentable)
-/// Renders an RTF Data buffer using a native NSTextView inside a SwiftUI layout.
 struct RTFTextView: NSViewRepresentable {
     let rtfData: Data
 
@@ -21,7 +19,6 @@ struct RTFTextView: NSViewRepresentable {
         if let attributed = NSAttributedString(rtf: rtfData, documentAttributes: nil) {
             textView.textStorage?.setAttributedString(attributed)
         }
-        // Fit text to scroll view width
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -40,10 +37,6 @@ struct RTFTextView: NSViewRepresentable {
     }
 }
 
-// MARK: - Plain Text Preview (NSTextView for performance)
-/// Renders plain text using NSTextView instead of SwiftUI Text.
-/// SwiftUI Text performs O(n) layout measurement on every render, causing
-/// severe lag with long content. NSTextView has native virtualization.
 struct PlainTextPreview: NSViewRepresentable {
     let text: String
 
@@ -94,12 +87,9 @@ struct PlainTextPreview: NSViewRepresentable {
     }
 }
 
-// MARK: - Preview Sheet
 struct PreviewSheet: View {
     let item: ClipboardItem
     var image: NSImage? = nil
-    /// Backing image file when available — used for "open externally" so the
-    /// system app opens the real file instead of a re-encoded temp copy.
     var imageURL: URL? = nil
     var onPaste: ((ClipboardItem) -> Void)? = nil
     @Environment(\.popupWindowDismiss) private var dismissPopup
@@ -108,8 +98,6 @@ struct PreviewSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             SheetHeader(lang.l("preview.title"), onClose: { dismissPopup() }) {
-                // Open externally: images → Preview.app (like double-clicking
-                // in Finder), text/rich text → TextEdit, files → default app.
                 SheetHeaderIconButton(
                     icon: "arrow.up.right.square",
                     help: lang.l("preview.openExternally")
@@ -130,7 +118,6 @@ struct PreviewSheet: View {
                             .padding(20)
                     }
                 } else {
-                    // Image failed to load — show placeholder.
                     VStack(spacing: 10) {
                         Image(systemName: "photo.badge.exclamationmark")
                             .font(.system(size: 32))
@@ -142,7 +129,6 @@ struct PreviewSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else if item.type == .fileURL {
-                // File URL preview: show file list with icons.
                 VStack(alignment: .leading, spacing: 8) {
                     let paths = item.filePaths
                     ForEach(paths.prefix(20), id: \.self) { path in
@@ -168,23 +154,18 @@ struct PreviewSheet: View {
                 }
                 .padding(.vertical, 12)
             } else if item.type == .richText, let rtfData = item.rtfData {
-                // Native RTF rendering — preserves fonts, colours, and formatting.
                 RTFTextView(rtfData: rtfData)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(4)
             } else {
-                // Code syntax highlighting: detect code and render with colors.
                 if CodeHighlighter.detectLanguage(item.content) != nil,
                    PasteAdapterUtils.looksLikeCode(item.content) {
                     CodePreviewView(text: item.content)
                 } else {
-                    // Use NSTextView for long text — SwiftUI Text is O(n) for layout
-                    // and causes severe lag with 10k+ character content.
                     PlainTextPreview(text: item.content)
                 }
             }
 
-            // Action bar: copy + paste directly from preview.
             SheetFooter {
                 Button {
                     let pb = NSPasteboard.general
@@ -195,9 +176,6 @@ struct PreviewSheet: View {
                             pb.writeObjects([img])
                         }
                     case .fileURL:
-                        // Copy real file URLs, not the encoded JSON path string —
-                        // writing item.content put literal ["…","…"] text on the
-                        // pasteboard and broke Finder/other consumers.
                         let urls = item.filePaths.compactMap { URL(fileURLWithPath: $0) as NSURL }
                         if !urls.isEmpty {
                             pb.writeObjects(urls)
@@ -205,7 +183,6 @@ struct PreviewSheet: View {
                             pb.setString(item.content, forType: .string)
                         }
                     case .richText:
-                        // Preserve formatting when the RTF payload exists.
                         if let rtf = item.rtfData {
                             pb.setData(rtf, forType: .rtf)
                         }
@@ -235,10 +212,6 @@ struct PreviewSheet: View {
         .standardPopupLayout(size: WindowLayout.previewSize)
     }
 
-    // MARK: - Open Externally
-
-    /// Sensitive items go through Touch ID first — same gate as paste — so a
-    /// locked row can't leak its content into a temp file via this button.
     private func openExternally() {
         if item.isSensitive {
             Task { @MainActor in
@@ -279,7 +252,6 @@ struct PreviewSheet: View {
                 Self.openWithTextEdit([url], configuration: config)
             }
         case .fileURL:
-            // Like double-clicking in Finder — opens with the default app.
             let urls = item.filePaths
                 .filter { FileManager.default.fileExists(atPath: $0) }
                 .prefix(10)
@@ -290,8 +262,6 @@ struct PreviewSheet: View {
         }
     }
 
-    /// TextEdit is the "system text editor" — prefer it explicitly so a .txt
-    /// doesn't land in VSCode just because it's the default handler.
     private static func openWithTextEdit(_ urls: [URL], configuration: NSWorkspace.OpenConfiguration) {
         if let editor = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.TextEdit") {
             NSWorkspace.shared.open(urls, withApplicationAt: editor, configuration: configuration, completionHandler: nil)
@@ -306,7 +276,6 @@ struct PreviewSheet: View {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ClipShelfPreview", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        // Opportunistic prune so temp opens don't accumulate forever.
         if let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
         ) {
@@ -339,12 +308,10 @@ struct PreviewSheet: View {
 
     private static func writeTempImage(_ nsImage: NSImage) -> URL? {
         guard let tiff = nsImage.tiffRepresentation else { return nil }
-        // Preview.app opens TIFF natively — no re-encode needed.
         return writeTempData(tiff, fileExtension: "tiff")
     }
 }
 
-// MARK: - Code Preview (Syntax Highlighted)
 struct CodePreviewView: View {
     let text: String
     @Environment(\.dismiss) var dismiss
@@ -386,7 +353,6 @@ struct CodeHighlightNSView: NSViewRepresentable {
     }
 }
 
-// MARK: - Edit Sheet
 struct EditSheet: View {
     let item: ClipboardItem
     @ObservedObject var clipboardManager: ClipboardManager
@@ -427,12 +393,9 @@ struct EditSheet: View {
     }
 }
 
-// MARK: - Bottom Bar Button
 struct BottomBarButton: View {
     let icon: String
     var tint: Color = .secondary
-    /// Optional short text shown next to the icon so footer actions are
-    /// discoverable without hovering for a tooltip.
     var label: String? = nil
     let action: () -> Void
     @State private var isHovered = false

@@ -3,8 +3,6 @@ import XCTest
 
 final class ContentDetectorTests: XCTestCase {
 
-    // MARK: - HEX Color Detection
-
     func testHex6Digit() {
         let result = ContentDetector.analyze("#FF0000")
         XCTAssertNotNil(result.color)
@@ -28,8 +26,6 @@ final class ContentDetectorTests: XCTestCase {
         XCTAssertNil(ContentDetector.analyze("not a color").color)
     }
 
-    // MARK: - RGB Color Detection
-
     func testRGB() {
         let result = ContentDetector.analyze("rgb(255, 0, 0)")
         XCTAssertNotNil(result.color)
@@ -43,13 +39,10 @@ final class ContentDetectorTests: XCTestCase {
     }
 
     func testRGBClampedValues() {
-        // Values > 255 should be clamped
         let result = ContentDetector.analyze("rgb(300, 300, 300)")
         XCTAssertNotNil(result.color)
         XCTAssertEqual(result.colorString(format: .hex), "#FFFFFF")
     }
-
-    // MARK: - HSL Output
 
     func testHSLOutputForPureRed() {
         let result = ContentDetector.analyze("#FF0000")
@@ -64,10 +57,8 @@ final class ContentDetectorTests: XCTestCase {
         let hsl = result.colorString(format: .hsl)
         XCTAssertNotNil(hsl)
         XCTAssertTrue(hsl!.hasPrefix("hsl(0°"))
-        XCTAssertTrue(hsl!.contains("0%"))  // saturation = 0
+        XCTAssertTrue(hsl!.contains("0%"))
     }
-
-    // MARK: - URL Detection
 
     func testHTTPSURL() {
         let result = ContentDetector.analyze("https://example.com")
@@ -90,8 +81,6 @@ final class ContentDetectorTests: XCTestCase {
         let result = ContentDetector.analyze("  https://example.com  ")
         XCTAssertTrue(result.isURL)
     }
-
-    // MARK: - File Path Detection
 
     func testAbsolutePathExists() {
         let result = ContentDetector.analyze("/tmp")
@@ -118,8 +107,6 @@ final class ContentDetectorTests: XCTestCase {
         XCTAssertFalse(ContentDetector.analyze("hello world").isFilePath)
     }
 
-    // MARK: - Cache Consistency
-
     func testAnalyzeCacheReturnsSameResult() {
         let text = "https://cached-test.example.com"
         let first = ContentDetector.analyze(text)
@@ -127,8 +114,6 @@ final class ContentDetectorTests: XCTestCase {
         XCTAssertEqual(first.url, second.url)
         XCTAssertEqual(first.trimmedText, second.trimmedText)
     }
-
-    // MARK: - Empty / Image Bypass
 
     func testEmptyStringReturnsEmpty() {
         let result = ContentDetector.analyze("")

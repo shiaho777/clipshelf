@@ -1,8 +1,6 @@
 import XCTest
 @testable import ClipShelf
 
-// MARK: - InMemorySnippetStore
-
 private final class InMemorySnippetStore: SnippetStore {
     var snippets: [Snippet] = []
 
@@ -24,8 +22,6 @@ final class SnippetTests: XCTestCase {
         let mgr = SnippetManager(store: store)
         return (mgr, store)
     }
-
-    // MARK: - CRUD
 
     func testAddSnippet() {
         let (mgr, store) = makeManager()
@@ -66,8 +62,6 @@ final class SnippetTests: XCTestCase {
         XCTAssertEqual(mgr.snippets[1].title, "S3")
     }
 
-    // MARK: - Text Expansion
-
     func testMatchExpansion() {
         let s = Snippet(title: "Email", content: "hello@example.com", shortcut: "/email")
         let (mgr, _) = makeManager(preload: [s])
@@ -88,8 +82,6 @@ final class SnippetTests: XCTestCase {
         XCTAssertNil(mgr.matchExpansion("content"))
     }
 
-    // MARK: - Categories
-
     func testCategories() {
         let items = [
             Snippet(title: "A", content: "a", category: "Work"),
@@ -100,8 +92,6 @@ final class SnippetTests: XCTestCase {
         let (mgr, _) = makeManager(preload: items)
         XCTAssertEqual(mgr.categories, ["Personal", "Work"])
     }
-
-    // MARK: - Persistence
 
     func testLoadFromStore() {
         let preloaded = [Snippet(title: "Pre", content: "loaded")]

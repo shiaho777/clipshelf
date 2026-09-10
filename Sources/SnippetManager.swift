@@ -14,8 +14,6 @@ final class SnippetManager: ObservableObject {
         loadSnippets()
     }
 
-    // MARK: - CRUD
-
     func add(_ snippet: Snippet) {
         snippets.append(snippet)
         save()
@@ -39,9 +37,6 @@ final class SnippetManager: ObservableObject {
         save()
     }
 
-    // MARK: - Text Expansion
-
-    /// Check if the given text matches a snippet shortcut and return its content.
     func matchExpansion(_ text: String) -> Snippet? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return snippets.first { snippet in
@@ -50,12 +45,9 @@ final class SnippetManager: ObservableObject {
         }
     }
 
-    /// All unique categories, sorted.
     var categories: [String] {
         Array(Set(snippets.map(\.category).filter { !$0.isEmpty })).sorted()
     }
-
-    // MARK: - Persistence
 
     private func loadSnippets() {
         do { snippets = try store.loadSnippets() }

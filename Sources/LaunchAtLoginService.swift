@@ -1,13 +1,11 @@
 import ServiceManagement
 
 protocol LaunchAtLoginService {
-    /// Whether the app is currently registered as a login item on the system.
     var isEnabled: Bool { get }
     func setEnabled(_ enabled: Bool) throws
 }
 
 enum LaunchAtLoginServiceFactory {
-    /// The production service: SMAppService with a LaunchAgent fallback.
     static func defaultService() -> LaunchAtLoginService {
         CompositeLaunchAtLoginService(
             primary: SMAppLaunchAtLoginService(),
@@ -16,7 +14,6 @@ enum LaunchAtLoginServiceFactory {
     }
 }
 
-/// Registers via SMAppService (the modern macOS 13+ login item API).
 final class SMAppLaunchAtLoginService: LaunchAtLoginService {
     var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
 
@@ -24,15 +21,11 @@ final class SMAppLaunchAtLoginService: LaunchAtLoginService {
         if enabled {
             try SMAppService.mainApp.register()
         } else {
-            // unregister() throws when nothing is registered; ignore that.
             try? SMAppService.mainApp.unregister()
         }
     }
 }
 
-/// Fallback registration via a per-user LaunchAgent plist. Works for
-/// ad-hoc/unsigned developer builds where SMAppService.register() can fail,
-/// and on any supported macOS version.
 final class LaunchAgentLaunchAtLoginService: LaunchAtLoginService {
     private let label: String
     private let executableURL: URL
@@ -86,10 +79,8 @@ final class LaunchAgentLaunchAtLoginService: LaunchAtLoginService {
         )
         try data.write(to: plistURL, options: .atomic)
 
-        // Drop any previous instance before bootstrapping the new plist.
         _ = runLaunchCtl(["bootout", "gui/\(uid)/\(label)"])
         guard runLaunchCtl(["bootstrap", "gui/\(uid)", plistURL.path]) == 0 else {
-            // bootstrap can be finicky on some systems; fall back to legacy load.
             guard runLaunchCtl(["load", "-w", plistURL.path]) == 0 else {
                 try? FileManager.default.removeItem(at: plistURL)
                 throw LaunchAgentError.failedToLoad
@@ -119,9 +110,6 @@ final class LaunchAgentLaunchAtLoginService: LaunchAtLoginService {
     }
 }
 
-/// Tries the primary service first; falls back to the legacy service when
-/// registration fails (e.g. unsigned builds on systems where SMAppService
-/// refuses to register). Disabling clears both mechanisms.
 final class CompositeLaunchAtLoginService: LaunchAtLoginService {
     private let primary: LaunchAtLoginService
     private let fallback: LaunchAtLoginService

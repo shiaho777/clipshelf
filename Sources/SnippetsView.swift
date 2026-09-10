@@ -23,14 +23,12 @@ struct SnippetsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header (add button before the close button)
             SheetHeader(lang.l("snippets.title"), onClose: { dismissPopup() }) {
                 SheetHeaderIconButton(icon: "plus.circle.fill", help: lang.l("snippets.add")) {
                     isAdding = true
                 }
             }
 
-            // Search
             SearchField(
                 text: $searchText,
                 placeholder: lang.l("search.placeholder"),
@@ -39,7 +37,6 @@ struct SnippetsView: View {
 
             Divider().opacity(0.3)
 
-            // List
             if filtered.isEmpty {
                 Spacer()
                 EmptyStateView(
@@ -87,8 +84,6 @@ struct SnippetsView: View {
     }
 }
 
-// MARK: - Snippet Row
-
 private struct SnippetRow: View {
     let snippet: Snippet
     @ObservedObject var lang: LanguageManager
@@ -131,8 +126,6 @@ private struct SnippetRow: View {
         .onHover { isHovered = $0 }
     }
 }
-
-// MARK: - Edit Sheet
 
 struct SnippetEditSheet: View {
     @ObservedObject var snippetManager: SnippetManager

@@ -4,9 +4,6 @@ import AppKit
 final class StatusItemController {
     private(set) var statusItem: NSStatusItem?
     private var smartPasteBadgeTask: Task<Void, Never>?
-    /// Set while the transient smart-paste badge is showing, so the queue-badge
-    /// updater doesn't fight the reset timer (they raced: smart-paste fired
-    /// during stack mode and its reset wiped the queue icon+count).
     var isShowingSmartPasteBadge = false
 
     func install(target: AnyObject, action: Selector) {
@@ -18,17 +15,12 @@ final class StatusItemController {
             )
             button.action = action
             button.target = target
-            // Without this, right-clicks are swallowed and do nothing.
-            // Both clicks route to the same action; the handler checks
-            // `NSApp.currentEvent` to decide panel vs menu.
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.toolTip = "ClipShelf"
         }
         statusItem = item
     }
 
-    /// Right-click menu for the status item. Built fresh on every invocation
-    /// so it always matches the current language.
     var onOpenPanel: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onQuit: (() -> Void)?

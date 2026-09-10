@@ -2,9 +2,6 @@ import Foundation
 import LocalAuthentication
 import os
 
-/// Wraps `LAContext` for async/await Touch ID / Face ID / password authentication.
-/// Uses `.deviceOwnerAuthentication` so biometry failure falls back to the system
-/// password, preventing lockout when Touch ID is unavailable (wet fingers, locked, etc.).
 @MainActor
 final class BiometricAuthService {
     static let shared = BiometricAuthService()
@@ -16,12 +13,6 @@ final class BiometricAuthService {
 
     private init() {}
 
-    // MARK: - Public API
-
-    /// Authenticate with Touch ID / Face ID, falling back to the login password.
-    ///
-    /// - Parameter reason: Localised reason string shown in the authentication prompt.
-    /// - Throws: An `LAError` if authentication fails or is cancelled by the user.
     func authenticate(reason: String) async throws {
         let context = LAContext()
         var policyError: NSError?
@@ -52,7 +43,6 @@ final class BiometricAuthService {
         }
     }
 
-    /// Returns whether device owner authentication (biometry or password) is available.
     var isBiometryAvailable: Bool {
         LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
     }

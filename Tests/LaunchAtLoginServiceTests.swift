@@ -16,8 +16,6 @@ final class LaunchAtLoginServiceTests: XCTestCase {
         CompositeLaunchAtLoginService(primary: primary, fallback: fallback)
     }
 
-    // MARK: - Composite: Enable
-
     func testEnableUsesPrimaryWhenItSucceeds() throws {
         let service = makeService()
         try service.setEnabled(true)
@@ -41,8 +39,6 @@ final class LaunchAtLoginServiceTests: XCTestCase {
         XCTAssertEqual(fallback.setEnabledCalls, [true])
     }
 
-    // MARK: - Composite: Disable
-
     func testDisableClearsBothMechanisms() throws {
         let service = makeService()
         try service.setEnabled(false)
@@ -59,8 +55,6 @@ final class LaunchAtLoginServiceTests: XCTestCase {
         XCTAssertEqual(fallback.setEnabledCalls, [false])
     }
 
-    // MARK: - Composite: State
-
     func testIsEnabledTrueWhenEitherMechanismIsRegistered() {
         fallback.isEnabled = true
         XCTAssertTrue(makeService().isEnabled)
@@ -69,8 +63,6 @@ final class LaunchAtLoginServiceTests: XCTestCase {
     func testIsEnabledFalseWhenNeitherIsRegistered() {
         XCTAssertFalse(makeService().isEnabled)
     }
-
-    // MARK: - LaunchAgent fallback
 
     private final class CallRecorder {
         var calls: [[String]] = []
@@ -123,7 +115,6 @@ final class LaunchAtLoginServiceTests: XCTestCase {
             ["/Applications/ClipShelf.app/Contents/MacOS/ClipShelf"]
         )
         XCTAssertEqual(payload["RunAtLoad"] as? Bool, true)
-        // bootout (previous instance) then bootstrap the new plist.
         XCTAssertEqual(recorder.calls.first, ["bootout", "gui/501/com.test.ClipShelf"])
         XCTAssertEqual(recorder.calls.last, ["bootstrap", "gui/501", plistURL.path])
     }

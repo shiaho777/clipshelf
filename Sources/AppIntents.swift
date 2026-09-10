@@ -1,8 +1,6 @@
 import AppIntents
 import AppKit
 
-// MARK: - Search Clipboard History
-
 @available(macOS 13.0, *)
 struct SearchClipboardHistoryIntent: AppIntent {
     static var title: LocalizedStringResource = "Search Clipboard History"
@@ -14,26 +12,19 @@ struct SearchClipboardHistoryIntent: AppIntent {
     @Parameter(title: "Limit", default: 5)
     var limit: Int
 
-    /// Optional type filter: \"text\", \"image\", or \"richText\"
     @Parameter(title: "Type Filter (text / image / richText)", default: "")
     var typeFilter: String
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
         guard let delegate = NSApp.delegate as? AppDelegate else { return .result(value: []) }
-        // Sensitive items are never exposed to Shortcuts — the UI masks them
-        // behind biometric auth, and intents have no way to satisfy that gate.
         var results = delegate.clipboardManager.search(query).filter { !$0.isSensitive }
         if !typeFilter.isEmpty, let type = ClipboardItem.ItemType(rawValue: typeFilter) {
             results = results.filter { $0.type == type }
         }
-        // prefix(_:) traps on negative values, so a Shortcuts user passing
-        // Limit = -1 would crash the app process without this clamp.
         return .result(value: Array(results.prefix(max(0, limit)).map(\.content)))
     }
 }
-
-// MARK: - Get Recent Items
 
 @available(macOS 13.0, *)
 struct GetRecentItemsIntent: AppIntent {
@@ -48,13 +39,10 @@ struct GetRecentItemsIntent: AppIntent {
         guard let delegate = NSApp.delegate as? AppDelegate else {
             return .result(value: [])
         }
-        // Never expose sensitive items to Shortcuts (no biometric gate here).
         let items = delegate.clipboardManager.recentItems(limit: max(0, count))
         return .result(value: items.filter { !$0.isSensitive }.map(\.content))
     }
 }
-
-// MARK: - Pin Item by ID
 
 @available(macOS 13.0, *)
 struct PinClipboardItemIntent: AppIntent {
@@ -73,8 +61,6 @@ struct PinClipboardItemIntent: AppIntent {
     }
 }
 
-// MARK: - Delete Item by ID
-
 @available(macOS 13.0, *)
 struct DeleteClipboardItemIntent: AppIntent {
     static var title: LocalizedStringResource = "Delete Clipboard Item"
@@ -92,8 +78,6 @@ struct DeleteClipboardItemIntent: AppIntent {
     }
 }
 
-// MARK: - Paste Item by Index
-
 @available(macOS 13.0, *)
 struct PasteItemByIndexIntent: AppIntent {
     static var title: LocalizedStringResource = "Paste Clipboard Item by Index"
@@ -110,14 +94,11 @@ struct PasteItemByIndexIntent: AppIntent {
         guard let delegate = NSApp.delegate as? AppDelegate else { return .result(value: "") }
         let idx = index - 1
         guard let item = delegate.clipboardManager.item(at: idx) else { return .result(value: "") }
-        // Never paste/copy sensitive items via Shortcuts (no biometric gate here).
         guard !item.isSensitive else { return .result(value: "") }
         delegate.clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
         return .result(value: item.content)
     }
 }
-
-// MARK: - Get Items by Source App
 
 @available(macOS 13.0, *)
 struct GetItemsByAppIntent: AppIntent {
@@ -133,14 +114,11 @@ struct GetItemsByAppIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
         guard let delegate = NSApp.delegate as? AppDelegate else { return .result(value: []) }
-        // Never expose sensitive items to Shortcuts (no biometric gate here).
         let contents = delegate.clipboardManager.itemContents(sourceBundleID: bundleID, limit: max(0, limit))
         let sensitive = Set(delegate.clipboardManager.items.filter(\.isSensitive).map(\.content))
         return .result(value: contents.filter { !sensitive.contains($0) })
     }
 }
-
-// MARK: - Clear Sensitive Items
 
 @available(macOS 13.0, *)
 struct ClearSensitiveItemsIntent: AppIntent {

@@ -2,25 +2,16 @@ import AppKit
 import Carbon.HIToolbox
 import os
 
-/// Monitors keystrokes via a CGEvent tap and expands snippet shortcuts into their content.
-/// Requires Accessibility permission.
-///
-/// Usage:
-///   let monitor = SnippetExpansionMonitor(snippetManager: manager)
-///   monitor.start()
 @MainActor
 final class SnippetExpansionMonitor {
     private let snippetManager: SnippetManager
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SnippetExpansion")
 
-    /// True when the CGEvent tap is running and snippet expansion is operational.
     private(set) var isActive: Bool = false
 
-    /// Rolling buffer of recently typed characters.
     private var inputBuffer = ""
     private let maxBufferLength = 64
 
-    /// The CGEvent tap and its run-loop source.
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -29,7 +20,6 @@ final class SnippetExpansionMonitor {
     }
 
     deinit {
-        // Clean up event tap directly since deinit is nonisolated
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
@@ -37,8 +27,6 @@ final class SnippetExpansionMonitor {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
     }
-
-    // MARK: - Lifecycle
 
     func start() {
         guard eventTap == nil else { return }
@@ -86,18 +74,14 @@ final class SnippetExpansionMonitor {
         isActive = false
     }
 
-    // MARK: - Event Handling
-
     private nonisolated func handleEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
-        // Reset buffer on non-character keys (Return, Escape, Tab, arrows, etc.)
         if isResetKey(Int(keyCode)) {
             MainActor.assumeIsolated { inputBuffer = "" }
             return Unmanaged.passRetained(event)
         }
 
-        // Extract the character
         var length = 0
         var chars = [UniChar](repeating: 0, count: 4)
         event.keyboardGetUnicodeString(maxStringLength: 4, actualStringLength: &length, unicodeString: &chars)
@@ -110,11 +94,8 @@ final class SnippetExpansionMonitor {
                 inputBuffer = String(inputBuffer.suffix(maxBufferLength))
             }
 
-            // Check if the buffer ends with any snippet shortcut
             if let match = findMatch() {
-                // Delete the shortcut characters the user typed
                 deleteBackward(count: match.shortcut!.count)
-                // Insert the snippet content
                 insertText(match.content)
                 inputBuffer = ""
             }
@@ -142,9 +123,6 @@ final class SnippetExpansionMonitor {
         return resetKeys.contains(keyCode)
     }
 
-    // MARK: - Text Injection
-
-    /// Delete `count` characters backward using synthetic key events.
     private nonisolated func deleteBackward(count: Int) {
         for _ in 0..<count {
             if let down = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Delete), keyDown: true),
@@ -155,16 +133,9 @@ final class SnippetExpansionMonitor {
         }
     }
 
-    /// Insert text by writing to the pasteboard and issuing Cmd+V.
-    /// `template` is first expanded by `SnippetVariableEngine`; if `{{cursor}}` was
-    /// present, Left-arrow CGEvents are posted to move the insertion point there.
     private nonisolated func insertText(_ template: String) {
-        // Notify ClipboardMonitor to skip this pasteboard write.
         NotificationCenter.default.post(name: .clipboardSuppressCapture, object: nil)
         let pb = NSPasteboard.general
-        // Preserve non-string payloads (images, file URLs, RTF…) — previously
-        // only the string was saved and the restore wiped everything else,
-        // permanently destroying e.g. an image the user had copied.
         let savedTypes = pb.types ?? []
         var savedData: [(NSPasteboard.PasteboardType, Data)] = []
         for type in savedTypes where type != .string {
@@ -174,7 +145,6 @@ final class SnippetExpansionMonitor {
         }
         let clipboardText = pb.string(forType: .string) ?? ""
 
-        // Expand variables (pure function, safe to call from nonisolated context).
         let (expanded, cursorBackCount) = SnippetVariableEngine.expand(
             template: template,
             clipboardText: clipboardText
@@ -183,7 +153,6 @@ final class SnippetExpansionMonitor {
         pb.clearContents()
         pb.setString(expanded, forType: .string)
 
-        // Simulate Cmd+V
         if let down = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true),
            let up = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false) {
             down.flags = .maskCommand
@@ -192,7 +161,6 @@ final class SnippetExpansionMonitor {
             up.post(tap: .cgAnnotatedSessionEventTap)
         }
 
-        // Move cursor back to {{cursor}} position
         if cursorBackCount > 0 {
             for _ in 0..<cursorBackCount {
                 if let down = CGEvent(keyboardEventSource: nil,
@@ -207,10 +175,6 @@ final class SnippetExpansionMonitor {
             }
         }
 
-        // Restore previous clipboard contents after a brief delay. The restore
-        // write itself bumps changeCount, so also suppress that tick — otherwise
-        // the pre-expansion text is recaptured as a duplicate history entry
-        // whenever a monitor poll lands between the two writes.
         let oldContents = clipboardText
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             NotificationCenter.default.post(name: .clipboardSuppressCapture, object: nil)

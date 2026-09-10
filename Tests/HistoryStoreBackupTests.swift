@@ -24,41 +24,27 @@ final class HistoryStoreBackupTests: XCTestCase {
         contents.map { ClipboardItem(content: $0, type: .text) }
     }
 
-    // MARK: - Backup Creation
-
     func testSaveCreatesBackup() throws {
         let store = makeStore()
-        // First save — no backup yet (no prior file to rotate)
         try store.saveItems(makeItems(["v1"]))
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.backupURL(1).path),
                         "First save should not create backup (no prior file)")
 
-        // Second save — history.json from v1 becomes .bak.1
         try store.saveItems(makeItems(["v2"]))
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.backupURL(1).path),
                        "Second save should create .bak.1")
 
-        // Verify .bak.1 contains v1 data
         let backupData = try Data(contentsOf: store.backupURL(1))
         let backupItems = try JSONDecoder().decode([ClipboardItem].self, from: backupData)
         XCTAssertEqual(backupItems.count, 1)
         XCTAssertEqual(backupItems[0].content, "v1")
     }
 
-    // MARK: - Backup Rotation
-
     func testBackupRotation() throws {
         let store = makeStore()
-        // Save 4 times: v1, v2, v3, v4
         for i in 1...4 {
             try store.saveItems(makeItems(["v\(i)"]))
         }
-
-        // After 4 saves:
-        // history.json = v4
-        // .bak.1 = v3 (most recent backup)
-        // .bak.2 = v2
-        // .bak.3 = v1 (oldest backup)
 
         let decoder = JSONDecoder()
         let bak1 = try decoder.decode([ClipboardItem].self, from: Data(contentsOf: store.backupURL(1)))
@@ -75,25 +61,18 @@ final class HistoryStoreBackupTests: XCTestCase {
         for i in 1...6 {
             try store.saveItems(makeItems(["v\(i)"]))
         }
-        // .bak.1 = v5, .bak.2 = v4, .bak.3 = v3
-        // No .bak.4 should exist
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.backupURL(3).path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.backupURL(4).path))
     }
 
-    // MARK: - Recovery from Corruption
-
     func testRecoverFromCorruptFile() throws {
         let store = makeStore()
-        // Save valid data twice (so .bak.1 exists with v1)
         try store.saveItems(makeItems(["good data"]))
         try store.saveItems(makeItems(["latest"]))
 
-        // Now corrupt history.json
         let historyURL = tempDir.appendingPathComponent("history.json")
         try "NOT VALID JSON{{{".data(using: .utf8)!.write(to: historyURL)
 
-        // Load with a fresh store instance (no cached state)
         let freshStore = makeStore()
         let recovered = try freshStore.loadItems()
         XCTAssertEqual(recovered.count, 1)
@@ -103,12 +82,10 @@ final class HistoryStoreBackupTests: XCTestCase {
 
     func testRecoverFallsThrough() throws {
         let store = makeStore()
-        // Save 3 times to fill all backup slots
         try store.saveItems(makeItems(["oldest"]))
         try store.saveItems(makeItems(["middle"]))
         try store.saveItems(makeItems(["latest"]))
 
-        // Corrupt history.json and .bak.1
         let historyURL = tempDir.appendingPathComponent("history.json")
         try "CORRUPT".data(using: .utf8)!.write(to: historyURL)
         try "CORRUPT".data(using: .utf8)!.write(to: store.backupURL(1))
@@ -124,7 +101,6 @@ final class HistoryStoreBackupTests: XCTestCase {
         let store = makeStore()
         try store.saveItems(makeItems(["data"]))
 
-        // Corrupt everything
         let historyURL = tempDir.appendingPathComponent("history.json")
         try "BAD".data(using: .utf8)!.write(to: historyURL)
         try "BAD".data(using: .utf8)!.write(to: store.backupURL(1))

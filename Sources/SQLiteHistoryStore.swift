@@ -5,15 +5,10 @@ import os
 import SQLite3
 #endif
 
-/// The `SQLITE_TRANSIENT` destructor type tells SQLite to make its own copy of
-/// bound data immediately. Defined as `((sqlite3_destructor_type)(−1))` in C;
-/// Swift lacks the macro so we replicate it via `unsafeBitCast`.
 private let SQLITE_TRANSIENT_DESTRUCTOR = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 final class SQLiteHistoryStore: ClipboardHistoryStore {
     private var db: OpaquePointer?
-    /// Protects `lastKnownItems` and `lastKnownOrder` against concurrent access from
-    /// the persistence queue (saveItems) and any other queue that calls loadItems.
     private let itemsLock = NSLock()
     private let dbLock = NSRecursiveLock()
     private var lastKnownItems: [UUID: ClipboardItem] = [:]
@@ -21,12 +16,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private let dbURL: URL
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SQLiteStore")
 
-    /// Each migration is a (targetVersion, sql) pair. Migrations run in order.
-    /// Version 0 = fresh database before any migration.
-    /// Version 1 = initial schema (clipboard_items table).
-    /// Add new migrations here for future schema changes.
     static let migrations: [(version: Int, sql: String)] = [
-        // Version 1: initial schema
         (1, """
         CREATE TABLE IF NOT EXISTS clipboard_items (
             id TEXT PRIMARY KEY,
@@ -45,9 +35,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             expires_at REAL
         )
         """),
-        // Version 2: FTS5 full-text index for content, ocr_text, source_app_name.
-        // Triggers keep the FTS table in sync with the main table automatically.
-        // The final INSERT … SELECT populates FTS from existing rows on upgrade.
         (2, """
         CREATE VIRTUAL TABLE IF NOT EXISTS clipboard_fts
         USING fts5(
@@ -98,20 +85,12 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             SELECT rowid, content, coalesce(ocr_text, ''), coalesce(source_app_name, '')
             FROM clipboard_items;
         """),
-        // Version 3: AES-256-GCM encryption columns for sensitive items + NLEmbedding vector storage.
-        // content_enc / rtf_enc hold AES-GCM combined ciphertext; is_enc flags whether
-        // the plaintext columns carry a placeholder instead of real data.
         (3, """
         ALTER TABLE clipboard_items ADD COLUMN content_enc BLOB;
         ALTER TABLE clipboard_items ADD COLUMN rtf_enc BLOB;
         ALTER TABLE clipboard_items ADD COLUMN is_enc INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE clipboard_items ADD COLUMN embedding BLOB;
         """),
-        // Version 4: Rebuild FTS5 index with the trigram tokenizer.
-        // The trigram tokenizer splits text into overlapping 3-character windows,
-        // enabling substring search for CJK and all other scripts without word boundaries.
-        // We drop the old table + triggers and recreate them, then issue a single
-        // `VALUES('rebuild')` command which SQLite handles as an efficient full re-index.
         (4, """
         DROP TABLE IF EXISTS clipboard_fts;
         DROP TRIGGER IF EXISTS clipboard_items_ai;
@@ -153,8 +132,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         ON clipboard_items(expires_at)
         WHERE expires_at IS NOT NULL;
         """),
-        // Version 6: persist the screenshot flag. It was only ever held in
-        // memory, so every screenshot lost its badge and grouping after restart.
         (6, """
         ALTER TABLE clipboard_items ADD COLUMN is_screenshot INTEGER NOT NULL DEFAULT 0;
         """)
@@ -169,12 +146,8 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         self.dbURL = storageDirectory.appendingPathComponent("history.db")
         openDatabase()
         runMigrations()
-        // PRAGMA optimize is intentionally called at shutdown (optimizeForClose()),
-        // not here. Calling it at open provides no benefit as query statistics are empty.
     }
 
-    /// Call just before closing the database (e.g. applicationWillTerminate).
-    /// Updates SQLite query-planner statistics for better next-open performance.
     func optimizeForClose() {
         withDatabaseLock {
             exec("PRAGMA optimize")
@@ -182,9 +155,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     }
 
     deinit {
-        // Take the db lock: saveEmbedding runs on SemanticSearchService's
-        // background queue and may still be inside a statement — closing here
-        // without the lock was a use-after-free at shutdown.
         dbLock.lock()
         defer { dbLock.unlock() }
         for stmt in cachedStatements.values {
@@ -194,10 +164,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         if let db { sqlite3_close(db) }
     }
 
-    // MARK: - ClipboardHistoryStore
-
-    /// Full-text search via FTS5. Returns matching item IDs ordered by BM25 relevance
-    /// (pinned items first). Falls back gracefully if FTS5 is unavailable.
     func searchFTS(_ query: String, limit: Int = 500) -> [UUID] {
         withDatabaseLock {
             searchFTSLocked(query, limit: limit)
@@ -233,11 +199,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
                 uuids.append(uuid)
             }
         }
-        // Multi-token queries: FTS5's default OR-ish bare-term matching breaks
-        // the documented implicit-AND contract (e.g. "ab xyz" matched rows
-        // containing only "xyz"). Re-run the LIKE fallback with strict AND
-        // semantics so every token must match. Single-token queries can keep
-        // the BM25-ranked FTS result.
         let tokenCount = sanitized.components(separatedBy: " ").count
         if tokenCount > 1 {
             return searchLikeLocked(tokens: sanitized.components(separatedBy: " "), limit: boundedLimit)
@@ -267,8 +228,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
         var bindIndex: Int32 = 1
         for term in terms {
-            // Escape LIKE wildcards so a search for "100%" doesn't match
-            // everything containing "100" followed by anything.
             let pattern = "%\(Self.escapeLikePattern(term))%"
             sqlite3_bind_text(stmt, bindIndex, pattern, -1, SQLITE_TRANSIENT_DESTRUCTOR)
             sqlite3_bind_text(stmt, bindIndex + 1, pattern, -1, SQLITE_TRANSIENT_DESTRUCTOR)
@@ -286,18 +245,12 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         return uuids
     }
 
-    /// Escapes SQL LIKE wildcards (`\`, `%`, `_`) for use with `ESCAPE '\'`.
     static func escapeLikePattern(_ term: String) -> String {
         term.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "%", with: "\\%")
             .replacingOccurrences(of: "_", with: "\\_")
     }
 
-    /// Sanitise a raw user query into a safe FTS5 MATCH expression for the trigram tokenizer.
-    /// The trigram tokenizer performs inherent substring matching, so:
-    ///   - No `*` suffix is appended (that is a prefix-scan hint irrelevant to trigrams)
-    ///   - Tokens shorter than 3 characters are dropped (trigrams need at least 3 chars)
-    ///   - FTS5 meta-characters are stripped to prevent injection
     private func sanitizeFTSQuery(_ raw: String) -> String {
         var cleaned = raw
         for ch: Character in "\"*()^:-+" {
@@ -309,10 +262,9 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             .filter { token in
                 !token.isEmpty
                 && !reserved.contains(token.uppercased())
-                && token.count >= 3  // trigram minimum
+                && token.count >= 3
             }
         guard !tokens.isEmpty else { return "" }
-        // Join with implicit AND (all tokens must appear as trigrams in the row).
         return tokens.joined(separator: " ")
     }
 
@@ -423,20 +375,12 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private func saveItemsLocked(_ items: [ClipboardItem]) throws -> Bool {
         guard let db else { throw StoreError.databaseNotOpen }
 
-        // `Dictionary(uniqueKeysWithValues:)` traps on duplicate keys; imported
-        // or corrupt data can carry the same UUID twice, and a crash here would
-        // take the app down on every snapshot. Keep the first occurrence.
         var newMap = [UUID: ClipboardItem](minimumCapacity: items.count)
         for item in items where newMap[item.id] == nil {
             newMap[item.id] = item
         }
         let newIDs = Set(newMap.keys)
 
-        // Re-read the cache INSIDE the transaction window. The snapshot runs on
-        // the persistence queue while incremental deletes commit on the
-        // incremental queue; diffing against a cache read before BEGIN let a
-        // concurrent delete be overwritten by INSERT OR REPLACE — deleted rows
-        // resurrected after restart.
         exec("BEGIN")
         let currentItems = itemsLock.withLock { lastKnownItems }
         let toInsert = newIDs.subtracting(currentItems.keys)
@@ -650,10 +594,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         guard db != nil else { throw StoreError.databaseNotOpen }
         guard !ids.isEmpty else { return false }
 
-        // Delete ALL requested rows, not just cached ones: cold items beyond
-        // the hot window aren't in lastKnownItems, and filtering by the cache
-        // made their deletes silent no-ops — rows lingered and returned on the
-        // next load. (DELETE of an unknown id is simply a no-op in SQL.)
         exec("BEGIN")
         let anyFailed = !deleteItemsPrepared(ids)
 
@@ -754,9 +694,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         return true
     }
 
-    // MARK: - Migration
-
-    /// Migrate from JSON history file. Returns true if migration occurred.
     @discardableResult
     func migrateFromJSON(storageDirectory: URL) -> Bool {
         withDatabaseLock {
@@ -791,7 +728,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             lastKnownItems = knownItems
             lastKnownOrder = items.map(\.id)
 
-            // Rename original file
             let migratedURL = jsonURL.appendingPathExtension("migrated")
             try? fm.removeItem(at: migratedURL)
             try fm.moveItem(at: jsonURL, to: migratedURL)
@@ -803,8 +739,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
     }
 
-    // MARK: - Private
-
     private func openDatabase() {
         let status = sqlite3_open(dbURL.path, &db)
         if status != SQLITE_OK {
@@ -815,8 +749,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             exec("PRAGMA synchronous=NORMAL")
         }
     }
-
-    // MARK: - Schema Migration
 
     private func getUserVersion() -> Int {
         guard let db else { return 0 }
@@ -837,8 +769,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         let pendingMigrations = Self.migrations.filter { $0.version > currentVersion }
         guard !pendingMigrations.isEmpty else { return }
 
-        // Run each migration in its own transaction so a failure can be precisely
-        // rolled back without corrupting prior successful migrations.
         for migration in pendingMigrations {
             logger.info("Running schema migration to version \(migration.version)")
             exec("BEGIN")
@@ -849,7 +779,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             } else {
                 exec("ROLLBACK")
                 logger.error("Migration v\(migration.version) failed — rolled back; stopping further migrations")
-                break  // Leave the database at the last successfully committed version.
+                break
             }
         }
         logger.info("Database at schema version \(self.getUserVersion())")
@@ -914,9 +844,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             if let rtf = item.rtfData { rtfEncData = try? EncryptionService.shared.encrypt(rtf) }
             isEnc = true
         } else {
-            // Encryption failed or content not encodable: fall back to storing
-            // plaintext. Writing the placeholder without ciphertext would make
-            // the item permanently unrecoverable.
             isEnc = false
         }
 
@@ -968,7 +895,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             let len = sqlite3_column_bytes(stmt, 2)
             rtfData = Data(bytes: blob, count: Int(len))
         }
-        // Decrypt sensitive items (columns 14=content_enc, 15=rtf_enc, 16=is_enc)
         let isEnc = sqlite3_column_int(stmt, 16) != 0
         if isEnc {
             if sqlite3_column_type(stmt, 14) != SQLITE_NULL,
@@ -1000,8 +926,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         if sqlite3_column_type(stmt, 13) != SQLITE_NULL {
             expiresAt = Date(timeIntervalSinceReferenceDate: sqlite3_column_double(stmt, 13))
         }
-        // Column 17 (is_screenshot) may be absent on databases not yet migrated
-        // to v6 — treat an out-of-range column as false instead of crashing.
         let isScreenshot = sqlite3_column_count(stmt) > 17 && sqlite3_column_int(stmt, 17) != 0
 
         return ClipboardItem(
@@ -1025,10 +949,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         return Int(sqlite3_column_int64(stmt, 0))
     }
 
-    // MARK: - Embedding Storage
-
-    /// Persist a Float32 embedding vector for a clipboard item.
-    /// Called from SemanticSearchService's background queue after computation.
     func saveEmbedding(_ vector: [Float32], for id: UUID) {
         withDatabaseLock {
             let data = SemanticSearchService.shared.float32ArrayToData(vector)
@@ -1040,7 +960,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
     }
 
-    /// Load all persisted embedding vectors into memory. Called once at startup.
     func loadEmbeddings(limit: Int? = nil) -> [UUID: [Float32]] {
         withDatabaseLock {
             loadEmbeddingsLocked(limit: limit)
@@ -1071,12 +990,6 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         return result
     }
 
-    // MARK: - Helpers
-
-    /// Cache of repeatedly-used prepared statements (upsert, delete, use-count
-    /// updates). Compiling SQL on every write showed up as measurable overhead
-    /// in the incremental persistence path; the store is guarded by
-    /// `dbLock`, so cached statements are only touched under that lock.
     private var cachedStatements: [String: OpaquePointer] = [:]
 
     private func cachedStatement(_ sql: String) -> OpaquePointer? {

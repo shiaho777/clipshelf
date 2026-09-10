@@ -70,8 +70,6 @@ private enum ClipboardImageStoragePreparation {
     }
 }
 
-/// Manages image persistence, caching, OCR, and migration.
-/// Extracted from ClipboardManager to reduce its responsibilities.
 @MainActor
 final class ClipboardImageManager {
     private let imageStore: ClipboardImageStore
@@ -83,8 +81,6 @@ final class ClipboardImageManager {
         self.imageStore = imageStore
         self.ocrService = ocrService
     }
-
-    // MARK: - Resolve
 
     func resolvedImage(for item: ClipboardItem) -> NSImage? {
         guard item.type == .image else { return nil }
@@ -159,8 +155,6 @@ final class ClipboardImageManager {
         }
     }
 
-    // MARK: - Save / Delete
-
     func saveImageFile(_ data: Data, fileExtension: String? = nil) -> (fileName: String?, inlineData: Data?) {
         let (finalData, ext) = ClipboardImageStoragePreparation.storedRepresentation(of: data, fileExtension: fileExtension)
         let fileName = "\(UUID().uuidString).\(ext)"
@@ -216,24 +210,17 @@ final class ClipboardImageManager {
         ImageCache.shared.remove(item.id, fileName: fileName, removeSharedImage: !hasOtherReferences)
     }
 
-    // MARK: - Maintenance
-
     func pruneOrphanedFiles(referencedFileNames: Set<String>) {
         imageStore.pruneOrphanedFiles(referencedFileNames: referencedFileNames)
     }
-
-    // MARK: - OCR
 
     func recognizeText(in imageData: Data, completion: @escaping (String?) -> Void) {
         ocrService.recognizeText(in: imageData, completion: completion)
     }
 
-    /// Async wrapper for OCR text recognition.
     func recognizeText(in imageData: Data) async -> String? {
         await ocrService.recognizeText(in: imageData)
     }
-
-    // MARK: - Legacy Migration
 
     @discardableResult
     func migrateLegacyInlineImages(items: inout [ClipboardItem]) -> Bool {

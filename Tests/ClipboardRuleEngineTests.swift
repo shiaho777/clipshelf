@@ -11,8 +11,6 @@ final class ClipboardRuleEngineTests: XCTestCase {
         engine = ClipboardRuleEngine()
     }
 
-    // MARK: - Strip URL Tracking
-
     func testStripURLTrackingRemovesUTMParams() async {
         engine.rules = [
             ClipboardRule(name: "strip", actions: [.stripURLTracking], order: 0)
@@ -67,8 +65,6 @@ final class ClipboardRuleEngineTests: XCTestCase {
         }
     }
 
-    // MARK: - Sensitive Content Detection
-
     func testDetectCreditCardNumber() async {
         engine.rules = [
             ClipboardRule(name: "sensitive", actions: [.detectSensitive(autoDeleteSeconds: 60)], order: 0)
@@ -102,7 +98,6 @@ final class ClipboardRuleEngineTests: XCTestCase {
         let input = text("-----BEGIN RSA PRIVATE KEY-----\nMIIEow...")
         let result = await engine.process(input)
         if case .storeSensitive = result {
-            // pass
         } else {
             XCTFail("Expected .storeSensitive for SSH key")
         }
@@ -115,13 +110,10 @@ final class ClipboardRuleEngineTests: XCTestCase {
         let input = text("Just a normal sentence")
         let result = await engine.process(input)
         if case .store = result {
-            // pass
         } else {
             XCTFail("Expected .store for non-sensitive content")
         }
     }
-
-    // MARK: - Discard
 
     func testDiscardRuleShortCircuits() async {
         engine.rules = [
@@ -140,13 +132,10 @@ final class ClipboardRuleEngineTests: XCTestCase {
         let input = text("hello world")
         let result = await engine.process(input)
         if case .store = result {
-            // pass
         } else {
             XCTFail("Expected .store for non-matching content")
         }
     }
-
-    // MARK: - Rule Chaining
 
     func testMultipleActionsChain() async {
         engine.rules = [
@@ -174,8 +163,6 @@ final class ClipboardRuleEngineTests: XCTestCase {
             XCTFail("Expected .store with regex replacement")
         }
     }
-
-    // MARK: - Trigger Matching
 
     func testContentMatchesTrigger() async {
         engine.rules = [
@@ -222,8 +209,6 @@ final class ClipboardRuleEngineTests: XCTestCase {
         let result = await engine.process(text("anything"))
         if case .store = result {} else { XCTFail("Expected .store since rule is disabled") }
     }
-
-    // MARK: - Helpers
 
     private func text(_ s: String) -> CapturedContent {
         CapturedContent(kind: .text(content: s), sourceBundleID: nil, sourceAppName: nil)

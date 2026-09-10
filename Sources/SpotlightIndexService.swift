@@ -3,8 +3,6 @@ import CoreSpotlight
 import UniformTypeIdentifiers
 import os
 
-/// Indexes clipboard history items in CoreSpotlight so they appear in macOS system search.
-/// Sensitive items (`isSensitive = true`) are never indexed.
 @MainActor
 final class SpotlightIndexService {
     static let shared = SpotlightIndexService()
@@ -18,9 +16,6 @@ final class SpotlightIndexService {
 
     private init() {}
 
-    // MARK: - Public API
-
-    /// Batch-index items on startup. Runs asynchronously in a background Task.
     func indexItems(_ items: [ClipboardItem]) {
         let eligible = items.filter { !$0.isSensitive }
         guard !eligible.isEmpty else { return }
@@ -39,16 +34,12 @@ final class SpotlightIndexService {
         }
     }
 
-    /// Index a single item (call after adding a new item).
     func indexItem(_ item: ClipboardItem) {
         guard !item.isSensitive else { return }
         pendingItems[item.id] = item
         pendingWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            // A deindexAll() (e.g. clearAll) may have run while this batch was
-            // pending; without cancelling, the batch fired afterwards and
-            // re-indexed stale/deleted items with full content.
             guard !pendingItems.isEmpty else { return }
             let items = Array(self.pendingItems.values)
             self.pendingItems.removeAll(keepingCapacity: true)
@@ -58,7 +49,6 @@ final class SpotlightIndexService {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 
-    /// Remove a single item from the Spotlight index.
     func deindexItem(id: UUID) {
         pendingItems.removeValue(forKey: id)
         Task.detached(priority: .background) { [weak self] in
@@ -73,8 +63,6 @@ final class SpotlightIndexService {
         }
     }
 
-    /// Remove all ClipShelf items from the Spotlight index. Also drops any
-    /// pending index batch so it can't fire afterwards and resurrect stale rows.
     func deindexAll() {
         pendingItems.removeAll(keepingCapacity: true)
         pendingWork?.cancel()
@@ -91,12 +79,9 @@ final class SpotlightIndexService {
         }
     }
 
-    // MARK: - Helpers
-
     nonisolated private static func makeSearchableItem(_ item: ClipboardItem, domainID: String) -> CSSearchableItem {
         let attributeSet = CSSearchableItemAttributeSet(contentType: .text)
 
-        // Title: source app name or type badge
         let typeLabel: String
         switch item.type {
         case .text:    typeLabel = "Text"
@@ -106,12 +91,11 @@ final class SpotlightIndexService {
         }
         attributeSet.title = item.sourceAppName.map { "\($0) — \(typeLabel)" } ?? typeLabel
 
-        // Searchable text body (capped at 1000 chars; images use OCR text)
         let body: String
         if item.type == .image {
             body = item.ocrText ?? ""
         } else if item.type == .fileURL {
-            body = item.content  // path strings
+            body = item.content
         } else {
             body = String(item.content.prefix(1000))
         }

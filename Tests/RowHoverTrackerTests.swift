@@ -1,8 +1,6 @@
 import XCTest
 @testable import ClipShelf
 
-/// The history list consults a plain tracker (not SwiftUI @State) for the
-/// hovered row, so pointer crossings during a scroll don't re-render the list.
 final class RowHoverTrackerTests: XCTestCase {
 
     @MainActor
@@ -23,7 +21,6 @@ final class RowHoverTrackerTests: XCTestCase {
         RowHoverTracker.shared.set(second)
         XCTAssertEqual(RowHoverTracker.shared.itemID, second)
 
-        // Leave clean state for other tests / the running app.
         RowHoverTracker.shared.set(nil)
     }
 }

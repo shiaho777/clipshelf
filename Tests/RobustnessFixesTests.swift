@@ -3,17 +3,8 @@ import AppKit
 import Carbon.HIToolbox
 @testable import ClipShelf
 
-/// Regression tests for robustness fixes: hotkey config restoration, JS
-/// hang quarantine, pasteboard write failure semantics, CSV formula
-/// injection, and encryption key initialization.
 final class RobustnessFixesTests: XCTestCase {
 
-    // MARK: - HotKeyManager config restoration
-
-    /// Loading a stored config must not persist still-default values over
-    /// customizations that have not been read yet. Before the fix, assigning
-    /// `mainHotKey` during load fired `didSet` → `saveConfig()`, clobbering
-    /// the queue/quick-paste keys on disk.
     func testLoadConfigPreservesStoredCustomizations() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("hotkey-test-\(UUID().uuidString)")
@@ -29,18 +20,12 @@ final class RobustnessFixesTests: XCTestCase {
         XCTAssertEqual(manager.queueHotKey.keyCode, 12)
         XCTAssertEqual(manager.quickPasteHotKey.keyCode, 13)
 
-        // Re-read from disk through a fresh store to prove nothing was rewritten.
         let reloaded = JSONHotKeyStore(storageDirectory: directory)
         XCTAssertEqual(try reloaded.loadMainHotKey()?.keyCode, 11)
         XCTAssertEqual(try reloaded.loadQueueHotKey()?.keyCode, 12)
         XCTAssertEqual(try reloaded.loadQuickPasteHotKey()?.keyCode, 13)
     }
 
-    // MARK: - ScriptRuleRunner hang containment
-
-    /// A script stuck in an infinite loop must time out without poisoning all
-    /// later evaluations (the serial eval queue is rotated) and must be
-    /// skipped immediately on subsequent calls.
     func testInfiniteLoopIsQuarantinedWithoutBlockingLaterScripts() async {
         let runner = ScriptRuleRunner(timeout: 0.5)
         let hangScript = "function process(content, bundleID) { while(true) {} }"
@@ -51,7 +36,6 @@ final class RobustnessFixesTests: XCTestCase {
         XCTAssertGreaterThan(Date().timeIntervalSince(hungStart), 0.4,
                              "expected to wait for the timeout before returning")
 
-        // The queue rotation lets healthy scripts keep working.
         let healthy = await runner.evaluate(
             script: "function process(content, bundleID) { return content + '!'; }",
             content: "hi",
@@ -59,7 +43,6 @@ final class RobustnessFixesTests: XCTestCase {
         )
         XCTAssertEqual(healthy, .modified("hi!"))
 
-        // The hung script is quarantined and returns instantly.
         let quarantinedStart = Date()
         let quarantined = await runner.evaluate(script: hangScript, content: "x", sourceBundleID: nil)
         XCTAssertNil(quarantined)
@@ -67,11 +50,6 @@ final class RobustnessFixesTests: XCTestCase {
                           "quarantined script should be skipped without waiting for timeout")
     }
 
-    // MARK: - ClipboardPasteboardWriter failure semantics
-
-    /// When an image payload cannot be resolved the pasteboard must be left
-    /// untouched — previously it was cleared first, destroying whatever the
-    /// user had copied, and the use count was incremented anyway.
     func testFailedImagePayloadLeavesClipboardUntouched() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("clipshelf-test-\(UUID().uuidString)"))
         pasteboard.declareTypes([.string], owner: nil)
@@ -112,24 +90,16 @@ final class RobustnessFixesTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "hello world")
     }
 
-    // MARK: - CSV formula injection
-
     func testCSVFormulaInjectionNeutralized() {
         XCTAssertEqual("=1+1".csvEscaped, "'=1+1")
         XCTAssertEqual("+SUM(A1)".csvEscaped, "'+SUM(A1)")
         XCTAssertEqual("-not-a-flag".csvEscaped, "'-not-a-flag")
         XCTAssertEqual("@import".csvEscaped, "'@import")
         XCTAssertEqual("\tTabbed".csvEscaped, "'\tTabbed")
-        // Ordinary content is untouched.
         XCTAssertEqual("plain text".csvEscaped, "plain text")
-        // Quoting still applies after neutralization.
         XCTAssertEqual("=a,b".csvEscaped, "\"'=a,b\"")
     }
 
-    // MARK: - EncryptionService concurrency
-
-    /// Concurrent first use from multiple queues must initialize the key
-    /// exactly once without crashing (previously an unsynchronized lazy var).
     func testConcurrentEncryptionDoesNotCrash() {
         let service = EncryptionService.shared
         let group = DispatchGroup()

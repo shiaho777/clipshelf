@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Settings rendered inside the main panel (no separate window).
-///
-/// Reuses the main panel's visual language so the two pages read as one app:
-/// a `SheetHeader`-style header row, a capsule section switcher built from the
-/// same ingredients as the history filter chips (`filterButton`), and the
-/// shared section content. The standalone-window `SettingsView` remains for
-/// any future host that wants a modal settings window.
 struct SettingsEmbeddedView: View {
     @ObservedObject var clipboardManager: ClipboardManager
     @ObservedObject var snippetManager: SnippetManager
@@ -15,19 +8,13 @@ struct SettingsEmbeddedView: View {
     @ObservedObject private var lang = LanguageManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var sectionAnimation
-    /// Slide direction for the content transition, set on every tap before the
-    /// animated `section` assignment so forward/backward feel like a tab bar.
     @State private var forward = true
-    // @AppStorage, not @State: the settings page remounts on every re-entry
-    // (page = .history tears the view down), so @State reset the tab to
-    // General each time. Also keeps the choice across relaunches.
     @AppStorage("settings.section") private var section = 0
 
     private let sectionKeys = ["settings.tab.general", "settings.tab.rules", "settings.tab.data", "settings.tab.about"]
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header row — matches the panel's search-row geometry.
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Button {
                     onBack()
@@ -54,7 +41,6 @@ struct SettingsEmbeddedView: View {
                 sectionSwitcher
             }
             .padding(.horizontal, 14)
-            // fullSizeContentView: keep clear of the transparent titlebar.
             .padding(.top, 36)
             .padding(.bottom, 10)
 
@@ -63,10 +49,6 @@ struct SettingsEmbeddedView: View {
             settingsContent
         }
         .transition(.opacity)
-        // Honor a requested tab (e.g. the gear context-menu "Test Rules"
-        // action writes _settingsRequestedTab). Previously only the unused
-        // window variant read this key, so the request silently landed on
-        // the General section.
         .onAppear {
             let requested = UserDefaults.standard.integer(forKey: "_settingsRequestedTab")
             if requested > 0, requested < sectionKeys.count {
@@ -75,16 +57,12 @@ struct SettingsEmbeddedView: View {
             UserDefaults.standard.removeObject(forKey: "_settingsRequestedTab")
         }
         .onChange(of: section) { newValue in
-            // Persist the tab only for organic navigation; a _settingsRequestedTab
-            // jump (gear → "Test Rules") is one-shot and must not overwrite it.
             if UserDefaults.standard.object(forKey: "_settingsRequestedTab") == nil {
                 UserDefaults.standard.set(newValue, forKey: "settings.section")
             }
         }
     }
 
-    /// Capsule section switcher — same visual recipe as the history filter chips:
-    /// 12pt text, active segment gets a control-background capsule with soft shadow.
     private var sectionSwitcher: some View {
         HStack(spacing: 2) {
             ForEach(0..<sectionKeys.count, id: \.self) { i in
@@ -119,15 +97,11 @@ struct SettingsEmbeddedView: View {
     private var settingsContent: some View {
         ScrollView {
             sectionBody
-                // Keyed by section so tab switches crossfade/slide instead of
-                // hard-cutting — same spring as the switcher pill above.
                 .id(section)
                 .transition(contentTransition)
         }
     }
 
-    /// Slide follows navigation direction (reduce-motion gets opacity only),
-    /// matching the history filter chips' recipe.
     private var contentTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
         return .asymmetric(
@@ -152,14 +126,6 @@ struct SettingsEmbeddedView: View {
 }
 import SwiftUI
 import AppKit
-
-// MARK: - In-Panel Settings Sections
-//
-// Each section is a standalone View that owns its own @State so toggles,
-// pickers and buttons stay live while embedded in the main panel
-// (SettingsEmbeddedView). These deliberately do NOT live as computed
-// properties on `SettingsView`: a computed property there produced fresh view
-// instances on every render, resetting @State and breaking interaction.
 
 
 struct SettingsGeneralSectionPanel: View {
@@ -210,9 +176,6 @@ struct SettingsGeneralSectionPanel: View {
                 }
             }
             .onAppear {
-                // Mirror the system registration state before first interaction.
-                // Without this the toggle showed OFF while login-launch was
-                // actually enabled, and the first tap silently disabled it.
                 settingsVM.loadLaunchAtLoginPreferenceIfNeeded()
             }
             SettingsCard(title: lang.l("settings.hotkeys.section")) {
@@ -281,7 +244,6 @@ struct SettingsGeneralSectionPanel: View {
         }
     }
 
-    /// Shared trailing width so the pickers in one card align into a column.
     private var pickerWidth: CGFloat { 110 }
 }
 
@@ -301,8 +263,6 @@ struct SettingsDataSectionPanel: View {
     @State private var showExportSuccess = false
     @State private var showImportSuccess = false
     @State private var importExportError: String?
-    /// 0 = ZIP backup, 1 = CSV, 2 = Markdown. Persisted: the view remounts on
-    /// every re-entry, so @State reset the picker to ZIP each time.
     @AppStorage("settings.exportFormat") private var exportFormat = 0
 
     private static let storageDirectory: URL = AppStoragePaths.defaultStorageDirectory()
@@ -529,12 +489,6 @@ struct SettingsAboutSectionPanel: View {
     }
 }
 
-// MARK: - Section Content
-
-/// One settings section, shared between the embedded panel page and the
-/// (optional) standalone window. `isInPanel` switches to the panel's visual
-/// language: self-drawn rows on the vibrancy background instead of the system
-/// grouped-form chrome.
 struct SettingsSectionStack<Content: View>: View {
     let isInPanel: Bool
     @ViewBuilder let content: () -> Content
@@ -558,10 +512,6 @@ struct SettingsSectionStack<Content: View>: View {
     }
 }
 
-/// A single settings row: label on the left, control on the right — mirrors
-/// the main panel's row anatomy (12–13pt text, quiet secondary captions).
-/// Descriptions belong in `caption` so they align inside the row instead of
-/// dangling between rows with mismatched padding.
 struct SettingsRow<Control: View>: View {
     let label: String
     var caption: String? = nil
@@ -593,7 +543,6 @@ struct SettingsRow<Control: View>: View {
     }
 }
 
-/// A full-width titled group of settings rows (panel style).
 struct SettingsCard<Content: View>: View {
     let title: String?
     @ViewBuilder let content: () -> Content

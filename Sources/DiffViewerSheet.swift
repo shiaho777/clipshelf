@@ -20,10 +20,8 @@ struct DiffViewerSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Header ──────────────────────────────────────────
             SheetHeader(lang.l("diff.title"), onClose: { dismissPopup() })
 
-            // ── Diff lines ──────────────────────────────────────
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(hunks.enumerated()), id: \.offset) { _, hunk in
@@ -34,7 +32,6 @@ struct DiffViewerSheet: View {
             }
             .frame(minHeight: 200, maxHeight: 380)
 
-            // ── Footer ──────────────────────────────────────────
             SheetFooter {
                 HStack(spacing: DesignSystem.Spacing.md) {
                     Label("\(insertionCount)", systemImage: "plus")
@@ -54,8 +51,6 @@ struct DiffViewerSheet: View {
         .standardPopupLayout()
     }
 
-    // MARK: - Actions
-
     private func copyDiffToClipboard() {
         let diffText = hunks.map { hunk -> String in
             switch hunk.operation {
@@ -69,21 +64,17 @@ struct DiffViewerSheet: View {
     }
 }
 
-// MARK: - Line View
-
 private struct DiffLineView: View {
     let hunk: DiffHunk
 
     var body: some View {
         HStack(spacing: 0) {
-            // Gutter indicator
             Text(gutterChar)
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .foregroundColor(gutterColor)
                 .frame(width: 22, alignment: .center)
                 .padding(.vertical, 2)
 
-            // Line content
             Text(hunk.line.isEmpty ? " " : hunk.line)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(textColor)

@@ -7,15 +7,9 @@ struct RulesSettingsView: View {
     @State private var testInput = ""
     @State private var testResult: ClipboardRuleEngine.TestResult?
     @State private var ruleError: String?
-    /// ClipboardRuleEngine is a plain class (not ObservableObject): toggling or
-    /// reordering a rule mutates `ruleEngine.rules` without any objectWillChange,
-    /// leaving this view showing stale toggles/order. Views bump this token on
-    /// every mutation to force a re-render.
     @State private var rulesRevision = 0
 
     private var rules: [ClipboardRule] {
-        // Reading rulesRevision inside the computed property makes SwiftUI
-        // re-evaluate it whenever the token changes.
         _ = rulesRevision
         return clipboardManager.ruleEngine.rules.sorted { $0.order < $1.order }
     }
@@ -24,15 +18,12 @@ struct RulesSettingsView: View {
         rulesRevision &+= 1
     }
 
-    /// Move a user rule one step up (lower order) or down (higher order) in the sorted list.
-    /// Built-in rules are pinned at the top and cannot be reordered.
     private func moveRule(_ rule: ClipboardRule, direction: Int) {
         let sorted = rules
         guard let idx = sorted.firstIndex(where: { $0.id == rule.id }) else { return }
         let targetIdx = idx + direction
         guard targetIdx >= 0, targetIdx < sorted.count else { return }
         let neighbor = sorted[targetIdx]
-        // Swap order values between the two rules.
         guard let ri = clipboardManager.ruleEngine.rules.firstIndex(where: { $0.id == rule.id }),
               let ni = clipboardManager.ruleEngine.rules.firstIndex(where: { $0.id == neighbor.id })
         else { return }
@@ -78,7 +69,6 @@ struct RulesSettingsView: View {
                     .labelsHidden()
 
                     if !rule.isBuiltIn {
-                        // Reorder buttons — only shown for user-created rules
                         let sorted = rules
                         let ruleIdx = sorted.firstIndex(where: { $0.id == rule.id }) ?? 0
                         HStack(spacing: 0) {
@@ -132,7 +122,6 @@ struct RulesSettingsView: View {
             AddRuleSheet(clipboardManager: clipboardManager, isPresented: $showAddRule, onSaved: { noteRulesChanged() })
         }
 
-        // Rule Test / Preview — error alert anchored here so it's visible anywhere in this view
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 Text(lang.l("rules.test.title"))
@@ -177,7 +166,6 @@ struct RulesSettingsView: View {
                                 .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
                         }
-                        // Execution Trace
                         if !result.steps.isEmpty {
                             Divider().opacity(0.2)
                             DisclosureGroup {
@@ -236,8 +224,6 @@ struct RulesSettingsView: View {
         .background(errorAlert)
     }
 
-    // MARK: - Import / Export
-
     private func exportRules() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.init(filenameExtension: "cliprules") ?? .data]
@@ -272,7 +258,6 @@ struct RulesSettingsView: View {
         }
     }
 
-    // MARK: - Error Alert    /// Append a `.alert` modifier to the body to surface import/export errors.
     var errorAlert: some View {
         EmptyView()
             .alert(
@@ -295,26 +280,20 @@ struct RulesSettingsView: View {
     }
 }
 
-// MARK: - Running App entry
-
 struct RunningAppEntry: Identifiable {
-    let id: String  // bundleID
+    let id: String
     let name: String
     let icon: NSImage?
 }
 
-// MARK: - Add Rule Sheet
-
 struct AddRuleSheet: View {
     @ObservedObject var clipboardManager: ClipboardManager
     @Binding var isPresented: Bool
-    /// Called after a rule was persisted so the parent list re-renders
-    /// (the engine itself is not observable).
     var onSaved: (() -> Void)? = nil
     @ObservedObject var lang = LanguageManager.shared
 
     @State private var name = ""
-    @State private var triggerType = 0 // 0=always, 1=regex, 2=app
+    @State private var triggerType = 0
     @State private var triggerValue = ""
     @State private var selectedActions: Set<String> = []
     @State private var regexPattern = ""
@@ -468,7 +447,6 @@ struct AddRuleSheet: View {
         clipboardManager.saveRules()
     }
 
-    /// Build a deduplicated, sorted list of currently running user-facing apps.
     private func loadRunningApps() -> [RunningAppEntry] {
         NSWorkspace.shared.runningApplications
             .filter { app in
@@ -484,8 +462,6 @@ struct AddRuleSheet: View {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }
-
-// MARK: - App Picker Sheet
 
 struct AppPickerSheet: View {
     let apps: [RunningAppEntry]

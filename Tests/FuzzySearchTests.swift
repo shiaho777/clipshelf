@@ -7,8 +7,6 @@ final class FuzzySearchTests: XCTestCase {
         contents.map { ClipboardItem(content: $0, type: .text) }
     }
 
-    // MARK: - Basic
-
     func testEmptyQueryReturnsAll() {
         let items = makeItems(["a", "b", "c"])
         let results = FuzzySearch.search("", in: items)
@@ -33,12 +31,9 @@ final class FuzzySearchTests: XCTestCase {
         XCTAssertEqual(results.count, 1)
     }
 
-    // MARK: - Subsequence Matching
-
     func testSubsequenceMatch() {
         let items = makeItems(["backgroundColor", "background", "color"])
         let results = FuzzySearch.search("bgc", in: items)
-        // "backgroundColor" should match bgc as subsequence (b-g-c-olor)
         XCTAssertTrue(results.contains(where: { $0.content == "backgroundColor" }))
     }
 
@@ -49,19 +44,15 @@ final class FuzzySearchTests: XCTestCase {
     }
 
     func testTypoPartialMatch() {
-        // "colr" should fuzzy-match "color" as subsequence c-o-l-r
         let items = makeItems(["color", "something else"])
         let results = FuzzySearch.search("colr", in: items)
         XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results[0].content, "color")
     }
 
-    // MARK: - Scoring
-
     func testExactMatchScoresHigherThanFuzzy() {
         let items = makeItems(["color", "controller"])
         let results = FuzzySearch.search("color", in: items)
-        // "color" is exact match, should come first
         XCTAssertEqual(results.first?.content, "color")
     }
 
@@ -71,15 +62,11 @@ final class FuzzySearchTests: XCTestCase {
         XCTAssertEqual(results.first?.content, "prefix_match")
     }
 
-    // MARK: - Multi-token
-
     func testMultiTokenSearch() {
         let items = makeItems(["Swift programming language", "Swift bird", "programming tutorial"])
         let results = FuzzySearch.search("swift programming", in: items)
         XCTAssertEqual(results.first?.content, "Swift programming language")
     }
-
-    // MARK: - Chinese
 
     func testChineseSearch() {
         let items = makeItems(["剪贴板管理器", "文本编辑器"])
@@ -87,8 +74,6 @@ final class FuzzySearchTests: XCTestCase {
         XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results[0].content, "剪贴板管理器")
     }
-
-    // MARK: - OCR Text
 
     func testImageOCRTextSearch() {
         let item = ClipboardItem(type: .image, imageHash: "abc", imageFileName: "test.png", ocrText: "Invoice #12345")
@@ -101,8 +86,6 @@ final class FuzzySearchTests: XCTestCase {
         let results = FuzzySearch.search("anything", in: [item])
         XCTAssertTrue(results.isEmpty)
     }
-
-    // MARK: - Subsequence Score Function
 
     func testSubsequenceScoreReturnsNilOnNoMatch() {
         XCTAssertNil(FuzzySearch.subsequenceScore(query: "xyz", in: "abc", original: "abc"))
@@ -117,8 +100,6 @@ final class FuzzySearchTests: XCTestCase {
         let scattered = FuzzySearch.subsequenceScore(query: "ac", in: "abc", original: "abc")!
         XCTAssertGreaterThan(consecutive, scattered)
     }
-
-    // MARK: - ParsedQuery / Advanced Syntax
 
     func testParseQueryExtractsAppFilter() {
         let parsed = FuzzySearch.parseQuery("app:com.apple.Safari hello")

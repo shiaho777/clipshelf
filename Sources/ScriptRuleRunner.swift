@@ -8,43 +8,20 @@ enum ScriptResult: Equatable {
 }
 
 final class ScriptRuleRunner {
-    /// Maximum execution time for a user script before it is treated as passthrough.
     static let defaultTimeout: TimeInterval = 3.0
 
     private let timeout: TimeInterval
-    /// Guards `evalQueue`, `contextCache`, `cacheOrder` and `hungScripts`.
-    /// The queue itself must be replaceable because a script that never
-    /// returns blocks its worker thread forever; everything reachable from
-    /// more than one thread lives behind this lock.
     private let stateLock = NSLock()
-    /// Serial queue for all JS evaluation. Rotated to a fresh queue when a
-    /// script hangs, so later evaluations are not queued behind the stuck one.
     private var evalQueue = DispatchQueue(label: "ScriptRuleRunner.eval", qos: .userInitiated)
-    /// Reusable JSContext instances keyed by script source.
-    /// Caching avoids re-parsing the script on every clipboard event.
     private var contextCache: [String: JSContext] = [:]
-    /// Insertion / access order for true LRU eviction. Least-recently-used key is at index 0.
     private var cacheOrder: [String] = []
     private static let maxCacheSize = 20
-    /// Script sources that previously failed to return within `timeout`
-    /// (e.g. contain an infinite loop). JavaScriptCore has no public API to
-    /// preempt a running script, so these are skipped instead of burning a
-    /// fresh thread and another timeout window on every clipboard event.
     private var hungScripts: Set<String> = []
 
     init(timeout: TimeInterval = ScriptRuleRunner.defaultTimeout) {
         self.timeout = timeout
     }
 
-    /// Evaluates a user-provided JS script against clipboard content **without blocking any thread**.
-    ///
-    /// The script must define: `function process(content, bundleID) { ... }`
-    /// - Return a string to modify the content
-    /// - Return `null` to discard the item
-    /// - Return the original content unchanged for passthrough
-    ///
-    /// Returns `nil` if the script exceeds `timeout`, threw a JS error,
-    /// is malformed, or previously hung and is quarantined.
     func evaluate(script: String, content: String, sourceBundleID: String?) async -> ScriptResult? {
         stateLock.lock()
         if hungScripts.contains(script) {
@@ -76,30 +53,21 @@ final class ScriptRuleRunner {
                 resumed = true
                 completed = true
                 sync.unlock()
-                // A timed-out script may still finish later; it must not win.
                 guard !timeoutWon else { return }
                 continuation.resume(returning: result)
             }
 
-            // Timeout: fires on a background global queue so no thread is blocked.
             DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + timeout) { [weak self] in
                 sync.lock()
                 let won = !resumed && !completed
                 resumed = true
                 sync.unlock()
                 guard won else { return }
-                // Quarantine *before* resuming the caller: the awaiting task may
-                // immediately issue the next evaluation, and that must land on
-                // the fresh queue rather than behind the stuck script.
                 self?.quarantineScript(script, staleQueue: queue)
                 continuation.resume(returning: nil)
-                // The spinning worker thread is abandoned; JSC has no public API
-                // to preempt a running script.
             }
         }
     }
-
-    // MARK: - Quarantine
 
     private func quarantineScript(_ script: String, staleQueue: DispatchQueue) {
         stateLock.lock()
@@ -114,14 +82,6 @@ final class ScriptRuleRunner {
         }
     }
 
-    // MARK: - Context Cache
-
-    /// Runs the initial `evaluateScript` for a not-yet-cached script on a
-    /// detached helper thread instead of the caller. This matters because the
-    /// setup path takes `stateLock`, and `evaluateScript` may never return
-    /// (infinite loop). Executing it on the caller would hold `stateLock`
-    /// forever: `quarantineScript` (fired by the timeout) then deadlocks, the
-    /// continuation never resumes, and every future capture awaits forever.
     private func evaluateScriptSetup(_ script: String, ctx: JSContext) {
         let thread = Thread {
             _ = ctx.evaluateScript(script)
@@ -135,17 +95,12 @@ final class ScriptRuleRunner {
         stateLock.lock()
 
         if let cached = contextCache[script] {
-            // Promote to most-recently-used position.
             cacheOrder.removeAll { $0 == script }
             cacheOrder.append(script)
             stateLock.unlock()
             return cached
         }
 
-        // Unknown script: the initial evaluateScript can hang forever, so it
-        // must not run while holding stateLock. Prepare the context, release
-        // the lock, then evaluate on a throwaway thread and wait on the cache
-        // (with the timeout as the escape hatch) for the result.
         let ctx = JSContext()!
         var compileError: String?
         ctx.exceptionHandler = { _, exception in compileError = exception?.toString() }
@@ -176,8 +131,6 @@ final class ScriptRuleRunner {
         setupThread.start()
 
         if setupGroup.wait(timeout: .now() + timeout) == .timedOut {
-            // Treat as hung: quarantine so future evaluations skip it. The
-            // spinning thread is abandoned (JSC has no public preemption).
             quarantineAfterSetupTimeout(script, ctx: ctx)
             return nil
         }
@@ -185,13 +138,11 @@ final class ScriptRuleRunner {
 
         stateLock.lock()
         defer { stateLock.unlock() }
-        // Another evaluation may have cached this script while we waited.
         if let cached = contextCache[script] {
             cacheOrder.removeAll { $0 == script }
             cacheOrder.append(script)
             return cached
         }
-        // Evict the least-recently-used entry when cache is full.
         if contextCache.count >= Self.maxCacheSize {
             let lruKey = cacheOrder.removeFirst()
             contextCache.removeValue(forKey: lruKey)
@@ -201,9 +152,6 @@ final class ScriptRuleRunner {
         return ctx
     }
 
-    /// Quarantine path for a script whose initial evaluateScript timed out.
-    /// Runs while the setup thread may still be spinning — it holds no lock,
-    /// so this cannot deadlock.
     private func quarantineAfterSetupTimeout(_ script: String, ctx: JSContext) {
         stateLock.lock()
         hungScripts.insert(script)
@@ -213,8 +161,6 @@ final class ScriptRuleRunner {
         }
         stateLock.unlock()
     }
-
-    // MARK: - Execution (runs on the current evalQueue)
 
     private func executeInContext(script: String, content: String, sourceBundleID: String?) -> ScriptResult? {
         guard let ctx = getOrCreateContext(for: script) else { return nil }

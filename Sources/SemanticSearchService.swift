@@ -3,12 +3,6 @@ import NaturalLanguage
 import Accelerate
 import os
 
-/// On-device semantic search using Apple's built-in NLEmbedding models.
-/// Primary: `NLEmbedding.sentenceEmbedding(for: .english)` (macOS 11+, 512-dim).
-/// Fallback: `NLEmbedding.wordEmbedding(for: .english)` averaged over tokens (300-dim).
-///
-/// Embeddings are persisted in SQLite and cached in-memory for fast search.
-/// All CPU-intensive work runs on a dedicated background serial queue.
 final class SemanticSearchService {
     static let shared = SemanticSearchService()
 
@@ -20,12 +14,8 @@ final class SemanticSearchService {
     private let wordModel: NLEmbedding?
     private let dimension: Int
 
-    /// Caches query embeddings for the semantic-search path. Every keystroke
-    /// (post-debounce) re-searches the same query text, and computing the
-    /// NLEmbedding vector dominates that call — far more than the vDSP scan.
     private let queryEmbeddingCache = NSCache<NSString, QueryVectorBox>()
 
-    /// True when at least one embedding model is available.
     var isAvailable: Bool { sentenceModel != nil || wordModel != nil }
 
     private final class QueryVectorBox {
@@ -45,29 +35,20 @@ final class SemanticSearchService {
         }
     }
 
-    // MARK: - Embedding Computation (background-safe)
-
-    /// Compute a sentence-level embedding vector. Returns `nil` if unavailable.
-    /// - Note: This is a CPU-intensive call. Always invoke on `queue` or a background thread.
     func computeEmbedding(for text: String) -> [Float32]? {
         guard !text.isEmpty, dimension > 0 else { return nil }
 
-        // Prefer sentence-level model
         if let model = sentenceModel,
            let vector = model.vector(for: text) {
             return vector.map { Float32($0) }
         }
 
-        // Fallback: average word vectors
         if let model = wordModel {
             return averageWordEmbedding(text: text, model: model)
         }
         return nil
     }
 
-    /// Schedule embedding computation for an array of items and persist via the store.
-    /// `onNewEmbeddings` is called on the main queue with any vectors that were newly computed;
-    /// use it to merge results into the in-memory cache without a full reload.
     func scheduleEmbeddingBatch(for items: [ClipboardItem],
                                 store: SQLiteHistoryStore,
                                 cachedIDs: Set<UUID>,
@@ -77,7 +58,7 @@ final class SemanticSearchService {
             !cachedIDs.contains($0.id) &&
             $0.type != .image &&
             !$0.content.isEmpty &&
-            !$0.isSensitive          // don't embed sensitive content
+            !$0.isSensitive
         }
         guard !candidates.isEmpty else { return }
 
@@ -95,22 +76,16 @@ final class SemanticSearchService {
         }
     }
 
-    // MARK: - Semantic Search
-
-    /// Returns items ranked by semantic similarity to `query`.
-    /// Uses vDSP dot-product for O(n·d) batch cosine similarity.
     func semanticSearch(query: String,
                         embeddings: [UUID: [Float32]],
                         itemByID: [UUID: ClipboardItem],
                         limit: Int = 20) -> [ClipboardItem] {
         guard isAvailable, !query.isEmpty, !embeddings.isEmpty else { return [] }
 
-        // Compute query vector synchronously (called on search path already debounced)
         guard let queryVec = cachedQueryEmbedding(for: query) else { return [] }
         let queryNorm = l2Norm(queryVec)
         guard queryNorm > 1e-6 else { return [] }
 
-        // Score every item that has a cached embedding
         var scored: [(item: ClipboardItem, score: Float32)] = []
 
         for (id, vec) in embeddings {
@@ -126,11 +101,6 @@ final class SemanticSearchService {
             .map { $0.item }
     }
 
-    // MARK: - Float32 ↔ Data
-
-    /// Cached embedding lookup for search queries; falls back to computing and
-    /// memoizing the vector. NSCache keeps repeated keystroke searches cheap
-    /// while still evicting under memory pressure.
     private func cachedQueryEmbedding(for query: String) -> [Float32]? {
         let key = query as NSString
         if let boxed = queryEmbeddingCache.object(forKey: key) {
@@ -152,8 +122,6 @@ final class SemanticSearchService {
             Array(buffer.bindMemory(to: Float32.self))
         }
     }
-
-    // MARK: - Private Math
 
     private func averageWordEmbedding(text: String, model: NLEmbedding) -> [Float32]? {
         let tokenizer = NLTokenizer(unit: .word)
