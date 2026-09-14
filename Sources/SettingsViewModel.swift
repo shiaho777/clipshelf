@@ -46,8 +46,11 @@ final class SettingsViewModel: ObservableObject {
         suppressLaunchAtLoginChange = true
         launchAtLogin = launchAtLoginService.isEnabled
         suppressLaunchAtLoginChange = false
+        if launchAtLoginService.requiresApproval {
+            launchAtLoginErrorKey = "settings.launchAtLoginNeedsApproval"
+        }
     }
-    
+
     private func setLaunchAtLogin(_ enabled: Bool) {
         do {
             try launchAtLoginService.setEnabled(enabled)
@@ -58,9 +61,14 @@ final class SettingsViewModel: ObservableObject {
             logger.error("Failed to update launch-at-login: \(error.localizedDescription)")
             return
         }
-        
+
         persistLaunchAtLoginPreference(enabled)
-        launchAtLoginErrorKey = nil
+        if enabled && launchAtLoginService.requiresApproval {
+            launchAtLoginErrorKey = "settings.launchAtLoginNeedsApproval"
+            launchAtLoginService.openSystemSettingsLoginItems()
+        } else {
+            launchAtLoginErrorKey = nil
+        }
     }
     
     private func persistLaunchAtLoginPreference(_ enabled: Bool) {

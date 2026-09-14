@@ -10,20 +10,17 @@ final class ClipboardPersistenceCoordinator {
     private var pendingUseCountPersistByID: [UUID: Int] = [:]
     private var pendingUseCountFlushWork: DispatchWorkItem?
     private let useCountDebounce: TimeInterval
-    private let onDeletedIDs: ((Set<UUID>) -> Void)?
 
     init(
         historyStore: ClipboardHistoryStore,
         logger: Logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Persistence"),
         useCountDebounce: TimeInterval = 0.5,
         snapshotDebounce: TimeInterval = 0.2,
-        usageSnapshotDebounce: TimeInterval = 1.5,
-        onDeletedIDs: ((Set<UUID>) -> Void)? = nil
+        usageSnapshotDebounce: TimeInterval = 1.5
     ) {
         self.historyStore = historyStore
         self.logger = logger
         self.useCountDebounce = useCountDebounce
-        self.onDeletedIDs = onDeletedIDs
         let queue = DispatchQueue(label: "ClipShelf.persistence", qos: .utility)
         self.incrementalQueue = DispatchQueue(label: "ClipShelf.incrementalPersistence", qos: .utility)
         let store = historyStore
@@ -47,11 +44,6 @@ final class ClipboardPersistenceCoordinator {
 
     func delete(ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
-        if let onDeletedIDs {
-            DispatchQueue.main.async {
-                onDeletedIDs(ids)
-            }
-        }
         let store = historyStore
         let log = logger
         incrementalQueue.async {

@@ -58,11 +58,18 @@ final class SQLiteHistoryStoreTests: XCTestCase {
         XCTAssertEqual(l.useCount, 3)
         XCTAssertEqual(l.imageHash, "abc")
         XCTAssertEqual(l.imageFileName, "img.png")
-        XCTAssertEqual(l.ocrText, "ocr")
+        XCTAssertNil(l.ocrText, "sensitive items must not persist plaintext OCR")
         XCTAssertEqual(l.sourceBundleID, "com.test")
         XCTAssertEqual(l.sourceAppName, "Test")
         XCTAssertTrue(l.isSensitive)
         XCTAssertNotNil(l.expiresAt)
+    }
+
+    func testSavePreservesOcrForNonSensitiveItems() throws {
+        let item = ClipboardItem(content: "test", type: .text, ocrText: "ocr")
+        try store.saveItems([item])
+        let loaded = try store.loadItems()
+        XCTAssertEqual(loaded.first?.ocrText, "ocr")
     }
 
     func testNoChangeReturnsFalse() throws {

@@ -35,9 +35,17 @@ final class ScriptRuleRunner {
         return await withCheckedContinuation { continuation in
             let sync = NSLock()
             var resumed = false
-            var completed = false
+            var started = false
 
             queue.async { [weak self] in
+                sync.lock()
+                if resumed {
+                    sync.unlock()
+                    return
+                }
+                started = true
+                sync.unlock()
+
                 guard let self else {
                     sync.lock()
                     let won = !resumed
@@ -51,7 +59,6 @@ final class ScriptRuleRunner {
                 sync.lock()
                 let timeoutWon = resumed
                 resumed = true
-                completed = true
                 sync.unlock()
                 guard !timeoutWon else { return }
                 continuation.resume(returning: result)
@@ -59,11 +66,14 @@ final class ScriptRuleRunner {
 
             DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + timeout) { [weak self] in
                 sync.lock()
-                let won = !resumed && !completed
+                let won = !resumed
                 resumed = true
+                let didStart = started
                 sync.unlock()
                 guard won else { return }
-                self?.quarantineScript(script, staleQueue: queue)
+                if didStart {
+                    self?.quarantineScript(script, staleQueue: queue)
+                }
                 continuation.resume(returning: nil)
             }
         }
@@ -82,16 +92,8 @@ final class ScriptRuleRunner {
         }
     }
 
-    private func evaluateScriptSetup(_ script: String, ctx: JSContext) {
-        let thread = Thread {
-            _ = ctx.evaluateScript(script)
-        }
-        thread.name = "ScriptRuleRunner.setup"
-        thread.stackSize = 8 << 20
-        thread.start()
-    }
-
     private func getOrCreateContext(for script: String) -> JSContext? {
+        guard script.count <= 50_000 else { return nil }
         stateLock.lock()
 
         if let cached = contextCache[script] {
@@ -100,6 +102,8 @@ final class ScriptRuleRunner {
             stateLock.unlock()
             return cached
         }
+
+        stateLock.unlock()
 
         let ctx = JSContext()!
         var compileError: String?
@@ -114,26 +118,7 @@ final class ScriptRuleRunner {
         var process = undefined;
         var globalThis = this;
         """)
-        if script.count > 50_000 {
-            stateLock.unlock()
-            return nil
-        }
-        stateLock.unlock()
-
-        let setupGroup = DispatchGroup()
-        setupGroup.enter()
-        let setupThread = Thread {
-            _ = ctx.evaluateScript(script)
-            setupGroup.leave()
-        }
-        setupThread.name = "ScriptRuleRunner.setup"
-        setupThread.stackSize = 8 << 20
-        setupThread.start()
-
-        if setupGroup.wait(timeout: .now() + timeout) == .timedOut {
-            quarantineAfterSetupTimeout(script, ctx: ctx)
-            return nil
-        }
+        _ = ctx.evaluateScript(script)
         guard compileError == nil else { return nil }
 
         stateLock.lock()
@@ -150,16 +135,6 @@ final class ScriptRuleRunner {
         contextCache[script] = ctx
         cacheOrder.append(script)
         return ctx
-    }
-
-    private func quarantineAfterSetupTimeout(_ script: String, ctx: JSContext) {
-        stateLock.lock()
-        hungScripts.insert(script)
-        if contextCache[script] != nil {
-            contextCache.removeValue(forKey: script)
-            cacheOrder.removeAll { $0 == script }
-        }
-        stateLock.unlock()
     }
 
     private func executeInContext(script: String, content: String, sourceBundleID: String?) -> ScriptResult? {

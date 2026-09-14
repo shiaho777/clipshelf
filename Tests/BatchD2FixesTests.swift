@@ -16,7 +16,7 @@ final class BatchD2FixesTests: XCTestCase {
         let dispatcher = ClipboardCaptureDispatcher(
             addText: { content, _, _, _, _, _ in ClipboardItem(content: content, type: .text) },
             addRichText: { content, rtf, _, _, _, _, _ in ClipboardItem(content: content, rtfData: rtf, type: .richText) },
-            addImage: { _, _, _, _, _, completion in pendingCompletion = completion },
+            addImage: { _, _, _, _, _, _, _, _, completion in pendingCompletion = completion },
             addFileURL: { paths, _, _, _, _, _, _ in ClipboardItem(content: paths.joined(), type: .fileURL) }
         )
 
@@ -36,7 +36,7 @@ final class BatchD2FixesTests: XCTestCase {
         let dispatcher = ClipboardCaptureDispatcher(
             addText: { content, _, _, _, _, _ in ClipboardItem(content: content, type: .text) },
             addRichText: { content, rtf, _, _, _, _, _ in ClipboardItem(content: content, rtfData: rtf, type: .richText) },
-            addImage: { _, _, _, _, _, completion in pendingCompletion = completion },
+            addImage: { _, _, _, _, _, _, _, _, completion in pendingCompletion = completion },
             addFileURL: { paths, _, _, _, _, _, _ in ClipboardItem(content: paths.joined(), type: .fileURL) }
         )
 
@@ -76,7 +76,7 @@ final class BatchD2FixesTests: XCTestCase {
         ClipboardCaptureDispatcher(
             addText: { content, _, _, _, _, _ in ClipboardItem(content: content, type: .text) },
             addRichText: { content, rtf, _, _, _, _, _ in ClipboardItem(content: content, rtfData: rtf, type: .richText) },
-            addImage: { _, _, _, _, _, completion in completion?(ClipboardItem(content: "", type: .image)) },
+            addImage: { _, _, _, _, _, _, _, _, completion in completion?(ClipboardItem(content: "", type: .image)) },
             addFileURL: { paths, _, _, _, _, _, _ in ClipboardItem(content: paths.joined(), type: .fileURL) }
         )
     }

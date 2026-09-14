@@ -224,6 +224,7 @@ struct QuickPasteView: View {
     let onPaste: (ClipboardItem) -> Void
     @State private var hoveredIndex: Int?
     @State private var searchText = ""
+    @State private var searchResults: [ClipboardItem]?
     @FocusState private var isFocused: Bool
 
     private let maxItems = 9
@@ -286,15 +287,20 @@ struct QuickPasteView: View {
         }
         .onChange(of: searchText) { _ in
             hoveredIndex = nil
+            refreshSearch()
+        }
+        .onReceive(clipboardManager.$historyRevision) { _ in
+            if searchResults != nil { refreshSearch() }
         }
     }
 
-    private var displayItems: [ClipboardItem] {
+    private func refreshSearch() {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty {
-            return Array(clipboardManager.items.prefix(maxItems))
-        }
-        return clipboardManager.search(query, limit: maxItems)
+        searchResults = query.isEmpty ? nil : clipboardManager.search(query, limit: maxItems)
+    }
+
+    private var displayItems: [ClipboardItem] {
+        searchResults ?? Array(clipboardManager.items.prefix(maxItems))
     }
 
     @ViewBuilder
@@ -377,7 +383,16 @@ struct QuickPasteView: View {
         }
         .contextMenu {
             Button(LanguageManager.shared.l("action.copy")) {
-                clipboardManager.copyToClipboard(item)
+                if item.isSensitive {
+                    Task { @MainActor in
+                        guard (try? await BiometricAuthService.shared.authenticate(
+                            reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                        )) != nil else { return }
+                        _ = clipboardManager.copyToClipboard(item)
+                    }
+                } else {
+                    _ = clipboardManager.copyToClipboard(item)
+                }
             }
         }
     }

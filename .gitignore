@@ -50,3 +50,14 @@ Thumbs.db
 *.tar.gz
 default.profraw
 .zcode/
+
+# Signing material (never commit)
+*.p12
+*.cer
+*.pem
+*.key
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+*.keychain*
+*.xcresult

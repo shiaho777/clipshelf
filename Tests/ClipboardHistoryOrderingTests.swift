@@ -101,7 +101,6 @@ final class ClipboardHistoryOrderingTests: XCTestCase {
             1
         )
     }
-}
 
     func testMovingItemReordersAndStampsTimestamps() {
         let now = Date()
@@ -135,3 +134,4 @@ final class ClipboardHistoryOrderingTests: XCTestCase {
         XCTAssertEqual(moved?.map(\.content), ["p2", "p1", "u1"])
         XCTAssertTrue(moved?.prefix(2).allSatisfy(\.isPinned) == true)
     }
+}

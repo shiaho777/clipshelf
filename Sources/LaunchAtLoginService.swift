@@ -2,7 +2,14 @@ import ServiceManagement
 
 protocol LaunchAtLoginService {
     var isEnabled: Bool { get }
+    var requiresApproval: Bool { get }
     func setEnabled(_ enabled: Bool) throws
+    func openSystemSettingsLoginItems()
+}
+
+extension LaunchAtLoginService {
+    var requiresApproval: Bool { false }
+    func openSystemSettingsLoginItems() {}
 }
 
 enum LaunchAtLoginServiceFactory {
@@ -16,6 +23,11 @@ enum LaunchAtLoginServiceFactory {
 
 final class SMAppLaunchAtLoginService: LaunchAtLoginService {
     var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
+    var requiresApproval: Bool { SMAppService.mainApp.status == .requiresApproval }
+
+    func openSystemSettingsLoginItems() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
 
     func setEnabled(_ enabled: Bool) throws {
         if enabled {
@@ -120,6 +132,11 @@ final class CompositeLaunchAtLoginService: LaunchAtLoginService {
     }
 
     var isEnabled: Bool { primary.isEnabled || fallback.isEnabled }
+    var requiresApproval: Bool { primary.requiresApproval }
+
+    func openSystemSettingsLoginItems() {
+        primary.openSystemSettingsLoginItems()
+    }
 
     func setEnabled(_ enabled: Bool) throws {
         if enabled {

@@ -193,18 +193,43 @@ struct MenuBarView: View {
     }
 
     private func pasteItem(_ item: ClipboardItem, asPlainText: Bool = false) {
-        if item.isSensitive {
-            Task { @MainActor in
-                do {
-                    try await BiometricAuthService.shared.authenticate(
-                        reason: LanguageManager.shared.l("biometric.unlockSensitive")
-                    )
-                    clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
-                } catch {
-                }
-            }
-        } else {
+        withItemUnlocked(item) {
             clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
+        }
+    }
+
+    private func withItemUnlocked(_ item: ClipboardItem, action: @escaping () -> Void) {
+        guard item.isSensitive && !unlockedItemIDs.contains(item.id) else {
+            action()
+            return
+        }
+        Task { @MainActor in
+            do {
+                try await BiometricAuthService.shared.authenticate(
+                    reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                )
+                unlockedItemIDs.insert(item.id)
+                action()
+            } catch {
+            }
+        }
+    }
+
+    private func withSelectionUnlocked(_ selected: [ClipboardItem], action: @escaping () -> Void) {
+        let locked = selected.filter { $0.isSensitive && !unlockedItemIDs.contains($0.id) }
+        guard !locked.isEmpty else {
+            action()
+            return
+        }
+        Task { @MainActor in
+            do {
+                try await BiometricAuthService.shared.authenticate(
+                    reason: LanguageManager.shared.l("biometric.unlockSensitive")
+                )
+                for item in locked { unlockedItemIDs.insert(item.id) }
+                action()
+            } catch {
+            }
         }
     }
     
@@ -234,27 +259,31 @@ struct MenuBarView: View {
     private func mergeAndPasteSelected() {
         let selectedItems = filteredItems.filter { selectedItemIDs.contains($0.id) }
         guard !selectedItems.isEmpty else { return }
-        let merged = selectedItems.map { item -> String in
-            if item.type == .image { return item.ocrText ?? "[Image]" }
-            return item.content
-        }.joined(separator: "\n")
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(merged, forType: .string)
-        clipboardManager.acknowledgePasteboardWrite()
-        clipboardManager.addTextItem(content: merged)
-        isMultiSelectMode = false
-        selectedItemIDs.removeAll()
-        clipboardManager.onItemSelected?()
+        withSelectionUnlocked(selectedItems) { [self] in
+            let merged = selectedItems.map { item -> String in
+                if item.type == .image { return item.ocrText ?? "[Image]" }
+                return item.content
+            }.joined(separator: "\n")
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(merged, forType: .string)
+            clipboardManager.acknowledgePasteboardWrite()
+            clipboardManager.addTextItem(content: merged)
+            isMultiSelectMode = false
+            selectedItemIDs.removeAll()
+            clipboardManager.onItemSelected?()
+        }
     }
-    
+
     private func queueSelectedForPaste() {
         let selectedItems = filteredItems.filter { selectedItemIDs.contains($0.id) }
         guard !selectedItems.isEmpty else { return }
-        PasteQueue.shared.enqueue(selectedItems)
-        isMultiSelectMode = false
-        selectedItemIDs.removeAll()
-        clipboardManager.onItemSelected?()
+        withSelectionUnlocked(selectedItems) { [self] in
+            PasteQueue.shared.enqueue(selectedItems)
+            isMultiSelectMode = false
+            selectedItemIDs.removeAll()
+            clipboardManager.onItemSelected?()
+        }
     }
 
     private func handleTransform(_ result: String) {
@@ -610,16 +639,18 @@ struct MenuBarView: View {
                 onTabPressed: { cycleFilter() },
                 onSpacePressed: {
                     if let idx = focusedIndex, idx < filteredItems.count {
-                        previewItem = filteredItems[idx]
+                        let item = filteredItems[idx]
+                        withItemUnlocked(item) { previewItem = item }
                     } else if let hovered = RowHoverTracker.shared.itemID,
                               let item = filteredItems.first(where: { $0.id == hovered }) {
-                        previewItem = item
+                        withItemUnlocked(item) { previewItem = item }
                     }
                 },
                 onEditPressed: {
                     if let idx = focusedIndex, idx < filteredItems.count {
                         let item = filteredItems[idx]
-                        if item.type != .image { editingItem = item }
+                        guard item.type != .image else { return }
+                        withItemUnlocked(item) { editingItem = item }
                     }
                 }
             ))

@@ -67,7 +67,7 @@ Tests/
 
 1. Create a struct conforming to `PasteAdapter` in `Sources/PasteAdapter.swift`
 2. Add target bundle IDs and implement `adapt(_:type:)`
-3. Register it in `PasteAdapterManager.adapters`
+3. Add it to the `allAdapters` array in `PasteAdapterManager.init()`
 4. Add tests
 
 ## Adding a Clipboard Rule Action

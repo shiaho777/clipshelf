@@ -109,6 +109,27 @@ final class TextTransformAdvancedTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
+    func testHtmlEntitiesDecodeDoesNotDoubleDecode() {
+        XCTAssertEqual(TextTransform.htmlEntitiesDecode.apply("&amp;lt;"), "&lt;")
+        XCTAssertEqual(TextTransform.htmlEntitiesDecode.apply("&amp;#60;"), "&#60;")
+    }
+
+    func testHtmlEntitiesDecodeNbsp() {
+        XCTAssertEqual(TextTransform.htmlEntitiesDecode.apply("a&nbsp;b"), "a\u{00A0}b")
+    }
+
+    func testUrlEncodeEscapesReservedCharacters() {
+        XCTAssertEqual(TextTransform.urlEncode.apply("a=b&c+d/e?f"), "a%3Db%26c%2Bd%2Fe%3Ff")
+    }
+
+    func testUrlEncodeLeavesUnreservedCharacters() {
+        XCTAssertEqual(TextTransform.urlEncode.apply("abc-_.!~*'()"), "abc-_.!~*'()")
+    }
+
+    func testHexDecodeIgnoresNewlinesAndTabs() {
+        XCTAssertEqual(TextTransform.hexDecode.apply("48 65\n6C6C\t6F"), "Hello")
+    }
+
     func testXmlFormatValidInput() {
         let input = "<root><child>text</child></root>"
         let result = TextTransform.xmlFormat.apply(input)

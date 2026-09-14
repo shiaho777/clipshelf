@@ -47,15 +47,15 @@ final class ClipboardMonitorTests: XCTestCase {
     }
 
     func testExcludedAppReturnsIgnored() {
-        let testRunnerBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-        guard !testRunnerBundleID.isEmpty else {
-            return
-        }
-        monitor.excludedBundleIDs = [testRunnerBundleID]
+        let excludedMonitor = ClipboardMonitor(pasteboard: testPasteboard)
+        excludedMonitor.frontmostApplicationProvider = { ("com.excluded.app", "Excluded App") }
+        excludedMonitor.excludedBundleIDs = ["com.excluded.app"]
+        excludedMonitor.start()
+        defer { excludedMonitor.stop() }
 
         testPasteboard.clearContents()
         testPasteboard.setString("secret", forType: .string)
-        let result = monitor.checkClipboard()
+        let result = excludedMonitor.checkClipboard()
 
         XCTAssertEqual(result, .ignored)
     }

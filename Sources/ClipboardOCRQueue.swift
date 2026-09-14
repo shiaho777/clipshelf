@@ -80,15 +80,19 @@ final class ClipboardOCRQueue {
                 guard let self else { return }
                 let data = await self.imageManager.imageDataForOCR(for: item)
                 guard let data else {
-                    self.isProcessing = false
-                    self.currentOCRItem = nil
+                    if self.currentOCRItem == id {
+                        self.isProcessing = false
+                        self.currentOCRItem = nil
+                    }
                     self.processNext()
                     return
                 }
                 self.imageManager.recognizeText(in: data) { [weak self] ocrText in
                     guard let self else { return }
-                    self.isProcessing = false
-                    self.currentOCRItem = nil
+                    if self.currentOCRItem == id {
+                        self.isProcessing = false
+                        self.currentOCRItem = nil
+                    }
                     if let ocrText {
                         self.onRecognized(id, ocrText)
                     }

@@ -62,4 +62,26 @@ final class RuleStoreImportExportTests: XCTestCase {
         XCTAssertTrue(json.contains("\n"))
         XCTAssertTrue(json.contains("  "))
     }
+
+    func testRenamedBuiltInRuleIsNotDuplicatedOnReload() throws {
+        var rules = JSONClipboardRuleStore.builtInRules()
+        rules[0].name = "My Renamed BuiltIn"
+        try store.saveRules(rules)
+
+        let loaded = try store.loadRules()
+        let builtInID = JSONClipboardRuleStore.builtInRules()[0].id
+        XCTAssertEqual(loaded.filter(\.isBuiltIn).count, JSONClipboardRuleStore.builtInRules().count)
+        XCTAssertEqual(loaded.filter { $0.id == builtInID }.count, 1)
+        XCTAssertTrue(loaded.contains { $0.name == "My Renamed BuiltIn" })
+    }
+
+    func testStaleBuiltInIDsAreRemovedOnReload() throws {
+        var rules = JSONClipboardRuleStore.builtInRules()
+        rules.append(ClipboardRule(name: "Retired BuiltIn", isBuiltIn: true, actions: [.autoPin], order: 99))
+        try store.saveRules(rules)
+
+        let loaded = try store.loadRules()
+        XCTAssertEqual(loaded.filter(\.isBuiltIn).count, JSONClipboardRuleStore.builtInRules().count)
+        XCTAssertFalse(loaded.contains { $0.name == "Retired BuiltIn" })
+    }
 }

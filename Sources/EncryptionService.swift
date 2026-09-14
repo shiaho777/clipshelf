@@ -65,14 +65,28 @@ final class EncryptionService {
         return createAndSaveKey()
     }
 
+    private enum KeySaveResult {
+        case saved
+        case duplicate
+        case failed
+    }
+
     private func createAndSaveKey() -> SymmetricKey? {
         let key = SymmetricKey(size: .bits256)
         let keyData = key.withUnsafeBytes { Data($0) }
-        if saveToKeychain(keyData) {
+        switch saveToKeychain(keyData) {
+        case .saved:
             return key
+        case .duplicate:
+            if let existing = loadFromKeychain(), existing.count == 32 {
+                return SymmetricKey(data: existing)
+            }
+            logger.error("Keychain already holds an encryption key that could not be reloaded — refusing to overwrite it")
+            return nil
+        case .failed:
+            logger.error("Failed to persist encryption key to Keychain — refusing ephemeral key so sensitive items fall back to plaintext instead of becoming unrecoverable")
+            return nil
         }
-        logger.error("Failed to persist encryption key to Keychain — refusing ephemeral key so sensitive items fall back to plaintext instead of becoming unrecoverable")
-        return nil
     }
 
     private func loadFromKeychain() -> Data? {
@@ -89,8 +103,7 @@ final class EncryptionService {
         return result as? Data
     }
 
-    @discardableResult
-    private func saveToKeychain(_ keyData: Data) -> Bool {
+    private func saveToKeychain(_ keyData: Data) -> KeySaveResult {
         let attributes: [CFString: Any] = [
             kSecClass:            kSecClassGenericPassword,
             kSecAttrService:      keychainService as CFString,
@@ -98,17 +111,11 @@ final class EncryptionService {
             kSecValueData:        keyData,
             kSecAttrAccessible:   kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         ]
-        var status = SecItemAdd(attributes as CFDictionary, nil)
-        if status == errSecDuplicateItem {
-            let update: [CFString: Any] = [kSecValueData: keyData]
-            let query: [CFString: Any] = [
-                kSecClass:       kSecClassGenericPassword,
-                kSecAttrService: keychainService as CFString,
-                kSecAttrAccount: keychainAccount as CFString,
-            ]
-            status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        switch SecItemAdd(attributes as CFDictionary, nil) {
+        case errSecSuccess: return .saved
+        case errSecDuplicateItem: return .duplicate
+        default: return .failed
         }
-        return status == errSecSuccess
     }
 }
 

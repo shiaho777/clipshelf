@@ -27,6 +27,7 @@ extension CapturedContent: Equatable {
         case (.richText(let a, let d1), .richText(let b, let d2)): return a == b && d1 == d2
         case (.image(let a), .image(let b)): return a == b
         case (.imageFile(let a, let extA), .imageFile(let b, let extB)): return a == b && extA == extB
+        case (.fileURL(let a), .fileURL(let b)): return a == b
         default: return false
         }
     }
@@ -44,6 +45,23 @@ final class ClipboardRuleEngine {
         cache.countLimit = 64
         return cache
     }()
+    private let regexQueue = DispatchQueue(label: "ClipShelf.regex", qos: .userInitiated, attributes: .concurrent)
+    private var quarantinedPatterns: Set<String> = []
+    private static let regexTimeout: TimeInterval = 0.2
+    private static let maxRegexInputBytes = 4 * 1024 * 1024
+
+    private final class RegexResultBox<T> {
+        private let semaphore = DispatchSemaphore(value: 0)
+        private var result: T?
+        func finish(_ value: T) {
+            result = value
+            semaphore.signal()
+        }
+        func awaitResult(timeout: TimeInterval) -> T? {
+            guard semaphore.wait(timeout: .now() + timeout) == .success else { return nil }
+            return result
+        }
+    }
 
     private func rebuildExecutionPlan() {
         enabledRules = rules.filter(\.isEnabled).sorted { $0.order < $1.order }
@@ -230,8 +248,7 @@ final class ClipboardRuleEngine {
             return true
         case .contentMatches(let pattern):
             guard let text = textContent(content) else { return false }
-            guard let regex = regex(for: pattern) else { return false }
-            return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+            return regexMatches(pattern: pattern, in: text)
         case .sourceApp(let bundleID):
             return content.sourceBundleID == bundleID
         case .contentType(let type):
@@ -239,9 +256,24 @@ final class ClipboardRuleEngine {
             case (.text, .text): return true
             case (.richText, .richText): return true
             case (.image, .image), (.image, .imageFile): return true
+            case (.fileURL, .fileURL): return true
             default: return false
             }
         }
+    }
+
+    private func regexMatches(pattern: String, in text: String) -> Bool {
+        guard text.utf8.count <= Self.maxRegexInputBytes,
+              let regex = regex(for: pattern) else { return false }
+        let box = RegexResultBox<Bool>()
+        regexQueue.async {
+            box.finish(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil)
+        }
+        guard let matched = box.awaitResult(timeout: Self.regexTimeout) else {
+            quarantinedPatterns.insert(pattern)
+            return false
+        }
+        return matched
     }
     
     private static let trackingParams: Set<String> = [
@@ -277,6 +309,7 @@ final class ClipboardRuleEngine {
     }()
 
     private func regex(for pattern: String) -> NSRegularExpression? {
+        guard !quarantinedPatterns.contains(pattern) else { return nil }
         let key = pattern as NSString
         if let cached = regexCache.object(forKey: key) {
             return cached
@@ -296,9 +329,17 @@ final class ClipboardRuleEngine {
     
     private func applyRegexReplace(_ content: CapturedContent, pattern: String, replacement: String) -> CapturedContent {
         guard let text = textContent(content),
+              text.utf8.count <= Self.maxRegexInputBytes,
               let regex = regex(for: pattern) else { return content }
         let range = NSRange(text.startIndex..., in: text)
-        let replaced = regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
+        let box = RegexResultBox<String>()
+        regexQueue.async {
+            box.finish(regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement))
+        }
+        guard let replaced = box.awaitResult(timeout: Self.regexTimeout) else {
+            quarantinedPatterns.insert(pattern)
+            return content
+        }
         return replaced != text ? replaceText(in: content, with: replaced) : content
     }
     
@@ -325,13 +366,13 @@ final class ClipboardRuleEngine {
         switch content.kind {
         case .text:
             newKind = .text(content: newText)
-        case .richText(_, let rtf):
-            newKind = .richText(content: newText, rtfData: rtf)
+        case .richText:
+            newKind = .text(content: newText)
         case .image, .imageFile:
             return content
         case .fileURL:
             return content
         }
-        return CapturedContent(kind: newKind, sourceBundleID: content.sourceBundleID, sourceAppName: content.sourceAppName)
+        return CapturedContent(kind: newKind, sourceBundleID: content.sourceBundleID, sourceAppName: content.sourceAppName, isScreenshot: content.isScreenshot)
     }
 }

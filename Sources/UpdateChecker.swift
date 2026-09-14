@@ -119,8 +119,8 @@ final class UpdateChecker: ObservableObject {
 
     func checkForUpdates() {
         switch phase {
-        case .idle, .checking, .upToDate, .failed: break
-        case .available, .downloading, .ready: return
+        case .idle, .upToDate, .failed: break
+        case .checking, .available, .downloading, .ready: return
         }
         phase = .checking
         let task = URLSession.shared.dataTask(with: Self.apiURL) { [weak self] data, _, error in
@@ -204,6 +204,9 @@ final class UpdateChecker: ObservableObject {
     }
 
     private func didFinishDownload(at location: URL) {
+        downloadSession?.finishTasksAndInvalidate()
+        downloadSession = nil
+        downloadTask = nil
         guard let (version, targetURL) = currentDownload else { return }
         do {
             let fm = FileManager.default
@@ -220,6 +223,9 @@ final class UpdateChecker: ObservableObject {
     }
 
     private func didFailDownload(_ error: Error) {
+        downloadSession?.finishTasksAndInvalidate()
+        downloadSession = nil
+        downloadTask = nil
         if (error as NSError?)?.code == NSURLErrorCancelled {
             if let release = pendingRelease {
                 phase = .available(release)

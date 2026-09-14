@@ -22,6 +22,7 @@
 "settings.language" = "Language";
 "settings.launchAtLogin" = "Launch at Login";
 "settings.launchAtLoginFailed" = "Failed to update launch-at-login permission";
+"settings.launchAtLoginNeedsApproval" = "Approve ClipShelf in System Settings → Login Items to finish enabling launch at login";
 "settings.hotkeys.section" = "Hotkeys";
 "settings.history.section" = "History";
 "settings.maxHistory" = "History Limit";

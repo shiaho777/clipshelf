@@ -37,9 +37,11 @@ function process(content, bundleID) {
 ## Security Restrictions
 
 - **Timeout**: Scripts must complete within **3 seconds**. If execution exceeds this limit, the result is discarded and the item passes through unchanged.
+- **Quarantine**: A script that times out — either while loading or inside `process()` — is skipped permanently until ClipShelf restarts, so one bad script cannot stall the pipeline. The runaway evaluation is abandoned on a detached queue that gets rotated out.
 - **No timers**: `setTimeout` and `setInterval` are removed.
 - **No I/O**: There is no access to `fetch`, `XMLHttpRequest`, the filesystem, or any network API.
-- **No globals**: The script runs in a fresh `JSContext` for each invocation — no state persists between calls.
+- **Size limit**: Scripts larger than 50 KB are skipped and the item passes through unchanged.
+- **Per-script context**: Each script runs in its own cached `JSContext` (a small LRU pool). Globals such as `var count = 0` persist between invocations of the *same* script; they are never shared across different scripts.
 
 ## Examples
 

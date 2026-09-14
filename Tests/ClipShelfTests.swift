@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import ClipShelf
 
 @MainActor
@@ -32,7 +33,8 @@ final class ClipboardManagerTests: XCTestCase {
             historyStore: historyStore,
             imageStore: imageStore,
             preferencesStore: prefsStore,
-            ocrService: ocrService
+            ocrService: ocrService,
+            pasteboard: NSPasteboard(name: NSPasteboard.Name("com.test.ClipboardManager.\(UUID().uuidString)"))
         )
     }
 
@@ -113,7 +115,11 @@ final class ClipboardManagerTests: XCTestCase {
             ClipboardItem(content: "old 2", type: .text)
         ])
         let mgr = makeManager()
-        let originalID = mgr.items[0].id
+        guard let original = mgr.items.first(where: { $0.content == "duplicate" }) else {
+            XCTFail("seeded 'duplicate' item must be present")
+            return
+        }
+        let originalID = original.id
 
         for value in 0..<10 {
             mgr.addTextItem(content: "fresh \(value)")

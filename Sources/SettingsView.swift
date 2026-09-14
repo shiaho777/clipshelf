@@ -305,7 +305,7 @@ struct SettingsView: View {
             panel.nameFieldStringValue = "ClipboardHistory.csv"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
-                try service.exportCSV(to: url, items: clipboardManager.items)
+                try service.exportCSV(to: url, items: clipboardManager.exportableItems())
                 showExportSuccess = true; importExportError = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showExportSuccess = false }
             } catch { importExportError = error.localizedDescription }
@@ -315,7 +315,7 @@ struct SettingsView: View {
             panel.nameFieldStringValue = "ClipboardHistory.md"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
-                try service.exportMarkdown(to: url, items: clipboardManager.items)
+                try service.exportMarkdown(to: url, items: clipboardManager.exportableItems())
                 showExportSuccess = true; importExportError = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showExportSuccess = false }
             } catch { importExportError = error.localizedDescription }
@@ -325,7 +325,7 @@ struct SettingsView: View {
             panel.nameFieldStringValue = "ClipboardBackup.clipbackup"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
-                try service.exportBackup(to: url, items: clipboardManager.items)
+                try service.exportBackup(to: url, items: clipboardManager.exportableItems())
                 showExportSuccess = true; importExportError = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showExportSuccess = false }
             } catch { importExportError = error.localizedDescription }

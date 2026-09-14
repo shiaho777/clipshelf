@@ -58,5 +58,6 @@ final class LanguageManagerTests: XCTestCase {
         let mgr = makeManager(savedLanguage: "en")
         prefsStore.language = nil
         mgr.language = "en"
+        XCTAssertNil(prefsStore.language)
     }
 }

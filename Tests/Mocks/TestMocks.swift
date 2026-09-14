@@ -9,9 +9,19 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
     private(set) var saveCallCount = 0
     private(set) var updateUseCountCallCount = 0
 
+    private var sortedStorage: [ClipboardItem] {
+        storage.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.isPinned != rhs.element.isPinned { return lhs.element.isPinned }
+                if lhs.element.timestamp != rhs.element.timestamp { return lhs.element.timestamp > rhs.element.timestamp }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     var items: [ClipboardItem] {
         lock.lock(); defer { lock.unlock() }
-        return storage
+        return sortedStorage
     }
 
     func seed(_ items: [ClipboardItem]) {
@@ -21,10 +31,11 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
 
     func loadItems(limit: Int?) throws -> [ClipboardItem] {
         lock.lock(); defer { lock.unlock() }
-        guard let limit, limit >= 0, storage.count > limit else { return storage }
+        let ordered = sortedStorage
+        guard let limit, limit >= 0, ordered.count > limit else { return ordered }
         var pinned: [ClipboardItem] = []
         var unpinned: [ClipboardItem] = []
-        for item in storage {
+        for item in ordered {
             if item.isPinned { pinned.append(item) } else { unpinned.append(item) }
         }
         let keep = max(0, limit - pinned.count)
@@ -84,8 +95,24 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
     func saveItems(_ items: [ClipboardItem]) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
         saveCallCount += 1
-        storage = items
-        return true
+        var indexByID: [UUID: Int] = [:]
+        for (offset, element) in storage.enumerated() {
+            indexByID[element.id] = offset
+        }
+        var changed = false
+        for item in items {
+            if let index = indexByID[item.id] {
+                if storage[index] != item {
+                    storage[index] = item
+                    changed = true
+                }
+            } else {
+                indexByID[item.id] = storage.count
+                storage.append(item)
+                changed = true
+            }
+        }
+        return changed
     }
 
     @discardableResult
@@ -93,9 +120,10 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
         lock.lock(); defer { lock.unlock() }
         saveCallCount += 1
         if let index = storage.firstIndex(where: { $0.id == item.id }) {
+            guard storage[index] != item else { return false }
             storage[index] = item
         } else {
-            storage.insert(item, at: 0)
+            storage.append(item)
         }
         return true
     }
@@ -104,9 +132,7 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
     func deleteItems(ids: Set<UUID>) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
         guard !ids.isEmpty else { return false }
-        let previousCount = storage.count
         storage.removeAll { ids.contains($0.id) }
-        guard storage.count != previousCount else { return false }
         saveCallCount += 1
         return true
     }
@@ -114,11 +140,23 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
     @discardableResult
     func updateUseCount(id: UUID, useCount: Int) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
-        guard let index = storage.firstIndex(where: { $0.id == id }) else { return false }
-        storage[index].useCount = useCount
         updateUseCountCallCount += 1
+        guard let index = storage.firstIndex(where: { $0.id == id }),
+              storage[index].useCount != useCount else { return false }
+        storage[index].useCount = useCount
         saveCallCount += 1
         return true
+    }
+
+    func searchFTS(_ query: String, limit: Int = 500) -> [UUID] {
+        lock.lock(); defer { lock.unlock() }
+        let terms = query.lowercased().split(whereSeparator: \.isWhitespace)
+        guard !terms.isEmpty else { return [] }
+        return sortedStorage.filter { item in
+            let haystack = ([item.content, item.ocrText, item.sourceAppName, item.sourceBundleID]
+                .compactMap { $0 }.joined(separator: "\n").lowercased())
+            return terms.allSatisfy { haystack.contains($0) }
+        }.prefix(limit).map(\.id)
     }
 
     @discardableResult
@@ -257,12 +295,18 @@ final class InMemoryOCRService: OCRServiceProtocol {
 
 final class MockLaunchAtLoginService: LaunchAtLoginService {
     private(set) var setEnabledCalls: [Bool] = []
+    private(set) var openSystemSettingsCalls = 0
     var errorToThrow: Error?
     var isEnabled = false
+    var requiresApproval = false
 
     func setEnabled(_ enabled: Bool) throws {
         setEnabledCalls.append(enabled)
         if let error = errorToThrow { throw error }
         isEnabled = enabled
+    }
+
+    func openSystemSettingsLoginItems() {
+        openSystemSettingsCalls += 1
     }
 }

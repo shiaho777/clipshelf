@@ -124,7 +124,7 @@ git clone https://github.com/shiaho777/clipshelf.git
 cd clipshelf
 xcodegen generate
 xcodebuild -scheme ClipShelf -configuration Release build
-xcodebuild test -scheme ClipShelf -destination 'platform=macOS'
+xcodebuild test -scheme ClipShelfTests -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
 ```
 
 ```

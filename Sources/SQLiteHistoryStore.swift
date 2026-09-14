@@ -13,6 +13,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private let dbLock = NSRecursiveLock()
     private var lastKnownItems: [UUID: ClipboardItem] = [:]
     private var lastKnownOrder: [UUID] = []
+    private var deletedIDs: Set<UUID> = []
     private let dbURL: URL
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SQLiteStore")
 
@@ -146,6 +147,9 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         self.dbURL = storageDirectory.appendingPathComponent("history.db")
         openDatabase()
         runMigrations()
+        withDatabaseLock {
+            encryptLegacySensitiveRowsLocked()
+        }
     }
 
     func optimizeForClose() {
@@ -172,10 +176,14 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
     private func searchFTSLocked(_ query: String, limit: Int) -> [UUID] {
         guard let db else { return [] }
-        let sanitized = sanitizeFTSQuery(query)
         let boundedLimit = max(0, min(limit, Int(Int32.max)))
         guard boundedLimit > 0 else { return [] }
-        guard !sanitized.isEmpty else { return [] }
+        let rawTokens = query.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        guard !rawTokens.isEmpty else { return [] }
+        let sanitized = sanitizeFTSQuery(query)
+        guard !sanitized.isEmpty else {
+            return searchLikeLocked(tokens: rawTokens, limit: boundedLimit)
+        }
 
         let sql = """
         SELECT ci.id
@@ -185,26 +193,21 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         ORDER BY ci.is_pinned DESC, bm25(clipboard_fts) ASC
         LIMIT ?
         """
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+        guard let stmt = cachedStatement(sql) else {
             return searchLikeLocked(tokens: sanitized.components(separatedBy: " "), limit: boundedLimit)
         }
-        defer { sqlite3_finalize(stmt) }
+        defer { sqlite3_reset(stmt); sqlite3_clear_bindings(stmt) }
         sqlite3_bind_text(stmt, 1, sanitized, -1, SQLITE_TRANSIENT_DESTRUCTOR)
         sqlite3_bind_int(stmt, 2, Int32(boundedLimit))
 
         var uuids: [UUID] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            if let idStr = columnText(stmt!, 0), let uuid = UUID(uuidString: idStr) {
+            if let idStr = columnText(stmt, 0), let uuid = UUID(uuidString: idStr) {
                 uuids.append(uuid)
             }
         }
-        let tokenCount = sanitized.components(separatedBy: " ").count
-        if tokenCount > 1 {
-            return searchLikeLocked(tokens: sanitized.components(separatedBy: " "), limit: boundedLimit)
-        }
         if !uuids.isEmpty { return uuids }
-        return searchLikeLocked(tokens: sanitized.components(separatedBy: " "), limit: boundedLimit)
+        return searchLikeLocked(tokens: rawTokens, limit: boundedLimit)
     }
 
     private func searchLikeLocked(tokens: [String], limit: Int) -> [UUID] {
@@ -253,10 +256,10 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
     private func sanitizeFTSQuery(_ raw: String) -> String {
         var cleaned = raw
-        for ch: Character in "\"*()^:-+" {
+        for ch: Character in "\"*()^:-+{}~," {
             cleaned = cleaned.replacingOccurrences(of: String(ch), with: " ")
         }
-        let reserved: Set<String> = ["AND", "OR", "NOT"]
+        let reserved: Set<String> = ["AND", "OR", "NOT", "NEAR"]
         let tokens = cleaned
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { token in
@@ -282,6 +285,47 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         try withDatabaseLock {
             itemCountLocked()
         }
+    }
+
+    func allImageFileNames(excludingIDs: Set<UUID>) throws -> Set<String> {
+        try withDatabaseLock {
+            try allImageFileNamesLocked(excludingIDs: excludingIDs)
+        }
+    }
+
+    private func allImageFileNamesLocked(excludingIDs: Set<UUID>) throws -> Set<String> {
+        guard let db else { throw StoreError.databaseNotOpen }
+        var names = Set<String>()
+
+        func collect(from sql: String, bind: ((OpaquePointer) -> Void)? = nil) throws {
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                throw StoreError.queryFailed(String(cString: sqlite3_errmsg(db)))
+            }
+            defer { sqlite3_finalize(stmt) }
+            if let bind, let stmt { bind(stmt) }
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let c = sqlite3_column_text(stmt, 0) {
+                    names.insert(String(cString: c))
+                }
+            }
+        }
+
+        if excludingIDs.isEmpty {
+            try collect(from: "SELECT DISTINCT image_file_name FROM clipboard_items WHERE image_file_name IS NOT NULL")
+        } else {
+            let ids = Array(excludingIDs)
+            for start in stride(from: 0, to: ids.count, by: 500) {
+                let chunk = ids[start..<min(start + 500, ids.count)]
+                let placeholders = chunk.map { _ in "?" }.joined(separator: ",")
+                try collect(from: "SELECT DISTINCT image_file_name FROM clipboard_items WHERE image_file_name IS NOT NULL AND id NOT IN (\(placeholders))") { stmt in
+                    for (index, id) in chunk.enumerated() {
+                        sqlite3_bind_text(stmt, Int32(index + 1), id.uuidString, -1, SQLITE_TRANSIENT_DESTRUCTOR)
+                    }
+                }
+            }
+        }
+        return names
     }
 
     func loadItem(id: UUID) throws -> ClipboardItem? {
@@ -381,42 +425,41 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
         let newIDs = Set(newMap.keys)
 
-        exec("BEGIN")
         let currentItems = itemsLock.withLock { lastKnownItems }
-        let toInsert = newIDs.subtracting(currentItems.keys)
-        let toUpdate = newIDs.intersection(currentItems.keys).filter { newMap[$0] != currentItems[$0] }
-
-        guard !toInsert.isEmpty || !toUpdate.isEmpty else {
-            exec("ROLLBACK")
-            return false
+        let toInsert = newIDs.subtracting(currentItems.keys).subtracting(deletedIDs)
+        let toUpdate: [ClipboardItem] = newIDs.intersection(currentItems.keys).compactMap { id in
+            guard let incoming = newMap[id], let current = currentItems[id], incoming != current else { return nil }
+            var merged = incoming
+            if current.useCount > merged.useCount { merged.useCount = current.useCount }
+            if current.timestamp > merged.timestamp { merged.timestamp = current.timestamp }
+            return merged
         }
 
-        var anyFailed = false
+        guard !toInsert.isEmpty || !toUpdate.isEmpty else { return false }
 
-        if !toUpdate.isEmpty && !deleteItemsPrepared(toUpdate) {
-            anyFailed = true
-        }
-
+        exec("BEGIN")
         let insertItems = toInsert.compactMap { newMap[$0] }
-        if !insertItems.isEmpty && !insertItemsPrepared(insertItems) {
-            anyFailed = true
-        }
+        let result = insertItemsPrepared(insertItems + toUpdate)
 
-        let updateItems = toUpdate.compactMap { newMap[$0] }
-        if !updateItems.isEmpty && !insertItemsPrepared(updateItems) {
-            anyFailed = true
-        }
-
-        if anyFailed {
+        guard result.allStepsOK else {
             exec("ROLLBACK")
             logger.error("saveItems: one or more writes failed — transaction rolled back; will retry on next save")
             return false
         }
 
         exec("COMMIT")
+        var writtenItems = [UUID: ClipboardItem](minimumCapacity: toInsert.count + toUpdate.count)
+        for id in toInsert {
+            if let item = newMap[id] { writtenItems[id] = item }
+        }
+        for item in toUpdate {
+            writtenItems[item.id] = item
+        }
         itemsLock.withLock {
-            for (id, item) in newMap {
-                lastKnownItems[id] = item
+            for id in result.writtenIDs {
+                if let item = writtenItems[id] {
+                    lastKnownItems[id] = item
+                }
             }
             var order = items.map(\.id)
             for id in lastKnownOrder where !newIDs.contains(id) {
@@ -563,19 +606,22 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
 
         let current = itemsLock.withLock { lastKnownItems[item.id] }
         guard current != item else { return false }
+        if current == nil && deletedIDs.contains(item.id) { return false }
 
         exec("BEGIN")
-        let ok = insertItem(item)
+        let result = insertItemsPrepared([item])
 
-        if ok {
+        if result.allStepsOK {
             exec("COMMIT")
-            itemsLock.withLock {
-                lastKnownItems[item.id] = item
-                if current == nil {
-                    lastKnownOrder.insert(item.id, at: 0)
+            if result.writtenIDs.contains(item.id) {
+                itemsLock.withLock {
+                    lastKnownItems[item.id] = item
+                    if current == nil {
+                        lastKnownOrder.insert(item.id, at: 0)
+                    }
                 }
             }
-            return true
+            return result.writtenIDs.contains(item.id)
         }
 
         exec("ROLLBACK")
@@ -604,6 +650,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
 
         exec("COMMIT")
+        deletedIDs.formUnion(ids)
         itemsLock.withLock {
             for id in ids {
                 lastKnownItems.removeValue(forKey: id)
@@ -715,7 +762,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             }
 
             exec("BEGIN TRANSACTION")
-            guard insertItemsPrepared(items) else {
+            guard insertItemsPrepared(items).allStepsOK else {
                 exec("ROLLBACK")
                 return false
             }
@@ -747,6 +794,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         } else {
             exec("PRAGMA journal_mode=WAL")
             exec("PRAGMA synchronous=NORMAL")
+            exec("PRAGMA busy_timeout=5000")
         }
     }
 
@@ -785,32 +833,101 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         logger.info("Database at schema version \(self.getUserVersion())")
     }
 
-    @discardableResult
-    private func insertItem(_ item: ClipboardItem) -> Bool {
-        insertItemsPrepared([item])
+    private func encryptLegacySensitiveRowsLocked() {
+        guard let db else { return }
+        var stmt: OpaquePointer?
+        struct LegacyRow {
+            let id: String
+            let content: String
+            let rtf: Data?
+        }
+        var rows: [LegacyRow] = []
+        if sqlite3_prepare_v2(db, "SELECT id, content, rtf_data FROM clipboard_items WHERE is_sensitive = 1 AND is_enc = 0", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                guard let idC = sqlite3_column_text(stmt, 0) else { continue }
+                let content = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+                var rtf: Data?
+                if sqlite3_column_type(stmt, 2) != SQLITE_NULL,
+                   let blob = sqlite3_column_blob(stmt, 2) {
+                    rtf = Data(bytes: blob, count: Int(sqlite3_column_bytes(stmt, 2)))
+                }
+                rows.append(LegacyRow(id: String(cString: idC), content: content, rtf: rtf))
+            }
+            sqlite3_finalize(stmt)
+        }
+        guard !rows.isEmpty else { return }
+
+        exec("BEGIN")
+        var migratedCount = 0
+        for row in rows {
+            guard let contentData = row.content.data(using: .utf8),
+                  let encContent = try? EncryptionService.shared.encrypt(contentData) else {
+                logger.error("Could not encrypt legacy sensitive item \(row.id); leaving row unchanged for retry")
+                continue
+            }
+            let encRtf = row.rtf.flatMap { try? EncryptionService.shared.encrypt($0) }
+            let ok = execBind("UPDATE clipboard_items SET content = ?, rtf_data = NULL, content_enc = ?, rtf_enc = ?, is_enc = 1, ocr_text = NULL WHERE id = ?") { s in
+                sqlite3_bind_text(s, 1, "[\u{1F512} Sensitive]", -1, SQLITE_TRANSIENT_DESTRUCTOR)
+                encContent.withUnsafeBytes { sqlite3_bind_blob(s, 2, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT_DESTRUCTOR) }
+                if let encRtf {
+                    encRtf.withUnsafeBytes { sqlite3_bind_blob(s, 3, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT_DESTRUCTOR) }
+                } else {
+                    sqlite3_bind_null(s, 3)
+                }
+                sqlite3_bind_text(s, 4, row.id, -1, SQLITE_TRANSIENT_DESTRUCTOR)
+            }
+            if ok { migratedCount += 1 }
+        }
+        exec("COMMIT")
+        if migratedCount > 0 {
+            logger.info("Encrypted \(migratedCount) legacy sensitive item(s)")
+        }
     }
 
-    private func insertItemsPrepared(_ items: [ClipboardItem]) -> Bool {
-        guard let db else { return false }
+    private func insertItemsPrepared(_ items: [ClipboardItem]) -> (allStepsOK: Bool, writtenIDs: Set<UUID>) {
+        guard let db else { return (false, []) }
         let sql = """
-        INSERT OR REPLACE INTO clipboard_items
+        INSERT INTO clipboard_items
         (id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+        content = excluded.content,
+        rtf_data = excluded.rtf_data,
+        type = excluded.type,
+        timestamp = excluded.timestamp,
+        is_pinned = excluded.is_pinned,
+        use_count = excluded.use_count,
+        image_hash = excluded.image_hash,
+        image_file_name = excluded.image_file_name,
+        ocr_text = excluded.ocr_text,
+        source_bundle_id = excluded.source_bundle_id,
+        source_app_name = excluded.source_app_name,
+        is_sensitive = excluded.is_sensitive,
+        expires_at = excluded.expires_at,
+        content_enc = excluded.content_enc,
+        rtf_enc = excluded.rtf_enc,
+        is_enc = excluded.is_enc,
+        is_screenshot = excluded.is_screenshot
         """
-        guard let stmt = cachedStatement(sql) else { return false }
+        guard let stmt = cachedStatement(sql) else { return (false, []) }
         defer { sqlite3_reset(stmt); sqlite3_clear_bindings(stmt) }
+        var written: Set<UUID> = []
         for item in items {
-            bindItem(item, to: stmt)
+            guard bindItem(item, to: stmt) else {
+                logger.error("Refusing to persist sensitive item \(item.id.uuidString) without encryption — skipped")
+                continue
+            }
             if sqlite3_step(stmt) != SQLITE_DONE {
                 logger.error("SQL step failed: \(String(cString: sqlite3_errmsg(db)))")
                 sqlite3_reset(stmt)
                 sqlite3_clear_bindings(stmt)
-                return false
+                return (false, written)
             }
+            written.insert(item.id)
             sqlite3_reset(stmt)
             sqlite3_clear_bindings(stmt)
         }
-        return true
+        return (true, written)
     }
 
     private func deleteItemsPrepared(_ ids: Set<UUID>) -> Bool {
@@ -832,13 +949,16 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         return true
     }
 
-    private func bindItem(_ item: ClipboardItem, to stmt: OpaquePointer) {
+    private func bindItem(_ item: ClipboardItem, to stmt: OpaquePointer) -> Bool {
         var storedContent = item.content
         var contentEncData: Data?
         var rtfEncData: Data?
         let isEnc: Bool
-        if item.isSensitive, let contentData = item.content.data(using: .utf8),
-           let encrypted = try? EncryptionService.shared.encrypt(contentData) {
+        if item.isSensitive {
+            guard let contentData = item.content.data(using: .utf8),
+                  let encrypted = try? EncryptionService.shared.encrypt(contentData) else {
+                return false
+            }
             storedContent = "[\u{1F512} Sensitive]"
             contentEncData = encrypted
             if let rtf = item.rtfData { rtfEncData = try? EncryptionService.shared.encrypt(rtf) }
@@ -861,7 +981,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         sqlite3_bind_int(stmt, 7, Int32(item.useCount))
         bindOptionalText(stmt, 8, item.imageHash)
         bindOptionalText(stmt, 9, item.imageFileName)
-        bindOptionalText(stmt, 10, item.ocrText)
+        bindOptionalText(stmt, 10, isEnc ? nil : item.ocrText)
         bindOptionalText(stmt, 11, item.sourceBundleID)
         bindOptionalText(stmt, 12, item.sourceAppName)
         sqlite3_bind_int(stmt, 13, item.isSensitive ? 1 : 0)
@@ -882,6 +1002,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
         sqlite3_bind_int(stmt, 17, isEnc ? 1 : 0)
         sqlite3_bind_int(stmt, 18, item.isScreenshot ? 1 : 0)
+        return true
     }
 
     private func readRow(_ stmt: OpaquePointer) -> ClipboardItem? {

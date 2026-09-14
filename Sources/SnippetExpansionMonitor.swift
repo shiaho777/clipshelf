@@ -15,6 +15,8 @@ final class SnippetExpansionMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
+    private static let syntheticEventMarker: Int64 = 0x4353
+
     init(snippetManager: SnippetManager) {
         self.snippetManager = snippetManager
     }
@@ -24,7 +26,7 @@ final class SnippetExpansionMonitor {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
         }
     }
 
@@ -75,6 +77,17 @@ final class SnippetExpansionMonitor {
     }
 
     private nonisolated func handleEvent(_ event: CGEvent) -> Unmanaged<CGEvent>? {
+        if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticEventMarker {
+            return Unmanaged.passRetained(event)
+        }
+        if IsSecureEventInputEnabled() {
+            MainActor.assumeIsolated { inputBuffer = "" }
+            return Unmanaged.passRetained(event)
+        }
+        let flags = event.flags
+        if flags.contains(.maskCommand) || flags.contains(.maskControl) {
+            return Unmanaged.passRetained(event)
+        }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
         if isResetKey(Int(keyCode)) {
@@ -118,7 +131,7 @@ final class SnippetExpansionMonitor {
         let resetKeys: Set<Int> = [
             kVK_Return, kVK_ANSI_KeypadEnter, kVK_Escape, kVK_Tab,
             kVK_UpArrow, kVK_DownArrow, kVK_LeftArrow, kVK_RightArrow,
-            kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown,
+            kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown, kVK_Delete,
         ]
         return resetKeys.contains(keyCode)
     }
@@ -127,6 +140,8 @@ final class SnippetExpansionMonitor {
         for _ in 0..<count {
             if let down = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Delete), keyDown: true),
                let up = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Delete), keyDown: false) {
+                down.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+                up.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
                 down.post(tap: .cgAnnotatedSessionEventTap)
                 up.post(tap: .cgAnnotatedSessionEventTap)
             }
@@ -152,11 +167,14 @@ final class SnippetExpansionMonitor {
 
         pb.clearContents()
         pb.setString(expanded, forType: .string)
+        let expandedChangeCount = pb.changeCount
 
         if let down = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true),
            let up = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false) {
             down.flags = .maskCommand
             up.flags = .maskCommand
+            down.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+            up.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
             down.post(tap: .cgAnnotatedSessionEventTap)
             up.post(tap: .cgAnnotatedSessionEventTap)
         }
@@ -169,6 +187,8 @@ final class SnippetExpansionMonitor {
                    let up = CGEvent(keyboardEventSource: nil,
                                    virtualKey: CGKeyCode(kVK_LeftArrow),
                                    keyDown: false) {
+                    down.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+                    up.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
                     down.post(tap: .cgAnnotatedSessionEventTap)
                     up.post(tap: .cgAnnotatedSessionEventTap)
                 }
@@ -177,6 +197,7 @@ final class SnippetExpansionMonitor {
 
         let oldContents = clipboardText
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            guard pb.changeCount == expandedChangeCount else { return }
             NotificationCenter.default.post(name: .clipboardSuppressCapture, object: nil)
             pb.clearContents()
             if !oldContents.isEmpty {
