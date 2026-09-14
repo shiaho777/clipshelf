@@ -82,6 +82,7 @@ enum FuzzySearch {
                 case "image": result.typeFilter = .image
                 case "text": result.typeFilter = .text
                 case "rich", "richtext": result.typeFilter = .richText
+                case "file", "files", "fileurl", "url": result.typeFilter = .fileURL
                 default: result.textTokens.append(token)
                 }
             } else {

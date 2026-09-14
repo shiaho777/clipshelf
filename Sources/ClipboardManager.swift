@@ -58,7 +58,7 @@ class ClipboardManager: ObservableObject {
     var targetBundleID: String?
     var onItemSelected: (() -> Void)?
     
-    private let pasteboard = NSPasteboard.general
+    private let pasteboard: NSPasteboard
     private var cleanupTimer: Timer?
     private var cachedExcludedBundleIDs: Set<String> = ClipboardManager.defaultExcludedBundleIDs
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "Storage")
@@ -69,12 +69,13 @@ class ClipboardManager: ObservableObject {
     let ruleEngine = ClipboardRuleEngine()
     private let ruleStore: ClipboardRuleStore
     private var embeddingCache: [UUID: [Float32]] = [:]
+    private var embeddingCacheOrder: [UUID] = []
+    private let maxEmbeddingCacheEntries = 8_000
     private let startupOCRMigrationLimit = 24
-    private var pasteboardDataProviders: [NSPasteboardItemDataProvider] = [] {
-        didSet { invalidateDataProvidersIfNeeded(oldValue: oldValue) }
-    }
+    private var pasteboardDataProviders: [NSPasteboardItemDataProvider] = []
     private let historyIndex = ClipboardHistoryIndex()
     private var ocrQueue: ClipboardOCRQueue!
+    private var expirySweepTimer: Timer?
 
     let imageManager: ClipboardImageManager
     private let prefs: ClipboardPreferencesManager
@@ -163,10 +164,27 @@ class ClipboardManager: ObservableObject {
                 historyIndex.markNeedsRebuild()
             }
         }
+        var removedIDs = Set(removed.map(\.id))
+        let unresolved = ids.subtracting(removedIDs)
+        if !unresolved.isEmpty {
+            var coldRemoved: [ClipboardItem] = []
+            for id in unresolved {
+                if let item = itemByID[id] {
+                    coldRemoved.append(item)
+                }
+            }
+            removeIDsFromIndexes(unresolved)
+            ocrQueue?.remove(ids: unresolved)
+            for id in unresolved {
+                embeddingCache.removeValue(forKey: id)
+            }
+            deletedIDTombstones.formUnion(unresolved)
+            removed.append(contentsOf: coldRemoved)
+            removedIDs.formUnion(unresolved)
+        }
         if !removed.isEmpty {
-            let removedIDs = Set(removed.map(\.id))
             removeIDsFromIndexes(removedIDs)
-            ocrQueue?.remove(ids: ids)
+            ocrQueue?.remove(ids: removedIDs)
             for id in removedIDs {
                 embeddingCache.removeValue(forKey: id)
             }
@@ -174,6 +192,7 @@ class ClipboardManager: ObservableObject {
             totalStoredCount = max(0, totalStoredCount - removed.count)
             deletedIDTombstones.formUnion(removedIDs)
         }
+        SpotlightIndexService.shared.deindexItems(ids: ids)
         return removed
     }
 
@@ -228,9 +247,22 @@ class ClipboardManager: ObservableObject {
     }
 
     private func deleteImageFiles(for removedItems: [ClipboardItem]) {
-        for item in removedItems where item.type == .image {
-            let hasOtherReferences = historyIndex.hasOtherImageReferences(for: item.imageFileName)
-            imageManager.deleteImageFile(for: item, hasOtherReferences: hasOtherReferences)
+        let imageItems = removedItems.filter { $0.type == .image }
+        guard !imageItems.isEmpty else { return }
+        let removedIDs = Set(imageItems.map(\.id))
+        var stillReferenced: Set<String>
+        if let refs = try? historyStore.allImageFileNames(excludingIDs: removedIDs) {
+            stillReferenced = refs
+            stillReferenced.formUnion(items.lazy.compactMap(\.imageFileName))
+        } else {
+            logger.error("Could not enumerate image references; skipping image file deletion")
+            return
+        }
+        for item in imageItems {
+            imageManager.deleteImageFile(
+                for: item,
+                hasOtherReferences: stillReferenced.contains(item.imageFileName ?? "")
+            )
         }
     }
 
@@ -257,8 +289,10 @@ class ClipboardManager: ObservableObject {
         historyStore: ClipboardHistoryStore? = nil,
         imageStore: ClipboardImageStore? = nil,
         preferencesStore: AppPreferencesStore? = nil,
-        ocrService: OCRServiceProtocol? = nil
+        ocrService: OCRServiceProtocol? = nil,
+        pasteboard: NSPasteboard = .general
     ) {
+        self.pasteboard = pasteboard
         let resolvedStorageDirectory: URL
         if let storageDirectory {
             resolvedStorageDirectory = storageDirectory
@@ -316,10 +350,17 @@ class ClipboardManager: ObservableObject {
             },
             onRecognized: { [weak self] id, ocrText in
                 guard let self else { return }
-                guard let idx = self.indexForItem(id: id) else { return }
-                self.items[idx].ocrText = ocrText
-                self.updateIndexedItem(self.items[idx], at: idx)
-                self.persistItemIncrementally(self.items[idx])
+                guard var item = self.itemByID[id] else { return }
+                item.ocrText = ocrText
+                self.historyIndex.setItem(item)
+                if let idx = self.indexForItem(id: id),
+                   idx < self.items.count, self.items[idx].id == id {
+                    self.items[idx] = item
+                    self.updateIndexedItem(item, at: idx)
+                    self.noteHistoryMutation()
+                }
+                self.persistItemIncrementally(item)
+                SpotlightIndexService.shared.indexItem(item)
             }
         )
     }
@@ -328,8 +369,12 @@ class ClipboardManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            let orphanRefs = Set(self.items.compactMap(\.imageFileName))
-            self.imageManager.pruneOrphanedFiles(referencedFileNames: orphanRefs)
+            if var orphanRefs = try? self.historyStore.allImageFileNames(excludingIDs: []) {
+                orphanRefs.formUnion(self.items.lazy.compactMap(\.imageFileName))
+                self.imageManager.pruneOrphanedFiles(referencedFileNames: orphanRefs)
+            } else {
+                self.logger.error("Skipping orphan image prune — could not enumerate referenced files")
+            }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             self.migrateOCRForExistingImages()
         }
@@ -364,13 +409,16 @@ class ClipboardManager: ObservableObject {
                     autoPin: autoPin
                 )
             },
-            addImage: { [weak self] imageData, sourceBundleID, sourceAppName, fileExtension, isScreenshot, completion in
+            addImage: { [weak self] imageData, sourceBundleID, sourceAppName, fileExtension, isSensitive, expiresAt, autoPin, isScreenshot, completion in
                 self?.prepareAndAddImageItem(
                     imageData: imageData,
                     sourceBundleID: sourceBundleID,
                     sourceAppName: sourceAppName,
                     fileExtension: fileExtension,
                     isScreenshot: isScreenshot,
+                    isSensitive: isSensitive,
+                    expiresAt: expiresAt,
+                    autoPin: autoPin,
                     completion: completion
                 )
             },
@@ -402,6 +450,7 @@ class ClipboardManager: ObservableObject {
         if startRuntimeServices {
             monitor.start()
             configureCleanupTimer()
+            configureExpirySweepTimer()
         }
     }
 
@@ -409,6 +458,7 @@ class ClipboardManager: ObservableObject {
     deinit {
         monitor.stop()
         cleanupTimer?.invalidate()
+        expirySweepTimer?.invalidate()
     }
     
     private func handleCapturedContent(_ content: CapturedContent) {
@@ -427,6 +477,13 @@ class ClipboardManager: ObservableObject {
         }
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             self?.cleanupOldItems()
+        }
+    }
+
+    private func configureExpirySweepTimer() {
+        expirySweepTimer?.invalidate()
+        expirySweepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.purgeExpiredItems()
         }
     }
     
@@ -552,7 +609,7 @@ class ClipboardManager: ObservableObject {
     }
 
     @discardableResult
-    func addImageItem(imageData: Data, sourceBundleID: String? = nil, sourceAppName: String? = nil, fileExtension: String? = nil, isScreenshot: Bool = false) -> ClipboardItem {
+    func addImageItem(imageData: Data, sourceBundleID: String? = nil, sourceAppName: String? = nil, fileExtension: String? = nil, isScreenshot: Bool = false, isSensitive: Bool = false, expiresAt: Date? = nil, autoPin: Bool = false) -> ClipboardItem {
         let hash = ClipboardItem.hash(for: imageData)
         let duplicateIDs = historyIndex.unpinnedImageIDsByHash[hash] ?? []
         let (storedFileName, inlineImageData) = imageManager.saveImageFile(imageData, fileExtension: fileExtension)
@@ -560,35 +617,49 @@ class ClipboardManager: ObservableObject {
             id: UUID(),
             imageData: inlineImageData,
             type: .image,
+            isPinned: autoPin,
             imageHash: hash,
             imageFileName: storedFileName,
             sourceBundleID: sourceBundleID,
             sourceAppName: sourceAppName,
+            isSensitive: isSensitive,
+            expiresAt: expiresAt,
             isScreenshot: isScreenshot
         )
         return insertNewHistoryItem(newItem, duplicateIDs: duplicateIDs, enqueueOCR: true)
     }
 
-    private func prepareAndAddImageItem(imageData: Data, sourceBundleID: String? = nil, sourceAppName: String? = nil, fileExtension: String? = nil, isScreenshot: Bool = false, completion: ((ClipboardItem) -> Void)? = nil) {
+    private func prepareAndAddImageItem(imageData: Data, sourceBundleID: String? = nil, sourceAppName: String? = nil, fileExtension: String? = nil, isScreenshot: Bool = false, isSensitive: Bool = false, expiresAt: Date? = nil, autoPin: Bool = false, completion: ((ClipboardItem) -> Void)? = nil) {
         Task { [weak self] in
             guard let self else { return }
             let prepared = await self.imageManager.prepareImageFile(imageData, fileExtension: fileExtension)
-            let item = self.insertPreparedImage(prepared, sourceBundleID: sourceBundleID, sourceAppName: sourceAppName, isScreenshot: isScreenshot)
+            let item = self.insertPreparedImage(
+                prepared,
+                sourceBundleID: sourceBundleID,
+                sourceAppName: sourceAppName,
+                isScreenshot: isScreenshot,
+                isSensitive: isSensitive,
+                expiresAt: expiresAt,
+                autoPin: autoPin
+            )
             if let item { completion?(item) }
         }
     }
 
     @discardableResult
-    private func insertPreparedImage(_ prepared: PreparedClipboardImage, sourceBundleID: String? = nil, sourceAppName: String? = nil, isScreenshot: Bool = false) -> ClipboardItem? {
+    private func insertPreparedImage(_ prepared: PreparedClipboardImage, sourceBundleID: String? = nil, sourceAppName: String? = nil, isScreenshot: Bool = false, isSensitive: Bool = false, expiresAt: Date? = nil, autoPin: Bool = false) -> ClipboardItem? {
         let duplicateIDs = historyIndex.unpinnedImageIDsByHash[prepared.hash] ?? []
         let newItem = ClipboardItem(
             id: UUID(),
             imageData: prepared.inlineData,
             type: .image,
+            isPinned: autoPin,
             imageHash: prepared.hash,
             imageFileName: prepared.fileName,
             sourceBundleID: sourceBundleID,
             sourceAppName: sourceAppName,
+            isSensitive: isSensitive,
+            expiresAt: expiresAt,
             isScreenshot: isScreenshot
         )
         return insertNewHistoryItem(newItem, duplicateIDs: duplicateIDs, enqueueOCR: true)
@@ -606,16 +677,6 @@ class ClipboardManager: ObservableObject {
         return insertNewHistoryItem(item, duplicateIDs: duplicateIDs)
     }
 
-    private func invalidateDataProvidersIfNeeded(oldValue: [NSPasteboardItemDataProvider]) {
-        guard !oldValue.isEmpty else { return }
-        if let types = pasteboard.types, types.contains(.png) || types.contains(.tiff) {
-            return
-        }
-        for provider in oldValue {
-            _ = provider
-        }
-    }
-
     @discardableResult
     func copyToClipboard(_ item: ClipboardItem, autoPaste: Bool = false, asPlainText: Bool = false) -> Bool {
         let result = ClipboardPasteboardWriter.write(
@@ -629,7 +690,9 @@ class ClipboardManager: ObservableObject {
                 self?.imageManager.pasteboardPayload(for: item)
             }
         )
-        pasteboardDataProviders = result.retainedProviders
+        if result.didWrite {
+            pasteboardDataProviders = result.retainedProviders
+        }
         if let description = result.smartPasteDescription {
             lastSmartPasteDescription = description
         }
@@ -787,6 +850,11 @@ class ClipboardManager: ObservableObject {
         ClipboardHistoryQueries.contents(from: items, sourceBundleID: sourceBundleID, limit: limit)
     }
 
+    func exportableItems() -> [ClipboardItem] {
+        let all = (try? historyStore.loadItems(limit: nil)) ?? items
+        return all.filter { !$0.isSensitive }
+    }
+
     func deleteItem(byID id: UUID) {
         guard let item = itemByID[id] else { return }
         deleteItem(item)
@@ -811,7 +879,25 @@ class ClipboardManager: ObservableObject {
             store: store,
             cachedIDs: cachedIDs
         ) { [weak self] fresh in
-            self?.embeddingCache.merge(fresh) { _, new in new }
+            self?.mergeEmbeddingCache(fresh)
+        }
+    }
+
+    private func mergeEmbeddingCache(_ fresh: [UUID: [Float32]]) {
+        guard !fresh.isEmpty else { return }
+        for (id, vector) in fresh {
+            if embeddingCache[id] == nil {
+                embeddingCacheOrder.append(id)
+            }
+            embeddingCache[id] = vector
+        }
+        if embeddingCacheOrder.count > maxEmbeddingCacheEntries {
+            let evictCount = embeddingCacheOrder.count - maxEmbeddingCacheEntries
+            let evicted = embeddingCacheOrder.prefix(evictCount)
+            for id in evicted {
+                embeddingCache.removeValue(forKey: id)
+            }
+            embeddingCacheOrder.removeFirst(evictCount)
         }
     }
 
@@ -861,9 +947,7 @@ class ClipboardManager: ObservableObject {
             )
             do {
                 let coldRemoved = try historyStore.trimUnpinned(to: maxUnpinned)
-                if !coldRemoved.isEmpty {
-                    totalStoredCount = max(0, totalStoredCount - coldRemoved.count)
-                }
+                finishColdDeletions(coldRemoved)
             } catch {
                 logger.error("Failed to trim cold history: \(error.localizedDescription)")
             }
@@ -902,23 +986,7 @@ class ClipboardManager: ObservableObject {
     
     func cleanupOldItems() {
         let now = Date()
-        var accountedIDs = Set<UUID>()
-        let expired = ClipboardHistoryMaintenance.expiredItems(in: items, now: now)
-        if !expired.isEmpty {
-            removeHistoryItems(expired, wipeFirst: true)
-            accountedIDs.formUnion(expired.map(\.id))
-        }
-        do {
-            let coldExpired = try historyStore.deleteExpired(before: now)
-            let additional = ClipboardHistoryMaintenance.additionalStoreIDs(coldExpired, excluding: accountedIDs)
-            if !additional.isEmpty {
-                deletedIDTombstones.formUnion(additional)
-                totalStoredCount = max(0, totalStoredCount - additional.count)
-            }
-        } catch {
-            logger.error("Failed to delete expired cold items: \(error.localizedDescription)")
-        }
-
+        var accountedIDs = purgeExpiredItems(now: now)
         if let cutoffDate = ClipboardHistoryMaintenance.autoCleanupCutoff(intervalDays: autoCleanupInterval, now: now) {
             let old = ClipboardHistoryMaintenance.autoCleanupCandidates(in: items, olderThan: cutoffDate)
             if !old.isEmpty {
@@ -927,14 +995,43 @@ class ClipboardManager: ObservableObject {
             }
             do {
                 let coldOld = try historyStore.deleteUnpinnedOlderThan(cutoffDate)
-                let additional = ClipboardHistoryMaintenance.additionalStoreIDs(coldOld, excluding: accountedIDs)
-                if !additional.isEmpty {
-                    deletedIDTombstones.formUnion(additional)
-                    totalStoredCount = max(0, totalStoredCount - additional.count)
-                }
+                finishColdDeletions(ClipboardHistoryMaintenance.additionalStoreIDs(coldOld, excluding: accountedIDs))
             } catch {
                 logger.error("Failed to delete old cold items: \(error.localizedDescription)")
             }
+        }
+    }
+
+    @discardableResult
+    private func purgeExpiredItems(now: Date = Date()) -> Set<UUID> {
+        var accountedIDs = Set<UUID>()
+        let expired = ClipboardHistoryMaintenance.expiredItems(in: items, now: now)
+        if !expired.isEmpty {
+            removeHistoryItems(expired, wipeFirst: true)
+            accountedIDs.formUnion(expired.map(\.id))
+        }
+        do {
+            let coldExpired = try historyStore.deleteExpired(before: now)
+            finishColdDeletions(ClipboardHistoryMaintenance.additionalStoreIDs(coldExpired, excluding: accountedIDs))
+        } catch {
+            logger.error("Failed to delete expired cold items: \(error.localizedDescription)")
+        }
+        return accountedIDs
+    }
+
+    private func finishColdDeletions(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        deletedIDTombstones.formUnion(ids)
+        totalStoredCount = max(0, totalStoredCount - ids.count)
+        SpotlightIndexService.shared.deindexItems(ids: ids)
+        ocrQueue?.remove(ids: ids)
+        for id in ids {
+            embeddingCache.removeValue(forKey: id)
+            embeddingCacheOrder.removeAll { $0 == id }
+        }
+        if var refs = try? historyStore.allImageFileNames(excludingIDs: []) {
+            refs.formUnion(items.lazy.compactMap(\.imageFileName))
+            imageManager.pruneOrphanedFiles(referencedFileNames: refs)
         }
     }
     
@@ -965,8 +1062,21 @@ class ClipboardManager: ObservableObject {
 
     func replaceHistoryForImport(with merged: [ClipboardItem]) {
         let ordered = ClipboardHistoryOrdering.reorderedByPinState(merged)
+        let keepIDs = Set(ordered.items.map(\.id))
+        let existing = (try? historyStore.loadItems(limit: nil)) ?? []
+        let staleItems = existing.filter { !keepIDs.contains($0.id) }
         items = ordered.items
         rebuildItemIndexes()
+        if !staleItems.isEmpty {
+            let staleIDs = Set(staleItems.map(\.id))
+            deleteImageFiles(for: staleItems)
+            deletedIDTombstones.formUnion(staleIDs)
+            do {
+                try historyStore.deleteItems(ids: staleIDs)
+            } catch {
+                logger.error("Failed to purge stale items during import: \(error.localizedDescription)")
+            }
+        }
         recomputePinnedCount()
         totalStoredCount = items.count
         SpotlightIndexService.shared.deindexAll()

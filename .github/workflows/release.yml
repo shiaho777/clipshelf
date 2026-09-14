@@ -15,7 +15,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          brew install xcodegen
+          xcodegen --version
 
       - name: Generate Xcode Project
         run: xcodegen generate
@@ -44,6 +46,7 @@ jobs:
         if: env.CERTIFICATE_P12 != ''
         env:
           CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
           xcodebuild build \
             -project ClipShelf.xcodeproj \
@@ -51,7 +54,9 @@ jobs:
             -configuration Release \
             -derivedDataPath build/DerivedData \
             -destination 'platform=macOS' \
+            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
             CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$NOTARY_TEAM_ID" \
             CODE_SIGN_IDENTITY="Developer ID Application"
 
       - name: Build Release (unsigned)
@@ -65,6 +70,7 @@ jobs:
             -configuration Release \
             -derivedDataPath build/DerivedData \
             -destination 'platform=macOS' \
+            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Run Tests
@@ -90,11 +96,12 @@ jobs:
             "build/$DMG_NAME"
 
       - name: Notarize DMG
-        if: env.NOTARY_APPLE_ID != ''
+        if: env.NOTARY_APPLE_ID != '' && env.CERTIFICATE_P12 != ''
         env:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
         run: |
           DMG_NAME="ClipShelf-${{ steps.version.outputs.VERSION }}.dmg"
           xcrun notarytool submit "build/$DMG_NAME" \

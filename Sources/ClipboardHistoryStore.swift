@@ -24,6 +24,7 @@ protocol ClipboardHistoryStore {
     func deleteExpired(before date: Date) throws -> Set<UUID>
     @discardableResult
     func deleteUnpinnedOlderThan(_ date: Date) throws -> Set<UUID>
+    func allImageFileNames(excludingIDs: Set<UUID>) throws -> Set<String>
     func searchFTS(_ query: String, limit: Int) -> [UUID]
 }
 
@@ -90,6 +91,12 @@ extension ClipboardHistoryStore {
         let ids = Set(items.filter { !$0.isPinned && $0.timestamp < date }.map(\.id))
         _ = try deleteItems(ids: ids)
         return ids
+    }
+
+    func allImageFileNames(excludingIDs: Set<UUID>) throws -> Set<String> {
+        Set(try loadItems(limit: nil).lazy
+            .filter { !excludingIDs.contains($0.id) }
+            .compactMap(\.imageFileName))
     }
 
     func searchFTS(_ query: String, limit: Int = 500) -> [UUID] { [] }

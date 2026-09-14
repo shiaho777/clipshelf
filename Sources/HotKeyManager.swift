@@ -269,6 +269,11 @@ struct HotKeyRecorderHelper: NSViewRepresentable {
         }
         if let view = nsView as? HotKeyRecorderNSView {
             view.isRecording = isRecording
+            if isRecording {
+                DispatchQueue.main.async {
+                    view.window?.makeFirstResponder(view)
+                }
+            }
         }
     }
 }
@@ -276,8 +281,15 @@ struct HotKeyRecorderHelper: NSViewRepresentable {
 class HotKeyRecorderNSView: NSView {
     var isRecording = false
     var onKeyEvent: ((UInt16, UInt32) -> Void)?
-    
+
     override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if isRecording {
+            window?.makeFirstResponder(self)
+        }
+    }
     
     override func keyDown(with event: NSEvent) {
         guard isRecording else { return }

@@ -4,6 +4,7 @@ import Foundation
 final class ClipboardIngestPipeline {
     private let ruleEngine: ClipboardRuleEngine
     private let onStore: (CapturedContent, Bool, Date?, Bool) -> Void
+    private var tail: Task<Void, Never>?
 
     init(
         ruleEngine: ClipboardRuleEngine,
@@ -14,7 +15,9 @@ final class ClipboardIngestPipeline {
     }
 
     func handle(_ content: CapturedContent) {
-        Task { @MainActor [weak self] in
+        let previous = tail
+        let task = Task { @MainActor [weak self] in
+            _ = await previous?.value
             guard let self else { return }
             let result = await self.ruleEngine.process(content)
             switch result {
@@ -29,5 +32,6 @@ final class ClipboardIngestPipeline {
                 self.onStore(c, false, nil, true)
             }
         }
+        tail = task
     }
 }

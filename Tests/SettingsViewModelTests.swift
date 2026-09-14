@@ -84,6 +84,26 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(vm.launchAtLogin)
     }
 
+    func testToggleOnPendingApprovalShowsHintAndOpensSystemSettings() {
+        mockService.requiresApproval = true
+        let vm = makeViewModel()
+        vm.launchAtLogin = true
+        vm.handleLaunchAtLoginToggleChange()
+        XCTAssertEqual(mockService.setEnabledCalls, [true])
+        XCTAssertEqual(prefsStore.launchAtLogin, true)
+        XCTAssertEqual(vm.launchAtLoginErrorKey, "settings.launchAtLoginNeedsApproval")
+        XCTAssertEqual(mockService.openSystemSettingsCalls, 1)
+    }
+
+    func testLoadPreferencePendingApprovalShowsHint() {
+        mockService.requiresApproval = true
+        let vm = makeViewModel()
+        vm.loadLaunchAtLoginPreferenceIfNeeded()
+        XCTAssertFalse(vm.launchAtLogin)
+        XCTAssertEqual(vm.launchAtLoginErrorKey, "settings.launchAtLoginNeedsApproval")
+        XCTAssertEqual(mockService.openSystemSettingsCalls, 0)
+    }
+
     func testLoadPreferenceIdempotent() {
         mockService.isEnabled = true
         let vm = makeViewModel()

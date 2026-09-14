@@ -4,13 +4,13 @@ import Foundation
 final class ClipboardCaptureDispatcher {
     private let addText: (String, String?, String?, Bool, Date?, Bool) -> ClipboardItem
     private let addRichText: (String, Data, String?, String?, Bool, Date?, Bool) -> ClipboardItem
-    private let addImage: (Data, String?, String?, String?, Bool, ((ClipboardItem) -> Void)?) -> Void
+    private let addImage: (Data, String?, String?, String?, Bool, Date?, Bool, Bool, ((ClipboardItem) -> Void)?) -> Void
     private let addFileURL: ([String], String?, String?, Bool, Date?, Bool, Bool) -> ClipboardItem
 
     init(
         addText: @escaping (String, String?, String?, Bool, Date?, Bool) -> ClipboardItem,
         addRichText: @escaping (String, Data, String?, String?, Bool, Date?, Bool) -> ClipboardItem,
-        addImage: @escaping (Data, String?, String?, String?, Bool, ((ClipboardItem) -> Void)?) -> Void,
+        addImage: @escaping (Data, String?, String?, String?, Bool, Date?, Bool, Bool, ((ClipboardItem) -> Void)?) -> Void,
         addFileURL: @escaping ([String], String?, String?, Bool, Date?, Bool, Bool) -> ClipboardItem
     ) {
         self.addText = addText
@@ -55,6 +55,9 @@ final class ClipboardCaptureDispatcher {
                 content.sourceBundleID,
                 content.sourceAppName,
                 nil,
+                isSensitive,
+                expiresAt,
+                autoPin,
                 content.isScreenshot
             ) { [shouldEnqueue] item in
                 if shouldEnqueue { PasteQueue.shared.enqueue(item) }
@@ -65,6 +68,9 @@ final class ClipboardCaptureDispatcher {
                 content.sourceBundleID,
                 content.sourceAppName,
                 fileExtension,
+                isSensitive,
+                expiresAt,
+                autoPin,
                 content.isScreenshot
             ) { [shouldEnqueue] item in
                 if shouldEnqueue { PasteQueue.shared.enqueue(item) }

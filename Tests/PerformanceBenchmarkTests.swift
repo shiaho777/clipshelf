@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import ClipShelf
 
 final class PerformanceBenchmarkTests: XCTestCase {
@@ -148,7 +149,8 @@ final class PerformanceBenchmarkTests: XCTestCase {
             historyStore: historyStore,
             imageStore: imageStore,
             preferencesStore: prefsStore,
-            ocrService: InMemoryOCRService()
+            ocrService: InMemoryOCRService(),
+            pasteboard: NSPasteboard(name: NSPasteboard.Name("com.test.PerfBench.\(UUID().uuidString)"))
         )
         let target = manager.items.last!
 
@@ -171,7 +173,8 @@ final class PerformanceBenchmarkTests: XCTestCase {
             historyStore: historyStore,
             imageStore: imageStore,
             preferencesStore: prefsStore,
-            ocrService: InMemoryOCRService()
+            ocrService: InMemoryOCRService(),
+            pasteboard: NSPasteboard(name: NSPasteboard.Name("com.test.PerfBench.\(UUID().uuidString)"))
         )
         XCTAssertLessThanOrEqual(manager.items.count, 2_000)
         let target = manager.items[min(10, max(0, manager.items.count - 1))]
@@ -412,17 +415,21 @@ final class PerformanceBenchmarkTests: XCTestCase {
         XCTAssertTrue(store.searchFTS("").isEmpty, "Empty query should return empty array")
     }
 
-    func testFTSReservedWordsOnlyReturnsEmpty() throws {
+    func testFTSReservedWordsOnlyFallsBackToLike() throws {
         let store = SQLiteHistoryStore(storageDirectory: tempDir)
-        try store.saveItems([ClipboardItem(content: "AND OR NOT", type: .text)])
-        XCTAssertTrue(store.searchFTS("AND OR NOT").isEmpty, "FTS reserved words only → empty (filtered out)")
+        let item = ClipboardItem(content: "AND OR NOT", type: .text)
+        try store.saveItems([item])
+        XCTAssertEqual(store.searchFTS("AND OR NOT"), [item.id])
+        XCTAssertTrue(store.searchFTS("NEAR").isEmpty)
     }
 
     func testFTSSanitizesMetacharacters() throws {
         let store = SQLiteHistoryStore(storageDirectory: tempDir)
-        try store.saveItems([ClipboardItem(content: "safe content", type: .text)])
-        _ = store.searchFTS("query:*-(unsafe)^")
-        _ = store.searchFTS("\"quoted\" OR (AND)")
+        let item = ClipboardItem(content: "safe content", type: .text)
+        try store.saveItems([item])
+        XCTAssertTrue(store.searchFTS("query:*-(unsafe)^").isEmpty)
+        XCTAssertTrue(store.searchFTS("\"quoted\" OR (AND)").isEmpty)
+        XCTAssertEqual(store.searchFTS("safe"), [item.id])
     }
 
     func testCSVExportHeaderAndRowCount() throws {

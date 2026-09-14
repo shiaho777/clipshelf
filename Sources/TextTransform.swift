@@ -41,7 +41,10 @@ enum TextTransform: String, CaseIterable {
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                 .joined(separator: "\n")
         case .urlEncode:
-            return input.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            let allowed = CharacterSet(
+                charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()"
+            )
+            return input.addingPercentEncoding(withAllowedCharacters: allowed)
         case .urlDecode:
             return input.removingPercentEncoding
         case .jsonFormat:
@@ -115,7 +118,7 @@ enum TextTransform: String, CaseIterable {
     }
 
     private static func hexDecodeString(_ input: String) -> String? {
-        let cleaned = input.replacingOccurrences(of: " ", with: "").lowercased()
+        let cleaned = input.filter { !$0.isWhitespace }.lowercased()
         guard cleaned.count % 2 == 0 else { return nil }
         var bytes: [UInt8] = []
         var idx = cleaned.startIndex
@@ -130,15 +133,6 @@ enum TextTransform: String, CaseIterable {
 
     private static func htmlDecode(_ input: String) -> String {
         var result = input
-        let namedEntities: [(String, String)] = [
-            ("&amp;",  "&"),  ("&lt;",   "<"),  ("&gt;",   ">"),
-            ("&quot;", "\""), ("&#39;",  "'"),  ("&apos;", "'"),
-            ("&nbsp;", " "),  ("&copy;", "©"),  ("&reg;",  "®"),
-            ("&trade;","™"),  ("&mdash;","—"),  ("&ndash;","–"),
-        ]
-        for (entity, char) in namedEntities {
-            result = result.replacingOccurrences(of: entity, with: char)
-        }
         if let regex = try? NSRegularExpression(pattern: "&#(\\d+);|&#x([0-9a-fA-F]+);") {
             let ns = result as NSString
             let matches = regex.matches(in: result, range: NSRange(location: 0, length: ns.length))
@@ -154,6 +148,17 @@ enum TextTransform: String, CaseIterable {
                     result.replaceSubrange(range, with: String(scalar))
                 }
             }
+        }
+        let namedEntities: [(String, String)] = [
+            ("&lt;",   "<"),        ("&gt;",   ">"),
+            ("&quot;", "\""),       ("&apos;", "'"),
+            ("&nbsp;", "\u{00A0}"), ("&copy;", "©"),
+            ("&reg;",  "®"),        ("&trade;","™"),
+            ("&mdash;","—"),        ("&ndash;","–"),
+            ("&amp;",  "&"),
+        ]
+        for (entity, char) in namedEntities {
+            result = result.replacingOccurrences(of: entity, with: char)
         }
         return result
     }

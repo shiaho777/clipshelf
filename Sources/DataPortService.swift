@@ -44,7 +44,10 @@ final class DataPortService {
         self.imageStore = imageStore
     }
 
+    private static let maxImportedImageBytes = 64 * 1024 * 1024
+
     func exportBackup(to destinationURL: URL, items: [ClipboardItem]) throws {
+        let items = items.filter { !$0.isSensitive }
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("clipbackup-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -106,10 +109,18 @@ final class DataPortService {
 
         let imagesDir = historyURL.deletingLastPathComponent().appendingPathComponent("images")
         if FileManager.default.fileExists(atPath: imagesDir.path) {
-            if let files = try? FileManager.default.contentsOfDirectory(at: imagesDir, includingPropertiesForKeys: nil) {
+            if let files = try? FileManager.default.contentsOfDirectory(
+                at: imagesDir,
+                includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]
+            ) {
                 for file in files {
-                    let data = try Data(contentsOf: file)
-                    try imageStore.saveImageData(data, fileName: file.lastPathComponent)
+                    let name = file.lastPathComponent
+                    guard Self.isSafeImageFileName(name),
+                          let values = try? file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+                          values.isRegularFile == true,
+                          let size = values.fileSize, size <= Self.maxImportedImageBytes else { continue }
+                    let data = try Data(contentsOf: file, options: .mappedIfSafe)
+                    try imageStore.saveImageData(data, fileName: name)
                 }
             }
         }
@@ -157,7 +168,7 @@ final class DataPortService {
     func exportCSV(to url: URL, items: [ClipboardItem]) throws {
         let df = ISO8601DateFormatter()
         var lines: [String] = ["timestamp,type,content,source_app,is_pinned,ocr_text"]
-        for item in items {
+        for item in items where !item.isSensitive {
             let ts   = df.string(from: item.timestamp)
             let type = item.type.rawValue
             let content = item.content.csvEscaped
@@ -179,7 +190,9 @@ final class DataPortService {
             "| # | Time | Type | Content | App | Pinned |",
             "|---|------|------|---------|-----|--------|"
         ]
-        for (i, item) in items.enumerated() {
+        var rowIndex = 0
+        for item in items where !item.isSensitive {
+            rowIndex += 1
             let ts      = df.string(from: item.timestamp)
             let type    = item.type.rawValue
             let content = String(item.content.prefix(100))
@@ -187,7 +200,7 @@ final class DataPortService {
                 .replacingOccurrences(of: "|", with: "\\|")
             let app    = item.sourceAppName ?? "-"
             let pinned = item.isPinned ? "📌" : ""
-            lines.append("| \(i + 1) | \(ts) | \(type) | \(content) | \(app) | \(pinned) |")
+            lines.append("| \(rowIndex) | \(ts) | \(type) | \(content) | \(app) | \(pinned) |")
         }
         try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
     }

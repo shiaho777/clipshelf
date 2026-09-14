@@ -210,6 +210,42 @@ final class ClipboardRuleEngineTests: XCTestCase {
         if case .store = result {} else { XCTFail("Expected .store since rule is disabled") }
     }
 
+    func testContentTypeTriggerMatchesFileURL() async {
+        engine.rules = [
+            ClipboardRule(name: "pin-files", trigger: .contentType(.fileURL), actions: [.autoPin], order: 0)
+        ]
+        let fileContent = CapturedContent(kind: .fileURL(paths: ["/tmp/a.png", "/tmp/b.pdf"]), sourceBundleID: nil, sourceAppName: nil)
+        let result = await engine.process(fileContent)
+        XCTAssertEqual(result, .pin(fileContent))
+
+        let textContent = CapturedContent(kind: .text(content: "/tmp/a.png"), sourceBundleID: nil, sourceAppName: nil)
+        let result2 = await engine.process(textContent)
+        if case .store = result2 {} else { XCTFail("Expected .store for text when trigger is fileURL") }
+    }
+
+    func testRegexReplaceOnRichTextDemotesToPlainText() async {
+        engine.rules = [
+            ClipboardRule(name: "replace", actions: [.replaceRegex(pattern: "foo", replacement: "bar")], order: 0)
+        ]
+        let input = CapturedContent(
+            kind: .richText(content: "foo baz", rtfData: Data("{\\rtf1 foo baz}".utf8)),
+            sourceBundleID: "com.apple.Safari",
+            sourceAppName: "Safari"
+        )
+        let result = await engine.process(input)
+        guard case .store(let stored) = result else {
+            XCTFail("Expected .store")
+            return
+        }
+        guard case .text(let t) = stored.kind else {
+            XCTFail("Expected demoted .text kind, got \(stored.kind)")
+            return
+        }
+        XCTAssertEqual(t, "bar baz")
+        XCTAssertEqual(stored.sourceBundleID, "com.apple.Safari")
+        XCTAssertEqual(stored.sourceAppName, "Safari")
+    }
+
     private func text(_ s: String) -> CapturedContent {
         CapturedContent(kind: .text(content: s), sourceBundleID: nil, sourceAppName: nil)
     }

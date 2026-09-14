@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.nicebro.ClipShelf</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.2</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -28,8 +28,6 @@
     <string>ClipShelf needs this permission to paste content into other apps.</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>ClipShelf needs Accessibility access to simulate the paste shortcut.</string>
-    <key>SUFeedURL</key>
-    <string>https://github.com/shiaho777/clipshelf/releases/latest/download/appcast.xml</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

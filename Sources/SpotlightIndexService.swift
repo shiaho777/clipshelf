@@ -50,11 +50,18 @@ final class SpotlightIndexService {
     }
 
     func deindexItem(id: UUID) {
-        pendingItems.removeValue(forKey: id)
+        deindexItems(ids: [id])
+    }
+
+    func deindexItems(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            pendingItems.removeValue(forKey: id)
+        }
         Task.detached(priority: .background) { [weak self] in
             guard let self else { return }
             do {
-                try await self.index.deleteSearchableItems(withIdentifiers: [id.uuidString])
+                try await self.index.deleteSearchableItems(withIdentifiers: ids.map(\.uuidString))
             } catch {
                 await MainActor.run {
                     self.logger.error("Spotlight deindex failed: \(error.localizedDescription)")

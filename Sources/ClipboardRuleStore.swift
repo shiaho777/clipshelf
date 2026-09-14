@@ -25,8 +25,10 @@ final class JSONClipboardRuleStore: ClipboardRuleStore {
         }
         let data = try Data(contentsOf: fileURL)
         var rules = try decoder.decode([ClipboardRule].self, from: data)
-        let existing = Set(rules.filter(\.isBuiltIn).map(\.name))
-        for builtin in Self.builtInRules() where !existing.contains(builtin.name) {
+        let builtInIDs = Set(Self.builtInRules().map(\.id))
+        let existingBuiltInIDs = Set(rules.filter(\.isBuiltIn).map(\.id))
+        rules.removeAll { $0.isBuiltIn && !builtInIDs.contains($0.id) }
+        for builtin in Self.builtInRules() where !existingBuiltInIDs.contains(builtin.id) {
             rules.append(builtin)
         }
         return rules.sorted { $0.order < $1.order }

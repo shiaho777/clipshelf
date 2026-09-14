@@ -9,8 +9,7 @@ final class SnippetManager: ObservableObject {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SnippetManager")
 
     init(store: SnippetStore? = nil) {
-        let dir = AppStoragePaths.defaultStorageDirectory()
-        self.store = store ?? JSONSnippetStore(storageDirectory: dir)
+        self.store = store ?? JSONSnippetStore(storageDirectory: AppStoragePaths.defaultStorageDirectory())
         loadSnippets()
     }
 

@@ -37,15 +37,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let defaultPanelSize = NSSize(width: WindowLayout.mainPanelSize.width, height: WindowLayout.mainPanelSize.height)
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            let bundleID = Bundle.main.bundleIdentifier ?? "com.nicebro.ClipShelf"
-            let currentApp = NSRunningApplication.current
-            let otherInstances = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { $0 != currentApp }
-            if let existing = otherInstances.first {
-                existing.activate(options: .activateIgnoringOtherApps)
-                NSApp.terminate(nil)
-                return
-            }
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.nicebro.ClipShelf"
+        let currentApp = NSRunningApplication.current
+        let currentURL = Bundle.main.bundleURL
+        let currentOrder = (currentApp.launchDate ?? Date(), currentApp.processIdentifier)
+        let otherInstances = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .filter { $0 != currentApp && !$0.isTerminated }
+        if let existing = otherInstances.first(where: {
+            shouldYieldToDuplicate($0, currentURL: currentURL, currentOrder: currentOrder)
+        }) {
+            existing.activate(options: .activateIgnoringOtherApps)
+            NSApp.terminate(nil)
+            return
         }
 
         clipboardManager = ClipboardManager()
@@ -218,13 +223,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
 
+    private func capturePasteTarget() {
+        let front = NSWorkspace.shared.frontmostApplication
+        if let front, front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp = front
+        }
+    }
+
     private func showPanel() {
         guard let button = statusItemController.statusItem?.button, !isPanelAnimating else { return }
         guard !panel.isVisible else {
             panel.makeKeyAndOrderFront(nil)
             return
         }
-        previousApp = NSWorkspace.shared.frontmostApplication
+        capturePasteTarget()
 
         FrontmostAppInfo.shared.bundleID = previousApp?.bundleIdentifier
         FrontmostAppInfo.shared.appName = previousApp?.localizedName
@@ -364,15 +376,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func pasteNextFromQueue() {
         guard let item = pasteQueue.dequeueNext() else { return }
-        previousApp = NSWorkspace.shared.frontmostApplication
-        clipboardManager.targetBundleID = previousApp?.bundleIdentifier
+        capturePasteTarget()
+        guard let targetApp = previousApp else { return }
+        clipboardManager.targetBundleID = targetApp.bundleIdentifier
         guard clipboardManager.copyToClipboard(item) else {
             updateStatusBarBadge()
             return
         }
-        guard let targetApp = previousApp else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.simulateCmdV()
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApp.processIdentifier {
+            targetApp.activate(options: .activateIgnoringOtherApps)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApp.processIdentifier else { return }
+            self.simulateCmdV()
         }
     }
 
@@ -381,7 +398,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             QuickPastePanel.shared.hide()
         } else {
             if panel.isVisible { hidePanel() }
-            previousApp = NSWorkspace.shared.frontmostApplication
+            capturePasteTarget()
             clipboardManager.targetBundleID = previousApp?.bundleIdentifier
             QuickPastePanel.shared.show(clipboardManager: clipboardManager)
         }
@@ -454,6 +471,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if let panel, panel.isVisible { savePanelSize(panel.frame.size) }
         clipboardManager?.prepareForTermination()
+    }
+
+    private func shouldYieldToDuplicate(
+        _ other: NSRunningApplication,
+        currentURL: URL,
+        currentOrder: (Date, pid_t)
+    ) -> Bool {
+        let otherURL = other.bundleURL
+        if otherURL == currentURL { return true }
+        let currentIsDev = Self.isDevelopmentBuildURL(currentURL)
+        let otherIsDev = otherURL.map(Self.isDevelopmentBuildURL) ?? false
+        if currentIsDev != otherIsDev { return currentIsDev }
+        let otherOrder = (other.launchDate ?? .distantPast, other.processIdentifier)
+        return currentOrder > otherOrder
+    }
+
+    private static func isDevelopmentBuildURL(_ url: URL) -> Bool {
+        let path = url.path
+        return path.contains("/DerivedData/") || path.contains("/Build/Products/")
     }
 
     private func restoreLaunchAtLoginIfNeeded() {

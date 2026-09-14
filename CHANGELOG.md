@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.2.3] - 2026-09-14
+
+### Fixed
+- `MARKETING_VERSION` in `project.yml` is now the single version source of truth: `Info.plist` reads `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)` instead of a hardcoded literal, so the documented "bump `MARKETING_VERSION`" release step actually changes the version the app reports
+- Homebrew cask: the download URL 404'd (`version :latest` interpolated into a versioned asset name). The cask is now pinned to a real version + SHA256 with a `livecheck` block, and `zap` also removes the LaunchAgent fallback plist and saved-state data
+- README test command pointed at the `ClipShelf` app scheme, which has no test action; both READMEs now use the `ClipShelfTests` scheme matching CI
+- `docs/SCRIPTING.md` documented a fresh `JSContext` per invocation — contexts are actually cached per script (globals persist), and the doc now covers the timeout quarantine and the 50 KB script size cap
+- Update checker: tapping "check" while a check was already in flight fired a second concurrent request
+- Snippet expansion no longer captures keystrokes into its match buffer when Command or Control is held (e.g. ⌘V no longer appends "v"), ignores its own synthesized keystrokes, and stays out of secure input fields (passwords)
+- CONTRIBUTING referenced a nonexistent `PasteAdapterManager.adapters`; adapters register via the `allAdapters` array
+- Locked sensitive items could be read through Preview, Edit, the Space/E shortcuts, multi-select merge/queue/diff, drag previews, and the Quick Paste context menu — every path now goes through the same biometric unlock, and a successful paste unlock marks the item for the session
+- Queue/stack paste could capture ClipShelf's own panel as the target app and simulate ⌘V into itself; the target is captured before the panel activates and the frontmost app is re-validated before the keystroke
+- A timed-out JS script quarantined unrelated scripts that ran afterwards, and `JSContext` was configured on a different thread than it executed on — script contexts are per-script, single-queue, and quarantine is scoped to the script that actually timed out
+- User-supplied rule regexes could stall capture indefinitely; matching/replacement now runs on a bounded queue with a 200 ms timeout that quarantines the pattern, and inputs over 4 MB are skipped
+- `contentType` rules never matched file URLs, and `replaceRegex`/`trimWhitespace` on rich text left a stale RTF payload that disagreed with the new plain text — rich text is demoted to plain text when its text is rewritten
+- Two identical file-URL copies compared unequal because `CapturedContent.==` had no `.fileURL` case
+- Built-in rules merged by name, so renaming one spawned a duplicate on next launch; merging is now by stable built-in ID and retired built-ins are dropped
+- Asynchronous persistence could resurrect deleted items and wiped the `embedding` column on every update — the SQLite upsert preserves embeddings, deletions record tombstones so late writes/import/sync can't recreate rows, `PRAGMA busy_timeout` is set, sensitive rows no longer persist plaintext `ocr_text`, and legacy unencrypted sensitive rows are migrated in place
+- Replace-style history import never removed rows missing from the import file (save is merge-only); `replaceHistoryForImport` now deletes the absent IDs explicitly
+- Deleting a hot item could remove an image file still referenced by cold-storage rows; image deletion now consults `allImageFileNames(excludingIDs:)` across the store and memory first
+- Initializing encryption a second time overwrote the Keychain key and bricked the database — an existing key is reloaded instead of replaced
+- The OCR watchdog could clear `isProcessing`/`currentOCRItem` state belonging to a newer item after a timeout
+- Export now uses `exportableItems` so sensitive payloads are not written as plaintext
+- Cold-storage deletions (expiry sweep, age cleanup, trim) now update tombstones, counts, OCR/embedding caches, image files, and Spotlight consistently instead of leaving ghosts
+- The app-hosted test bundle launched the full app — touching the real history DB, `NSPasteboard.general`, global hotkeys, and login state — `applicationDidFinishLaunching` now returns early under XCTest and tests use uniquely named private pasteboards
+- Two ordering tests sat outside the XCTestCase class and were silently never run
+- Snippet expansion could overwrite a clipboard the user changed inside the 150 ms restore window; restore is skipped when `changeCount` has moved
+- The hotkey recorder never became first responder, so recorded keys never reached it
+- Rapid captures could be stored out of order when a slow rule/script ran; the ingest pipeline serializes rule processing in capture order
+- Quick Paste re-ran a full history search on every render
+- Launch at login could silently fail when more than one copy of the app was registered (e.g. a DerivedData debug build plus the `/Applications` install): both copies launched at login and the duplicate-instance check could make them terminate each other. Resolution is now deterministic — an exact-path duplicate exits, a development-build copy yields to a real install, and otherwise the earliest-launched instance wins, so exactly one instance survives
+
+### Removed
+- Dead `SUFeedURL` from `Info.plist` (no Sparkle feed exists; updates are handled by the GitHub-releases checker)
+- Unused `evaluateScriptSetup` helper in `ScriptRuleRunner`
+
+### Added
+- `SECURITY.md` with a private vulnerability-reporting channel (promised since 1.1.0 but never shipped)
+- `type:file` search filter in Quick Paste / history search
+- Launch-at-login now surfaces the "pending approval" state: when macOS holds the login item for user approval, Settings shows a hint and opens System Settings → Login Items directly
+
 ## [1.2.2] - 2026-09-10
 
 ### Removed
@@ -68,6 +111,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `SearchClipboardHistoryIntent` crashed the process when Shortcuts passed a negative Limit (`prefix(_:)` precondition)
 - Crash in `applicationWillTerminate` when termination happens before launch setup completes
 - Out-of-range crash in fuzzy scoring when a query matched at the first character of the content (`subsequenceScore`)
+- Panel now force-refreshes clipboard on show (no stale content after ⌘C → ⌘⇧V)
+- Potential deadlock in `PersistenceScheduler.flush()` when called from main thread
+- `DataPortService` in Settings now uses SQLite store (consistent with runtime)
+- Bundle identifier updated from placeholder to `com.nicebro.ClipboardManager` (superseded by the `com.nicebro.ClipShelf` rename in this release)
 
 ### Security
 - Script rules that never return (infinite loop) are quarantined after the timeout and the evaluation queue is rotated, so one bad script can no longer disable all script rules until relaunch; quarantined scripts are skipped without spending another timeout window (`ScriptRuleRunner`)
@@ -124,6 +171,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Monitor idle cadence deepened (`idle` 5s, `deepIdle` 12s) to cut background CPU
 - Sparkle import wrapped in `#if canImport(Sparkle)` for local builds without the package
 - Script rules harden JS sandbox (block network globals, size limit)
+- PasteAdapter code deduplicated — shared `looksLikeCode()` and shell escape utilities
+- FuzzySearch performance: subsequence early filter, length pre-check, debounce 0.15s
+- Clipboard monitor idle interval increased from 1.5s to 3.0s (saves CPU in background)
+- Image cache memory budget reduced from ~320MB to ~128MB total
+- OCR and CloudSync migrated to async/await (Swift concurrency)
+- SQLite `TRANSIENT` destructor extracted to a named constant for clarity
 
 ### Added
 - Smart Paste expanded to 30+ apps (Email, Messaging, Notes, iWork, plain text editors, extended terminals)
@@ -131,32 +184,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Rules Engine test/preview UI — test rules against sample text before deploying
 - Accessibility labels throughout main UI (VoiceOver support)
 - ClipboardManager facade split: ImageManager, PreferencesManager, SyncCoordinator
-- Sparkle auto-update framework integration
 - Rules import/export (`.cliprules` format) for sharing rule sets
 - Advanced search syntax (`app:bundleID`, `type:image|text|rich`)
 - Settings reorganized into tabbed interface (General / Rules / Sync / About)
 - First-launch onboarding overlay (3-step guide)
 - Snippet text expansion — type shortcut anywhere to auto-expand
-- iCloud image sync via CKAsset
 - Script API documentation (`docs/SCRIPTING.md`)
 - SECURITY.md with vulnerability reporting policy
 - Homebrew Cask formula
 - CHANGELOG, CONTRIBUTING guide, issue/PR templates
 - Release CI workflow with conditional code signing and notarization
-
-### Fixed
-- Panel now force-refreshes clipboard on show (no stale content after ⌘C → ⌘⇧V)
-- Potential deadlock in `PersistenceScheduler.flush()` when called from main thread
-- `DataPortService` in Settings now uses SQLite store (consistent with runtime)
-- Bundle identifier updated from placeholder to `com.nicebro.ClipboardManager`
-
-### Changed
-- PasteAdapter code deduplicated — shared `looksLikeCode()` and shell escape utilities
-- FuzzySearch performance: subsequence early filter, length pre-check, debounce 0.15s
-- Clipboard monitor idle interval increased from 1.5s to 3.0s (saves CPU in background)
-- Image cache memory budget reduced from ~320MB to ~128MB total
-- OCR and CloudSync migrated to async/await (Swift concurrency)
-- SQLite `TRANSIENT` destructor extracted to a named constant for clarity
 
 ## [1.0.0] - 2026-02-05
 

@@ -27,7 +27,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nicebro.ClipShelf
         PRODUCT_NAME: ClipShelf
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.2.3"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Sources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/ClipShelf.entitlements
