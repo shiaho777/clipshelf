@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - InMemoryClipboardHistoryStore
 
-final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
+final class InMemoryClipboardHistoryStore: ClipboardHistoryStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [ClipboardItem] = []
     private(set) var saveCallCount = 0

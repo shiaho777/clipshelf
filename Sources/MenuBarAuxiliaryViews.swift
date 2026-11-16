@@ -216,10 +216,11 @@ struct PreviewSheet: View {
         if item.isSensitive {
             Task { @MainActor in
                 do {
-                    try await BiometricAuthService.shared.authenticate(
+                    try await BiometricAuthService.shared.authenticateForSession(
                         reason: LanguageManager.shared.l("biometric.unlockSensitive")
                     )
                 } catch {
+                    UserNotifier.shared.show(LanguageManager.shared.l("biometric.failed"), kind: .warning)
                     return
                 }
                 openItemExternally()

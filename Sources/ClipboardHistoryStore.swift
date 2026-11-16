@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-protocol ClipboardHistoryStore {
+protocol ClipboardHistoryStore: Sendable {
     func loadItems() throws -> [ClipboardItem]
     func loadItems(limit: Int?) throws -> [ClipboardItem]
     func itemCount() throws -> Int
@@ -26,6 +26,7 @@ protocol ClipboardHistoryStore {
     func deleteUnpinnedOlderThan(_ date: Date) throws -> Set<UUID>
     func allImageFileNames(excludingIDs: Set<UUID>) throws -> Set<String>
     func searchFTS(_ query: String, limit: Int) -> [UUID]
+    func loadItems(ids: [UUID]) throws -> [UUID: ClipboardItem]
 }
 
 extension ClipboardHistoryStore {
@@ -100,9 +101,17 @@ extension ClipboardHistoryStore {
     }
 
     func searchFTS(_ query: String, limit: Int = 500) -> [UUID] { [] }
+
+    func loadItems(ids: [UUID]) throws -> [UUID: ClipboardItem] {
+        var result: [UUID: ClipboardItem] = [:]
+        for id in ids {
+            if let item = try loadItem(id: id) { result[id] = item }
+        }
+        return result
+    }
 }
 
-final class JSONClipboardHistoryStore: ClipboardHistoryStore {
+final class JSONClipboardHistoryStore: ClipboardHistoryStore, @unchecked Sendable {
     private let fileURL: URL
     private var lastSavedItems: [ClipboardItem]?
     private var lastSavedData: Data?

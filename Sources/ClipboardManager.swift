@@ -318,6 +318,9 @@ class ClipboardManager: ObservableObject {
             historyStore: self.historyStore,
             logger: self.logger
         )
+        self.persistence.onSensitivePersistFailure = {
+            UserNotifier.shared.show(LanguageManager.shared.l("storage.sensitiveNotSaved"), kind: .warning, duration: 6.0)
+        }
         self.ruleStore = JSONClipboardRuleStore(storageDirectory: resolvedStorageDirectory)
         
         try? FileManager.default.createDirectory(at: self.storageDirectory, withIntermediateDirectories: true)
@@ -797,25 +800,34 @@ class ClipboardManager: ObservableObject {
         monitor.checkClipboard()
     }
 
+    func refreshClipboardAndDrain(timeout: TimeInterval = 2.0) async {
+        monitor.checkClipboard()
+        await ingestPipeline?.drain(timeout: timeout)
+    }
+
     func acknowledgePasteboardWrite() {
         monitor.acknowledgeChangeCount()
     }
     
     func search(_ query: String, limit: Int? = nil, where predicate: ((ClipboardItem) -> Bool)? = nil) -> [ClipboardItem] {
-        let store = historyStore
-        return ClipboardSearchService.search(
+        ClipboardSearchService.search(
             query,
             limit: limit,
             where: predicate,
-            context: ClipboardSearchService.Context(
-                items: items,
-                itemByID: itemByID,
-                embeddingCache: embeddingCache,
-                resolveMissing: { [weak self] id in
-                    self?.resolveItemIncludingColdStorage(id: id)
-                },
-                searchFTS: { q, lim in store.searchFTS(q, limit: lim) }
-            )
+            snapshot: searchSnapshot()
+        )
+    }
+
+    func searchSnapshot() -> ClipboardSearchService.Snapshot {
+        let store = historyStore
+        return ClipboardSearchService.Snapshot(
+            items: items,
+            itemByID: itemByID,
+            embeddingCache: embeddingCache,
+            resolveMissingBatch: { ids in
+                (try? store.loadItems(ids: ids)) ?? [:]
+            },
+            searchFTS: { q, lim in store.searchFTS(q, limit: lim) }
         )
     }
 

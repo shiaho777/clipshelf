@@ -7,7 +7,7 @@ import SQLite3
 
 private let SQLITE_TRANSIENT_DESTRUCTOR = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-final class SQLiteHistoryStore: ClipboardHistoryStore {
+final class SQLiteHistoryStore: ClipboardHistoryStore, @unchecked Sendable {
     private var db: OpaquePointer?
     private let itemsLock = NSLock()
     private let dbLock = NSRecursiveLock()
@@ -254,7 +254,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             .replacingOccurrences(of: "_", with: "\\_")
     }
 
-    private func sanitizeFTSQuery(_ raw: String) -> String {
+    static func sanitizeFTSQuery(_ raw: String) -> String {
         var cleaned = raw
         for ch: Character in "\"*()^:-+{}~," {
             cleaned = cleaned.replacingOccurrences(of: String(ch), with: " ")
@@ -262,13 +262,20 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         let reserved: Set<String> = ["AND", "OR", "NOT", "NEAR"]
         let tokens = cleaned
             .components(separatedBy: .whitespacesAndNewlines)
-            .filter { token in
-                !token.isEmpty
-                && !reserved.contains(token.uppercased())
-                && token.count >= 3
+            .compactMap { token -> String? in
+                guard !token.isEmpty, !reserved.contains(token.uppercased()) else { return nil }
+                if token.count >= 3 { return token }
+                if token.count == 2, token.unicodeScalars.allSatisfy({ $0.value > 0x2E7F }) {
+                    return "\"\(token)\""
+                }
+                return nil
             }
         guard !tokens.isEmpty else { return "" }
         return tokens.joined(separator: " ")
+    }
+
+    private func sanitizeFTSQuery(_ raw: String) -> String {
+        Self.sanitizeFTSQuery(raw)
     }
 
     func loadItems() throws -> [ClipboardItem] {
@@ -332,6 +339,43 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         try withDatabaseLock {
             try loadItemLocked(id: id)
         }
+    }
+
+    func loadItems(ids: [UUID]) throws -> [UUID: ClipboardItem] {
+        guard !ids.isEmpty else { return [:] }
+        return try withDatabaseLock {
+            try loadItemsByIdsLocked(ids)
+        }
+    }
+
+    private func loadItemsByIdsLocked(_ ids: [UUID]) throws -> [UUID: ClipboardItem] {
+        guard let db else { throw StoreError.databaseNotOpen }
+        var result: [UUID: ClipboardItem] = [:]
+        var missing: [UUID] = []
+        for id in ids {
+            if let cached = itemsLock.withLock({ lastKnownItems[id] }) {
+                result[id] = cached
+            } else {
+                missing.append(id)
+            }
+        }
+        guard !missing.isEmpty else { return result }
+        let placeholders = missing.map { _ in "?" }.joined(separator: ",")
+        let sql = "SELECT id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot FROM clipboard_items WHERE id IN (\(placeholders))"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+            throw StoreError.queryFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(stmt) }
+        for (offset, id) in missing.enumerated() {
+            sqlite3_bind_text(stmt, Int32(offset + 1), id.uuidString, -1, SQLITE_TRANSIENT_DESTRUCTOR)
+        }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let item = readRow(stmt) {
+                result[item.id] = item
+            }
+        }
+        return result
     }
 
     private func loadItemsLocked(limit: Int?) throws -> [ClipboardItem] {

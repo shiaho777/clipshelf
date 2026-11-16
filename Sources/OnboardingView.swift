@@ -10,6 +10,7 @@ struct OnboardingView: View {
         ("doc.on.clipboard", "onboarding.step1.title", "onboarding.step1.desc"),
         ("magnifyingglass", "onboarding.step2.title", "onboarding.step2.desc"),
         ("keyboard", "onboarding.step3.title", "onboarding.step3.desc"),
+        ("lock.shield", "onboarding.step4.title", "onboarding.step4.desc"),
     ]
 
     var body: some View {

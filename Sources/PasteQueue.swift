@@ -41,6 +41,12 @@ final class PasteQueue: ObservableObject {
         return item
     }
 
+    func requeueFront(_ item: ClipboardItem) {
+        objectWillChange.send()
+        queue.insert(item, at: headIndex)
+        NotificationCenter.default.post(name: .pasteQueueChanged, object: nil)
+    }
+
     func clear() {
         queue.removeAll()
         headIndex = 0

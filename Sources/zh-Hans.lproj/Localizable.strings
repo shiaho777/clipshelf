@@ -143,8 +143,12 @@
 "onboarding.step2.desc" = "输入关键词模糊搜索历史记录，支持 app: 和 type: 前缀进行高级过滤。";
 "onboarding.step3.title" = "键盘优先";
 "onboarding.step3.desc" = "方向键导航，Tab 切换筛选，空格预览，回车粘贴。";
+"onboarding.step4.title" = "授予辅助功能权限";
+"onboarding.step4.desc" = "ClipShelf 需要辅助功能权限才能向其他应用粘贴。如果错过了系统弹窗，请到 系统设置 → 隐私与安全性 → 辅助功能 中开启。";
 "onboarding.next" = "下一步";
 "onboarding.done" = "开始使用";
+"permission.banner.message" = "辅助功能权限未开启，自动粘贴不可用。";
+"permission.banner.openSettings" = "打开设置";
 
 "list.loadMore" = "还有 %d 条";
 "list.loadMorePage" = "加载更多";
@@ -198,6 +202,15 @@
 "quickpaste.title" = "快速粘贴";
 "quickpaste.hint" = "1–9 粘贴 · ↑↓ 选择 · 回车确认 · Esc 关闭";
 "hotkey.quickPaste" = "快速粘贴快捷键";
+
+"paste.failed.noTarget" = "没有可粘贴的目标应用。内容已在剪贴板，请手动按 ⌘V。";
+"paste.failed.secureInput" = "当前是密码输入场景，自动粘贴被系统拦截。内容已复制，请手动按 ⌘V。";
+"paste.failed.activation" = "目标应用未能及时切到前台。内容已复制，请手动按 ⌘V。";
+"paste.failed.keystroke" = "无法模拟按键。请检查辅助功能权限后手动按 ⌘V。";
+"paste.failed.copy" = "写入剪贴板失败，请重试。";
+"biometric.failed" = "认证失败或已取消，内容保持锁定。";
+"hotkey.conflict" = "快捷键 %@ 已被其他应用占用，请在设置中更换。";
+"storage.sensitiveNotSaved" = "敏感内容加密失败，未保存到历史。请解锁 Mac 后重试。";
 
 "filter.currentApp" = "按当前应用筛选";
 

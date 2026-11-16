@@ -443,11 +443,12 @@ struct ClipboardItemRow: View {
             if item.isSensitive && !isUnlocked {
                 Task { @MainActor in
                     do {
-                        try await BiometricAuthService.shared.authenticate(
+                        try await BiometricAuthService.shared.authenticateForSession(
                             reason: lang.l("biometric.unlockSensitive")
                         )
                         onUnlock?()
                     } catch {
+                        UserNotifier.shared.show(LanguageManager.shared.l("biometric.failed"), kind: .warning)
                     }
                 }
                 return
@@ -464,11 +465,13 @@ struct ClipboardItemRow: View {
                 Button {
                     Task { @MainActor in
                         do {
-                            try await BiometricAuthService.shared.authenticate(
+                            try await BiometricAuthService.shared.authenticateForSession(
                                 reason: lang.l("biometric.unlockSensitive")
                             )
                             onUnlock?()
-                        } catch {}
+                        } catch {
+                            UserNotifier.shared.show(LanguageManager.shared.l("biometric.failed"), kind: .warning)
+                        }
                     }
                 } label: {
                     Label(lang.l("biometric.unlockSensitive"), systemImage: "lock.open")

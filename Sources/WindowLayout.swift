@@ -9,21 +9,39 @@ enum WindowLayout {
 }
 
 enum PopupPlacement {
+    static func screenFrame(for parentFrame: CGRect) -> CGRect {
+        let center = NSPoint(x: parentFrame.midX, y: parentFrame.midY)
+        let containing = NSScreen.screens.first { $0.frame.contains(center) }
+        return (containing ?? NSScreen.main)?.visibleFrame ?? .zero
+    }
+
+    static func clamp(origin: NSPoint, size: CGSize, within screenFrame: CGRect) -> NSPoint {
+        guard screenFrame != .zero else { return origin }
+        var x = origin.x
+        var y = origin.y
+        if x + size.width > screenFrame.maxX { x = screenFrame.maxX - size.width }
+        if x < screenFrame.minX { x = screenFrame.minX }
+        if y + size.height > screenFrame.maxY { y = screenFrame.maxY - size.height }
+        if y < screenFrame.minY { y = screenFrame.minY }
+        return NSPoint(x: x, y: y)
+    }
+
     static func origin(parentFrame: CGRect, size: CGSize) -> NSPoint {
-        if let screen = NSScreen.main?.visibleFrame {
-            let leftX = parentFrame.minX - size.width - 12
-            if leftX >= screen.minX {
-                return NSPoint(x: leftX, y: parentFrame.maxY - size.height)
-            }
-            let rightX = parentFrame.maxX + 12
-            if rightX + size.width <= screen.maxX {
-                return NSPoint(x: rightX, y: parentFrame.maxY - size.height)
-            }
-        }
-        return NSPoint(
+        let screen = screenFrame(for: parentFrame)
+        var candidate = NSPoint(
             x: parentFrame.minX + 28,
             y: parentFrame.maxY - size.height - 28
         )
+        if screen != .zero {
+            let leftX = parentFrame.minX - size.width - 12
+            let rightX = parentFrame.maxX + 12
+            if leftX >= screen.minX {
+                candidate = NSPoint(x: leftX, y: parentFrame.maxY - size.height)
+            } else if rightX + size.width <= screen.maxX {
+                candidate = NSPoint(x: rightX, y: parentFrame.maxY - size.height)
+            }
+        }
+        return clamp(origin: candidate, size: size, within: screen)
     }
 }
 

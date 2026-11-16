@@ -8,8 +8,35 @@ struct ClipboardSearchService {
         let items: [ClipboardItem]
         let itemByID: [UUID: ClipboardItem]
         let embeddingCache: [UUID: [Float32]]
-        let resolveMissing: (UUID) -> ClipboardItem?
+        let resolveMissingBatch: ([UUID]) -> [UUID: ClipboardItem]
         let searchFTS: (String, Int) -> [UUID]
+    }
+
+    struct Snapshot: @unchecked Sendable {
+        let items: [ClipboardItem]
+        let itemByID: [UUID: ClipboardItem]
+        let embeddingCache: [UUID: [Float32]]
+        let resolveMissingBatch: @Sendable ([UUID]) -> [UUID: ClipboardItem]
+        let searchFTS: @Sendable (String, Int) -> [UUID]
+
+        var context: Context {
+            Context(
+                items: items,
+                itemByID: itemByID,
+                embeddingCache: embeddingCache,
+                resolveMissingBatch: resolveMissingBatch,
+                searchFTS: searchFTS
+            )
+        }
+    }
+
+    static func search(
+        _ query: String,
+        limit: Int? = nil,
+        where predicate: ((ClipboardItem) -> Bool)? = nil,
+        snapshot: Snapshot
+    ) -> [ClipboardItem] {
+        search(query, limit: limit, where: predicate, context: snapshot.context)
     }
 
     static func search(
@@ -35,16 +62,19 @@ struct ClipboardSearchService {
             }
             let ftsIDs = context.searchFTS(trimmed, ftsLimit)
             if !ftsIDs.isEmpty {
+                let missingIDs = ftsIDs.filter { context.itemByID[$0] == nil }
+                let resolved = missingIDs.isEmpty ? [:] : context.resolveMissingBatch(missingIDs)
                 ftsItems.reserveCapacity(min(ftsIDs.count, ftsLimit))
                 for id in ftsIDs {
-                    let item = context.itemByID[id] ?? context.resolveMissing(id)
+                    let item = context.itemByID[id] ?? resolved[id]
                     guard let item, predicate?(item) ?? true else { continue }
                     ftsItems.append(item)
                 }
             }
         }
 
-        if !parsed.hasMetadataFilters && ftsItems.count < 3 && !context.embeddingCache.isEmpty {
+        if !parsed.hasMetadataFilters && ftsItems.count < 3 && !context.embeddingCache.isEmpty
+            && SemanticSearchService.isLikelyEnglishQuery(trimmed) {
             let semantic = SemanticSearchService.shared.semanticSearch(
                 query: trimmed,
                 embeddings: context.embeddingCache,

@@ -18,6 +18,13 @@ final class SemanticSearchService {
 
     var isAvailable: Bool { sentenceModel != nil || wordModel != nil }
 
+    static func isLikelyEnglishQuery(_ query: String) -> Bool {
+        let letters = query.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        guard !letters.isEmpty else { return false }
+        let asciiLetters = letters.filter { $0.isASCII }
+        return Double(asciiLetters.count) / Double(letters.count) >= 0.8
+    }
+
     private final class QueryVectorBox {
         let vector: [Float32]
         init(_ vector: [Float32]) { self.vector = vector }

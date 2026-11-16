@@ -33,30 +33,50 @@ final class ClipboardImagePasteboardDataProvider: NSObject, NSPasteboardItemData
     }
 }
 
-private enum ClipboardImageStoragePreparation {
+enum ClipboardImageStoragePreparation {
     static let compressionThreshold = 2 * 1024 * 1024
 
     static func storedRepresentation(of data: Data, fileExtension: String?) -> (Data, String) {
         if let ext = normalizedImageExtension(fileExtension) {
             return (data, ext)
         }
-        guard data.count > compressionThreshold,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
+        var workingData = data
+        if fileExtension?.lowercased() == "tiff" || fileExtension?.lowercased() == "tif" {
+            if let png = pngRepresentation(of: data) {
+                workingData = png
+            } else {
+                return (data, "tiff")
+            }
+        }
+        guard workingData.count > compressionThreshold,
+              let source = CGImageSourceCreateWithData(workingData as CFData, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return (data, "png")
+            return (workingData, "png")
         }
         let mutableData = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             mutableData, "public.jpeg" as CFString, 1, nil
-        ) else { return (data, "png") }
+        ) else { return (workingData, "png") }
         CGImageDestinationAddImage(
             dest, cgImage,
             [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
         )
-        guard CGImageDestinationFinalize(dest) else { return (data, "png") }
+        guard CGImageDestinationFinalize(dest) else { return (workingData, "png") }
         let jpegData = mutableData as Data
-        guard jpegData.count < data.count else { return (data, "png") }
+        guard jpegData.count < workingData.count else { return (workingData, "png") }
         return (jpegData, "jpg")
+    }
+
+    static func pngRepresentation(of data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let mutableData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            mutableData, "public.png" as CFString, 1, nil
+        ) else { return nil }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return Data(referencing: mutableData)
     }
 
     static func normalizedImageExtension(_ fileExtension: String?) -> String? {
@@ -139,6 +159,9 @@ final class ClipboardImageManager {
         }
         if ext == "heic" || ext == "heif" {
             return NSPasteboard.PasteboardType("public.heic")
+        }
+        if ext == "tiff" || ext == "tif" {
+            return .tiff
         }
         return .png
     }

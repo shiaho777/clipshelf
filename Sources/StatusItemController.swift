@@ -2,9 +2,13 @@ import AppKit
 
 @MainActor
 final class StatusItemController {
+    static let shared = StatusItemController()
+
     private(set) var statusItem: NSStatusItem?
     private var smartPasteBadgeTask: Task<Void, Never>?
+    private var warningBadgeTask: Task<Void, Never>?
     var isShowingSmartPasteBadge = false
+    private(set) var isShowingWarningBadge = false
 
     func install(target: AnyObject, action: Selector) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -58,8 +62,30 @@ final class StatusItemController {
     @objc private func menuSettings(_ sender: Any?) { onOpenSettings?() }
     @objc private func menuQuit(_ sender: Any?) { onQuit?() }
 
+    func showWarningBadge(_ message: String, restore: @escaping () -> Void) {
+        guard let button = statusItem?.button else { return }
+        warningBadgeTask?.cancel()
+        smartPasteBadgeTask?.cancel()
+        isShowingSmartPasteBadge = false
+        isShowingWarningBadge = true
+        button.image = NSImage(
+            systemSymbolName: "exclamationmark.triangle.fill",
+            accessibilityDescription: message
+        )
+        button.title = ""
+        button.toolTip = message
+        warningBadgeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.isShowingWarningBadge = false
+            button.toolTip = "ClipShelf"
+            restore()
+        }
+    }
+
     func showSmartPasteBadge(_ adapterName: String) {
         guard let button = statusItem?.button else { return }
+        guard !isShowingWarningBadge else { return }
         smartPasteBadgeTask?.cancel()
         isShowingSmartPasteBadge = true
         button.image = NSImage(

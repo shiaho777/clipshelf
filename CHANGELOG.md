@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Reliable paste engine: the target app's frontmost state is polled until confirmed (up to 2 s) before ⌘V is sent, secure-input fields are detected, and every failure (no target, secure input, activation timeout, missing keystroke permission, clipboard write failure) surfaces as an in-panel banner plus a status-bar warning instead of a silent log line
+- Session-level Touch ID unlock (5 minutes): sensitive items no longer re-authenticate on every panel open, and authentication failures are now reported to the user
+- Accessibility permission banner with a one-click jump to System Settings, shown whenever the permission is missing; onboarding gains a fourth step explaining the permission
+- Visible main-hotkey hint in the panel footer
+- Batch cold-storage lookup (`loadItems(ids:)`) so FTS hits resolve in a single SQL statement instead of one query per row
+
+### Changed
+- Clipboard capture idle cadence capped at 3 s (was 12 s) with tighter timer tolerance; opening the main panel or Quick Paste now waits for the ingest pipeline to drain, so the freshest copy is always visible
+- Two-character CJK queries now match through the FTS5 trigram index instead of falling back to a full-table LIKE scan; panel search runs off the main thread on an immutable snapshot, eliminating typing stalls on large histories
+- Semantic search is skipped for non-English queries, removing irrelevant English-vector noise from Chinese searches
+- TIFF clipboard images are captured as-is and converted to PNG on a background queue during ingest, removing the main-thread re-encode stall when opening the panel after copying a large image
+- Popups and Quick Paste anchor to the screen containing the parent window/cursor and clamp on all edges, fixing off-screen placement on multi-monitor setups
+- History list auto-loads the next page when the load-more row scrolls into view
+- Image cache budgets scale with physical memory (25% under 8 GB, 50% under 16 GB)
+- Failed queue pastes requeue the item at the front instead of dropping it
+
+### Fixed
+- Quick Paste could send ⌘V into the wrong app because it never re-validated the frontmost application; it now uses the same verified paste path as the main panel
+- Hotkey registration conflicts were log-only; the affected shortcut is now reported with a prompt to change it in Settings
+- Sensitive items refused at persist time (encryption unavailable) vanished without notice after restart; the failure is now surfaced explicitly
+
 ## [1.2.3] - 2026-09-14
 
 ### Fixed
