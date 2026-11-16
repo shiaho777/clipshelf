@@ -46,6 +46,7 @@ class QuickPastePanel: ObservableObject {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
 

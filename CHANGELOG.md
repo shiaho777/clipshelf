@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Batch cold-storage lookup (`loadItems(ids:)`) so FTS hits resolve in a single SQL statement instead of one query per row
 
 ### Changed
+- Visual overhaul: main panel, Quick Paste and popups now share a locked dark HUD appearance (fixes dark-on-dark text in light mode); search field gains a capsule container with focus ring; popups animate in/out with scale+fade; row typography converged to 11/13 pt with integer paddings; badges, empty states and onboarding redesigned with brand accent; new gradient app icon replaces the flat placeholder
 - Clipboard capture idle cadence capped at 3 s (was 12 s) with tighter timer tolerance; opening the main panel or Quick Paste now waits for the ingest pipeline to drain, so the freshest copy is always visible
 - Two-character CJK queries now match through the FTS5 trigram index instead of falling back to a full-table LIKE scan; panel search runs off the main thread on an immutable snapshot, eliminating typing stalls on large histories
 - Semantic search is skipped for non-English queries, removing irrelevant English-vector noise from Chinese searches
@@ -25,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Failed queue pastes requeue the item at the front instead of dropping it
 
 ### Fixed
+- Opening the panel briefly flashed the empty state before the first page rendered; the unfiltered list now computes synchronously on open
 - Quick Paste could send ⌘V into the wrong app because it never re-validated the frontmost application; it now uses the same verified paste path as the main panel
 - Hotkey registration conflicts were log-only; the affected shortcut is now reported with a prompt to change it in Settings
 - Sensitive items refused at persist time (encryption unavailable) vanished without notice after restart; the failure is now surfaced explicitly

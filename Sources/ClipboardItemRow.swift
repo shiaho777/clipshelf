@@ -198,11 +198,11 @@ struct ClipboardItemRow: View {
 
     @ViewBuilder
     private var metaLine: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             SourceAppIcon(bundleID: item.sourceBundleID, size: 12)
             if let appName = item.sourceAppName, !appName.isEmpty {
                 Text(appName)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -211,7 +211,7 @@ struct ClipboardItemRow: View {
             TimeAgoText(date: item.timestamp)
             if item.useCount > 1 {
                 Text("· \(item.useCount)×")
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(.quaternary)
                     .monospacedDigit()
             }
@@ -224,8 +224,8 @@ struct ClipboardItemRow: View {
         HStack(spacing: 8) {
             if item.isPinned {
                 Image(systemName: "pin.fill")
-                    .font(.system(size: 8))
-                    .foregroundColor(.orange.opacity(0.75))
+                    .font(.system(size: 9))
+                    .foregroundColor(.orange.opacity(0.9))
             }
             
             if detection.color != nil {
@@ -324,17 +324,17 @@ struct ClipboardItemRow: View {
                         }
                         highlightedDisplayText(shownPreview)
                             .lineLimit(2)
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                         if item.type == .richText {
                             TagBadge("R", color: .blue)
                         }
                         if isAutoMaskedRow {
-                            TagBadge(lang.l("item.secret.masked"), color: .orange, fontSize: 8)
+                            TagBadge(lang.l("item.secret.masked"), color: .orange)
                         }
                         if looksLikeCode {
                             Image(systemName: "chevron.left.slash.chevron.right")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.purple.opacity(0.6))
+                                .font(.system(size: 9))
+                                .foregroundStyle(.purple.opacity(0.75))
                         }
                         if detection.isURL {
                             Image(systemName: "link")
@@ -398,22 +398,22 @@ struct ClipboardItemRow: View {
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .overlay(alignment: .leading) {
             if isFocused {
-                RoundedRectangle(cornerRadius: 1)
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(Color.accentColor.opacity(0.9))
-                    .frame(width: 2.5)
-                    .padding(.vertical, 5)
+                    .frame(width: 3)
+                    .padding(.vertical, 6)
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: DesignSystem.Radius.card, style: .continuous)
                 .fill(
                     isFocused
-                        ? Color.accentColor.opacity(0.08)
-                        : (isHovered ? Color.primary.opacity(0.04) : Color.clear)
+                        ? Color.accentColor.opacity(0.1)
+                        : (isHovered ? Color.primary.opacity(0.06) : Color.clear)
                 )
         )
         .contentShape(Rectangle())

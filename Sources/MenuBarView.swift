@@ -193,6 +193,11 @@ struct MenuBarView: View {
         searchGeneration &+= 1
         let generation = searchGeneration
         let snapshot = clipboardManager.searchSnapshot()
+        if query.isEmpty {
+            let result = Self.computeFilteredPage(snapshot: snapshot, query: query, filter: filter, visibleCount: count)
+            applyFilteredPage(result)
+            return
+        }
         Task { @MainActor in
             let result = await Task.detached(priority: .userInitiated) {
                 Self.computeFilteredPage(snapshot: snapshot, query: query, filter: filter, visibleCount: count)

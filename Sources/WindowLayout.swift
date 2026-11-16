@@ -50,6 +50,43 @@ private final class PopupPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 }
 
+enum PopupPresentation {
+    static func present(_ panel: NSPanel) {
+        let finalFrame = panel.frame
+        let shrunk = NSRect(
+            x: finalFrame.midX - finalFrame.width * 0.485,
+            y: finalFrame.midY - finalFrame.height * 0.485,
+            width: finalFrame.width * 0.97,
+            height: finalFrame.height * 0.97
+        )
+        panel.alphaValue = 0
+        panel.setFrame(shrunk, display: false)
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.16
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+            panel.animator().setFrame(finalFrame, display: true)
+        }
+    }
+
+    static func dismiss(_ panel: NSPanel) {
+        guard panel.isVisible else {
+            panel.close()
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.12
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        }, completionHandler: {
+            panel.close()
+            panel.alphaValue = 1
+        })
+    }
+}
+
 private struct PopupWindowDismissKey: EnvironmentKey {
     static let defaultValue: () -> Void = {}
 }
@@ -154,6 +191,7 @@ private struct BoolPopupWindowPresenter<PopupContent: View>: NSViewRepresentable
             panel.hasShadow = true
             panel.backgroundColor = .windowBackgroundColor
             panel.isOpaque = true
+            panel.appearance = NSAppearance(named: .darkAqua)
             panel.contentViewController = NSHostingController(rootView: rootView)
 
             if let parentWindow = anchorView?.window {
@@ -168,14 +206,13 @@ private struct BoolPopupWindowPresenter<PopupContent: View>: NSViewRepresentable
             }
 
             window = panel
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            PopupPresentation.present(panel)
         }
 
         func closeWindow() {
             guard let window else { return }
             isClosingProgrammatically = true
-            window.close()
+            PopupPresentation.dismiss(window)
         }
 
         func windowWillClose(_ notification: Notification) {
@@ -273,6 +310,7 @@ private struct ItemPopupWindowPresenter<Item: Identifiable, PopupContent: View>:
             panel.hasShadow = true
             panel.backgroundColor = .windowBackgroundColor
             panel.isOpaque = true
+            panel.appearance = NSAppearance(named: .darkAqua)
             panel.contentViewController = NSHostingController(rootView: rootView)
 
             if let parentWindow = anchorView?.window {
@@ -288,12 +326,12 @@ private struct ItemPopupWindowPresenter<Item: Identifiable, PopupContent: View>:
 
             presentedItemID = itemValue.id
             window = panel
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            PopupPresentation.present(panel)
         }
 
         func closeWindow() {
-            window?.close()
+            guard let window else { return }
+            PopupPresentation.dismiss(window)
         }
 
         func windowWillClose(_ notification: Notification) {
@@ -514,12 +552,17 @@ struct SearchField: View {
     var size: Size = .regular
     var reduceMotion: Bool = false
     var focus: FocusState<Bool>.Binding?
+    @State private var isHovered = false
+
+    private var isFocused: Bool {
+        focus?.wrappedValue ?? false
+    }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: size.iconSize, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(isFocused ? Color.accentColor : Color.secondary)
             Group {
                 if let focus {
                     TextField(placeholder ?? lang.l("search.placeholder"), text: $text)
@@ -546,6 +589,20 @@ struct SearchField: View {
         }
         .padding(.horizontal, size.horizontalPadding)
         .padding(.vertical, size.verticalPadding)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.Radius.editor, style: .continuous)
+                .fill(Color.primary.opacity(isHovered || isFocused ? 0.09 : 0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.Radius.editor, style: .continuous)
+                .stroke(Color.accentColor.opacity(isFocused ? 0.55 : 0), lineWidth: 1)
+        )
+        .padding(.horizontal, size == .regular ? DesignSystem.Spacing.lg : DesignSystem.Spacing.md)
+        .padding(.top, DesignSystem.Spacing.md)
+        .padding(.bottom, DesignSystem.Spacing.xs)
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isFocused)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovered)
     }
 }
 
@@ -553,9 +610,9 @@ struct TagBadge: View {
     let text: String
     var systemImage: String?
     var color: Color = .blue
-    var fontSize: CGFloat = 8
+    var fontSize: CGFloat = 9
 
-    init(_ text: String, systemImage: String? = nil, color: Color = .blue, fontSize: CGFloat = 8) {
+    init(_ text: String, systemImage: String? = nil, color: Color = .blue, fontSize: CGFloat = 9) {
         self.text = text
         self.systemImage = systemImage
         self.color = color
@@ -571,11 +628,11 @@ struct TagBadge: View {
             Text(text)
                 .font(.system(size: fontSize, weight: .medium, design: .rounded))
         }
-        .padding(.horizontal, DesignSystem.Spacing.xs)
-        .padding(.vertical, 1.5)
-        .background(color.opacity(0.1))
-        .foregroundColor(color.opacity(0.75))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.badge))
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.14))
+        .foregroundColor(color.opacity(0.9))
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.badge + 1, style: .continuous))
     }
 }
 
@@ -587,12 +644,20 @@ struct EmptyStateView: View {
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.xl - 2) {
-            Image(systemName: icon)
-                .font(.system(size: 38, weight: .ultraLight))
-                .foregroundStyle(.quaternary)
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.1))
+                    .frame(width: 72, height: 72)
+                Circle()
+                    .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                    .frame(width: 72, height: 72)
+                Image(systemName: icon)
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(Color.accentColor.opacity(0.8))
+            }
             Text(message)
                 .font(.system(size: DesignSystem.FontSize.body, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let actionTitle, let action {
                 Button(action: action) {

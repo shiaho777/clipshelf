@@ -20,14 +20,28 @@ struct OnboardingView: View {
             VStack(spacing: 20) {
                 let step = steps[currentStep]
 
-                Image(systemName: step.icon)
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(.secondary)
-                    .frame(height: 44)
-                    .id(currentStep)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.accentColor.opacity(0.25), Color.accentColor.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 76, height: 76)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+                        .frame(width: 76, height: 76)
+                    Image(systemName: step.icon)
+                        .font(.system(size: 32, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .id(currentStep)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
 
                 Text(lang.l(step.titleKey))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .multilineTextAlignment(.center)
 
                 Text(lang.l(step.descKey))
@@ -42,13 +56,14 @@ struct OnboardingView: View {
 
             Spacer()
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(0..<steps.count, id: \.self) { i in
-                    Circle()
+                    Capsule()
                         .fill(i == currentStep ? Color.accentColor : Color.primary.opacity(0.15))
-                        .frame(width: 6, height: 6)
+                        .frame(width: i == currentStep ? 18 : 6, height: 6)
                 }
             }
+            .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: currentStep)
             .padding(.bottom, 16)
 
             Button {

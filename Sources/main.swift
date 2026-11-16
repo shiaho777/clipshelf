@@ -81,6 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.minSize = minPanelSize
         panel.maxSize = maxPanelSize
         if let contentView = panel.contentView {
@@ -154,6 +155,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self?.showSmartPasteBadge(adapterName)
             }
             .store(in: &cancellables)
+
+        if ProcessInfo.processInfo.arguments.contains("-ClipShelfShowPanelOnLaunch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.showPanel()
+            }
+        }
+
+        if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "-ClipShelfRenderPreview"),
+           index + 1 < ProcessInfo.processInfo.arguments.count {
+            let directory = ProcessInfo.processInfo.arguments[index + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.renderPreviewImages(to: directory)
+                NSApp.terminate(nil)
+            }
+        }
 
         UserNotifier.shared.setBadgeRestore { [weak self] in
             self?.updateStatusBarBadge()
@@ -409,6 +425,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard !AXIsProcessTrusted() else { return }
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
+    }
+
+    private func renderPreviewImages(to directory: String) {
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let dark = NSAppearance(named: .darkAqua)!
+        func render<V: View>(_ view: V, size: NSSize, name: String) {
+            let container = NSView(frame: NSRect(origin: .zero, size: size))
+            container.wantsLayer = true
+            container.layer?.backgroundColor = NSColor(calibratedWhite: 0.11, alpha: 1).cgColor
+            let hosting = NSHostingView(rootView: view.environmentObject(FrontmostAppInfo.shared))
+            hosting.frame = container.bounds
+            hosting.appearance = dark
+            container.appearance = dark
+            container.addSubview(hosting)
+            dark.performAsCurrentDrawingAppearance {
+                container.layoutSubtreeIfNeeded()
+                hosting.layoutSubtreeIfNeeded()
+                guard let rep = container.bitmapImageRepForCachingDisplay(in: container.bounds) else { return }
+                container.cacheDisplay(in: container.bounds, to: rep)
+                guard let data = rep.representation(using: .png, properties: [:]) else { return }
+                try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
+            }
+        }
+        render(
+            MenuBarView(clipboardManager: clipboardManager, snippetManager: snippetManager),
+            size: NSSize(width: 340, height: 520),
+            name: "preview-history.png"
+        )
+        render(
+            OnboardingView(onComplete: {}),
+            size: NSSize(width: 340, height: 480),
+            name: "preview-onboarding.png"
+        )
+        render(
+            SettingsEmbeddedView(clipboardManager: clipboardManager, snippetManager: snippetManager, onBack: {}),
+            size: NSSize(width: 340, height: 520),
+            name: "preview-settings.png"
+        )
     }
     
     func application(_ application: NSApplication, open urls: [URL]) {
