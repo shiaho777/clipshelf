@@ -1,6 +1,6 @@
 import Foundation
 
-protocol ClipboardImageStore {
+protocol ClipboardImageStore: Sendable {
     func fileURL(for fileName: String) -> URL
     func imageData(for fileName: String) -> Data?
     func saveImageData(_ data: Data, fileName: String) throws
@@ -8,7 +8,7 @@ protocol ClipboardImageStore {
     func pruneOrphanedFiles(referencedFileNames: Set<String>)
 }
 
-final class FileClipboardImageStore: ClipboardImageStore {
+final class FileClipboardImageStore: ClipboardImageStore, @unchecked Sendable {
     private let directoryURL: URL
     
     init(storageDirectory: URL) {

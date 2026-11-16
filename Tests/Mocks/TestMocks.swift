@@ -171,7 +171,7 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore, @unchecked Sen
 
 // MARK: - InMemoryClipboardImageStore
 
-final class InMemoryClipboardImageStore: ClipboardImageStore {
+final class InMemoryClipboardImageStore: ClipboardImageStore, @unchecked Sendable {
     private(set) var storage: [String: Data] = [:]
     private(set) var deletedFileNames: [String] = []
     private(set) var prunedOrphanFileNames: [String] = []

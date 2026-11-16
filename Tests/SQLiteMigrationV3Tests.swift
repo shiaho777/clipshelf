@@ -17,11 +17,11 @@ final class SQLiteMigrationV3Tests: XCTestCase {
     }
 
     func testCurrentSchemaVersion() {
-        XCTAssertEqual(SQLiteHistoryStore.currentSchemaVersion, 6)
+        XCTAssertEqual(SQLiteHistoryStore.currentSchemaVersion, 7)
     }
 
     func testMigrationsCount() {
-        XCTAssertEqual(SQLiteHistoryStore.migrations.count, 6)
+        XCTAssertEqual(SQLiteHistoryStore.migrations.count, 7)
     }
 
     func testFreshDatabaseLoadsWithoutError() throws {

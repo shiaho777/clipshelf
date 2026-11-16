@@ -84,6 +84,7 @@ class ClipboardManager: ObservableObject {
     private var isInitializing = true
     private var deletedIDTombstones: Set<UUID> = []
     private var suppressItemsPublish = false
+    private var coldTrimPending = false
 
     var pendingOCRQueueDepth: Int { ocrQueue?.depth ?? 0 }
     private var itemByID: [UUID: ClipboardItem] { historyIndex.itemByID }
@@ -337,7 +338,9 @@ class ClipboardManager: ObservableObject {
         }
         loadScalarPreferences()
         loadSmartPasteEnabled()
-        cleanupOldItems()
+        DispatchQueue.main.async { [weak self] in
+            self?.cleanupOldItems()
+        }
         isInitializing = false
         configureOCRQueue()
         scheduleDeferredStartupMaintenance()
@@ -948,23 +951,65 @@ class ClipboardManager: ObservableObject {
                 let removedIDs = Set(trimmed.removed.map(\.id))
                 items = trimmed.items
                 removeIDsFromIndexes(removedIDs)
-                deleteImageFiles(for: trimmed.removed)
+                scheduleImageFileCleanup(for: trimmed.removed)
                 persistDeletedIDsIncrementally(removedIDs)
                 recomputePinnedCount()
             }
-            let maxUnpinned = ClipboardHistoryOrdering.maxUnpinnedCapacity(
-                maxHistoryCount: maxHistoryCount,
-                pinnedCount: cachedPinnedCount,
-                itemCount: items.count
-            )
-            do {
-                let coldRemoved = try historyStore.trimUnpinned(to: maxUnpinned)
-                finishColdDeletions(coldRemoved)
-            } catch {
-                logger.error("Failed to trim cold history: \(error.localizedDescription)")
-            }
+            scheduleColdTrim()
         }
         enforceHotWindowInMemory()
+    }
+
+    private func scheduleColdTrim() {
+        guard maxHistoryCount > 0, !coldTrimPending else { return }
+        coldTrimPending = true
+        let maxUnpinned = ClipboardHistoryOrdering.maxUnpinnedCapacity(
+            maxHistoryCount: maxHistoryCount,
+            pinnedCount: cachedPinnedCount,
+            itemCount: items.count
+        )
+        let store = historyStore
+        Task.detached(priority: .utility) { [weak self] in
+            let removed = (try? store.trimUnpinned(to: maxUnpinned)) ?? []
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.coldTrimPending = false
+                if !removed.isEmpty { self.finishColdDeletions(removed) }
+            }
+        }
+    }
+
+    private func scheduleImageFileCleanup(for removedItems: [ClipboardItem]) {
+        let imageItems = removedItems.filter { $0.type == .image }
+        guard !imageItems.isEmpty else { return }
+        let store = historyStore
+        let imageStore = imageManager.fileStore
+        let retainedNames = Set(items.lazy.compactMap(\.imageFileName))
+        let log = logger
+        Task.detached(priority: .utility) {
+            let removedIDs = Set(imageItems.map(\.id))
+            var stillReferenced: Set<String>
+            if let refs = try? store.allImageFileNames(excludingIDs: removedIDs) {
+                stillReferenced = refs
+                stillReferenced.formUnion(retainedNames)
+            } else {
+                log.error("Could not enumerate image references; skipping image file deletion")
+                return
+            }
+            var deletedFileNames: [String] = []
+            for item in imageItems {
+                guard let fileName = item.imageFileName else { continue }
+                if !stillReferenced.contains(fileName) {
+                    imageStore.deleteImageFile(named: fileName)
+                    deletedFileNames.append(fileName)
+                }
+            }
+            let removedIDsCopy = removedIDs
+            await MainActor.run {
+                for id in removedIDsCopy { ImageCache.shared.remove(id) }
+                for fileName in deletedFileNames { ImageCache.shared.removeShared(fileName: fileName) }
+            }
+        }
     }
     
     private func loadItems() {
@@ -1041,9 +1086,14 @@ class ClipboardManager: ObservableObject {
             embeddingCache.removeValue(forKey: id)
             embeddingCacheOrder.removeAll { $0 == id }
         }
-        if var refs = try? historyStore.allImageFileNames(excludingIDs: []) {
-            refs.formUnion(items.lazy.compactMap(\.imageFileName))
-            imageManager.pruneOrphanedFiles(referencedFileNames: refs)
+        let store = historyStore
+        let imageStore = imageManager.fileStore
+        let retainedNames = Set(items.lazy.compactMap(\.imageFileName))
+        Task.detached(priority: .utility) {
+            if var refs = try? store.allImageFileNames(excludingIDs: []) {
+                refs.formUnion(retainedNames)
+                imageStore.pruneOrphanedFiles(referencedFileNames: refs)
+            }
         }
     }
     
