@@ -172,6 +172,7 @@
 "snippet.openPrivacy" = "打开设置";
 
 "settings.exportFormat" = "导出格式";
+"settings.exportFormat.compact" = "紧凑备份 (.csb，LZMA 压缩)";
 "settings.exportFormat.zip" = "ZIP 备份 (.clipbackup)";
 "settings.exportFormat.csv" = "CSV (.csv)";
 "settings.exportFormat.md" = "Markdown (.md)";

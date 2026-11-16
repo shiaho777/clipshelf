@@ -172,6 +172,7 @@
 "snippet.openPrivacy" = "Open Settings";
 
 "settings.exportFormat" = "Export Format";
+"settings.exportFormat.compact" = "Compact Backup (.csb, LZMA)";
 "settings.exportFormat.zip" = "ZIP Backup (.clipbackup)";
 "settings.exportFormat.csv" = "CSV (.csv)";
 "settings.exportFormat.md" = "Markdown (.md)";

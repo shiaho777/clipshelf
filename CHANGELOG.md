@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Accessibility permission banner with a one-click jump to System Settings, shown whenever the permission is missing; onboarding gains a fourth step explaining the permission
 - Visible main-hotkey hint in the panel footer
 - Batch cold-storage lookup (`loadItems(ids:)`) so FTS hits resolve in a single SQL statement instead of one query per row
+- Compact backup format `.csb` using the system Compression framework (LZMA, zero third-party dependencies): compact JSON compressed in-process, images embedded without re-encoding; now the default export. Measured on 2k entries: 49 KB vs 61 KB legacy zip (−19%) and 589 KB pretty JSON (−92%); repetitive history compresses ~90%. Import auto-detects `.csb` by magic bytes and still restores legacy `.clipbackup` zips
 
 ### Changed
 - Performance at scale: fuzzy fallback search rejects on a 256-char head window and ranks candidates with a min-heap plus precomputed bonus tables (50k-item benchmark ~17.9 s → ~1.1 s with compiler optimizations); FTS reindex trigger only fires when searchable columns change (schema v7), so use-count/embedding/OCR updates no longer retokenize full text; snapshot saves diff by stored fingerprints instead of copying and comparing the whole known-items dictionary; cold-store trim checks COUNT first and runs off the main thread, coalesced; image-file cleanup moved off the main thread; startup expiry cleanup deferred until after first paint
