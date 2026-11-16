@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-16
+
 ### Added
 - Reliable paste engine: the target app's frontmost state is polled until confirmed (up to 2 s) before ⌘V is sent, secure-input fields are detected, and every failure (no target, secure input, activation timeout, missing keystroke permission, clipboard write failure) surfaces as an in-panel banner plus a status-bar warning instead of a silent log line
 - Session-level Touch ID unlock (5 minutes): sensitive items no longer re-authenticate on every panel open, and authentication failures are now reported to the user
