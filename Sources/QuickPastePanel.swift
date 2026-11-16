@@ -21,7 +21,9 @@ class QuickPastePanel: ObservableObject {
         self.clipboardManager = clipboardManager
         self.targetApp = NSWorkspace.shared.frontmostApplication
 
-        clipboardManager.forceRefreshClipboard()
+        Task { @MainActor [weak clipboardManager] in
+            await clipboardManager?.refreshClipboardAndDrain()
+        }
 
         let view = QuickPasteView(clipboardManager: clipboardManager) { [weak self] in
             self?.hide()
@@ -44,6 +46,7 @@ class QuickPastePanel: ObservableObject {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
 
@@ -129,41 +132,34 @@ class QuickPastePanel: ObservableObject {
     private func pasteAndClose(item: ClipboardItem) {
         guard let cm = clipboardManager else { return }
         let finish: () -> Void = { [weak self] in
-            let app = self?.targetApp
-            self?.hide()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                app?.activate(options: .activateIgnoringOtherApps)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self?.simulateCmdV()
-                }
+            guard let self else { return }
+            let app = self.targetApp
+            self.hide()
+            PasteEngine.shared.paste(into: app)
+        }
+        let copyAndFinish: () -> Void = { [weak self] in
+            guard cm.copyToClipboard(item) else {
+                UserNotifier.shared.show(LanguageManager.shared.l("paste.failed.copy"), kind: .warning)
+                self?.hide()
+                return
             }
+            finish()
         }
         if item.isSensitive {
             Task { @MainActor in
                 do {
-                    try await BiometricAuthService.shared.authenticate(
+                    try await BiometricAuthService.shared.authenticateForSession(
                         reason: LanguageManager.shared.l("biometric.unlockSensitive")
                     )
                 } catch {
+                    UserNotifier.shared.show(LanguageManager.shared.l("biometric.failed"), kind: .warning)
                     return
                 }
-                guard cm.copyToClipboard(item) else { return }
-                finish()
+                copyAndFinish()
             }
         } else {
-            guard cm.copyToClipboard(item) else { return }
-            finish()
+            copyAndFinish()
         }
-    }
-
-    private func simulateCmdV() {
-        let source = CGEventSource(stateID: .combinedSessionState)
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else { return }
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
-        keyDown.post(tap: .cgSessionEventTap)
-        keyUp.post(tap: .cgSessionEventTap)
     }
 
     private func defaultLocation() -> NSPoint {
@@ -172,14 +168,12 @@ class QuickPastePanel: ObservableObject {
     }
 
     private func clampToScreen(location: NSPoint, panelSize: NSSize) -> NSPoint {
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        let containing = NSScreen.screens.first { $0.frame.contains(location) }
+        let screenFrame = (containing ?? NSScreen.main)?.visibleFrame ?? .zero
         var x = location.x + 8
         var y = location.y - panelSize.height - 4
-        if x + panelSize.width > screenFrame.maxX { x = screenFrame.maxX - panelSize.width }
-        if x < screenFrame.minX { x = screenFrame.minX }
         if y < screenFrame.minY { y = location.y + 20 }
-        if y + panelSize.height > screenFrame.maxY { y = screenFrame.maxY - panelSize.height }
-        return NSPoint(x: x, y: y)
+        return PopupPlacement.clamp(origin: NSPoint(x: x, y: y), size: panelSize, within: screenFrame)
     }
 }
 
@@ -385,7 +379,7 @@ struct QuickPasteView: View {
             Button(LanguageManager.shared.l("action.copy")) {
                 if item.isSensitive {
                     Task { @MainActor in
-                        guard (try? await BiometricAuthService.shared.authenticate(
+                        guard (try? await BiometricAuthService.shared.authenticateForSession(
                             reason: LanguageManager.shared.l("biometric.unlockSensitive")
                         )) != nil else { return }
                         _ = clipboardManager.copyToClipboard(item)

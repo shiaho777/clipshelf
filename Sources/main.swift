@@ -12,7 +12,7 @@ import Sparkle
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     nonisolated override init() { super.init() }
 
-    private let statusItemController = StatusItemController()
+    private let statusItemController = StatusItemController.shared
     private var cancellables = Set<AnyCancellable>()
     var panel: FloatingPanel!
     var clipboardManager: ClipboardManager!
@@ -25,9 +25,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 #endif
     private var clickMonitor: Any?
-    private var pasteObserver: NSObjectProtocol?
-    private var didPaste = false
-    private var pasteGeneration: UInt64 = 0
     private var isPanelAnimating = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "App")
     private var queueObserver: Any?
@@ -84,6 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.minSize = minPanelSize
         panel.maxSize = maxPanelSize
         if let contentView = panel.contentView {
@@ -157,6 +155,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self?.showSmartPasteBadge(adapterName)
             }
             .store(in: &cancellables)
+
+        if ProcessInfo.processInfo.arguments.contains("-ClipShelfShowPanelOnLaunch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.showPanel()
+            }
+        }
+
+        if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "-ClipShelfRenderPreview"),
+           index + 1 < ProcessInfo.processInfo.arguments.count {
+            let directory = ProcessInfo.processInfo.arguments[index + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.renderPreviewImages(to: directory)
+                NSApp.terminate(nil)
+            }
+        }
+
+        UserNotifier.shared.setBadgeRestore { [weak self] in
+            self?.updateStatusBarBadge()
+        }
+        hotKeyManager.onRegistrationConflict = { [weak self] displayString in
+            guard self != nil else { return }
+            UserNotifier.shared.show(
+                LanguageManager.shared.l("hotkey.conflict", displayString),
+                kind: .warning,
+                duration: 6.0
+            )
+        }
     }
     
     func openSettings(tab: Int = 0) {
@@ -241,8 +266,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         FrontmostAppInfo.shared.bundleID = previousApp?.bundleIdentifier
         FrontmostAppInfo.shared.appName = previousApp?.localizedName
 
-        clipboardManager.forceRefreshClipboard()
-        clipboardManager.cleanupOldItems()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.clipboardManager.refreshClipboardAndDrain()
+            self.clipboardManager.cleanupOldItems()
+        }
 
         let buttonRect = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) ?? .zero
         let panelSize = panel.frame.size
@@ -319,78 +347,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func pasteAndClose() {
         hidePanel()
-        guard let targetApp = previousApp else { return }
+        guard let targetApp = previousApp else {
+            UserNotifier.shared.show(LanguageManager.shared.l("paste.failed.noTarget"), kind: .warning)
+            return
+        }
         clipboardManager.targetBundleID = targetApp.bundleIdentifier
-
-        cleanupPasteObserver()
-        pasteGeneration &+= 1
-        let generation = pasteGeneration
-        didPaste = false
-
-        pasteObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self, !self.didPaste, self.pasteGeneration == generation,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.processIdentifier == targetApp.processIdentifier else { return }
-            self.didPaste = true
-            self.cleanupPasteObserver()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                guard let self, self.pasteGeneration == generation else { return }
-                self.simulateCmdV()
-            }
-        }
-
-        targetApp.activate(options: .activateIgnoringOtherApps)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, !self.didPaste, self.pasteGeneration == generation else { return }
-            self.didPaste = true
-            self.cleanupPasteObserver()
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApp.processIdentifier else {
-                self.logger.warning("Paste target failed to activate; skipping fallback Cmd+V")
-                return
-            }
-            self.simulateCmdV()
-        }
+        PasteEngine.shared.paste(into: targetApp)
     }
-    
-    private func cleanupPasteObserver() {
-        if let obs = pasteObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(obs)
-            pasteObserver = nil
-        }
-    }
-    
-    func simulateCmdV() {
-        let source = CGEventSource(stateID: .combinedSessionState)
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else { return }
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
-        keyDown.post(tap: .cgSessionEventTap)
-        keyUp.post(tap: .cgSessionEventTap)
-    }
-    
+
     func pasteNextFromQueue() {
         guard let item = pasteQueue.dequeueNext() else { return }
         capturePasteTarget()
-        guard let targetApp = previousApp else { return }
-        clipboardManager.targetBundleID = targetApp.bundleIdentifier
-        guard clipboardManager.copyToClipboard(item) else {
+        guard let targetApp = previousApp else {
+            pasteQueue.requeueFront(item)
+            UserNotifier.shared.show(LanguageManager.shared.l("paste.failed.noTarget"), kind: .warning)
             updateStatusBarBadge()
             return
         }
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetApp.processIdentifier {
-            targetApp.activate(options: .activateIgnoringOtherApps)
+        clipboardManager.targetBundleID = targetApp.bundleIdentifier
+        guard clipboardManager.copyToClipboard(item) else {
+            pasteQueue.requeueFront(item)
+            UserNotifier.shared.show(LanguageManager.shared.l("paste.failed.copy"), kind: .warning)
+            updateStatusBarBadge()
+            return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            guard let self,
-                  NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApp.processIdentifier else { return }
-            self.simulateCmdV()
-        }
+        PasteEngine.shared.paste(into: targetApp)
     }
 
     func toggleQuickPaste() {
@@ -444,6 +425,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard !AXIsProcessTrusted() else { return }
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
+    }
+
+    private func renderPreviewImages(to directory: String) {
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let dark = NSAppearance(named: .darkAqua)!
+        func render<V: View>(_ view: V, size: NSSize, name: String) {
+            let container = NSView(frame: NSRect(origin: .zero, size: size))
+            container.wantsLayer = true
+            container.layer?.backgroundColor = NSColor(calibratedWhite: 0.11, alpha: 1).cgColor
+            let hosting = NSHostingView(rootView: view.environmentObject(FrontmostAppInfo.shared))
+            hosting.frame = container.bounds
+            hosting.appearance = dark
+            container.appearance = dark
+            container.addSubview(hosting)
+            dark.performAsCurrentDrawingAppearance {
+                container.layoutSubtreeIfNeeded()
+                hosting.layoutSubtreeIfNeeded()
+                guard let rep = container.bitmapImageRepForCachingDisplay(in: container.bounds) else { return }
+                container.cacheDisplay(in: container.bounds, to: rep)
+                guard let data = rep.representation(using: .png, properties: [:]) else { return }
+                try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
+            }
+        }
+        render(
+            MenuBarView(clipboardManager: clipboardManager, snippetManager: snippetManager),
+            size: NSSize(width: 340, height: 520),
+            name: "preview-history.png"
+        )
+        render(
+            OnboardingView(onComplete: {}),
+            size: NSSize(width: 340, height: 480),
+            name: "preview-onboarding.png"
+        )
+        render(
+            SettingsEmbeddedView(clipboardManager: clipboardManager, snippetManager: snippetManager, onBack: {}),
+            size: NSSize(width: 340, height: 520),
+            name: "preview-settings.png"
+        )
     }
     
     func application(_ application: NSApplication, open urls: [URL]) {

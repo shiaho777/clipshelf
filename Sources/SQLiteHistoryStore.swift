@@ -7,13 +7,14 @@ import SQLite3
 
 private let SQLITE_TRANSIENT_DESTRUCTOR = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-final class SQLiteHistoryStore: ClipboardHistoryStore {
+final class SQLiteHistoryStore: ClipboardHistoryStore, @unchecked Sendable {
     private var db: OpaquePointer?
     private let itemsLock = NSLock()
     private let dbLock = NSRecursiveLock()
     private var lastKnownItems: [UUID: ClipboardItem] = [:]
     private var lastKnownOrder: [UUID] = []
     private var deletedIDs: Set<UUID> = []
+    private var fingerprints: [UUID: Int] = [:]
     private let dbURL: URL
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "SQLiteStore")
 
@@ -135,6 +136,21 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         """),
         (6, """
         ALTER TABLE clipboard_items ADD COLUMN is_screenshot INTEGER NOT NULL DEFAULT 0;
+        """),
+        (7, """
+        ALTER TABLE clipboard_items ADD COLUMN fp INTEGER;
+        DROP TRIGGER IF EXISTS clipboard_items_au;
+        CREATE TRIGGER clipboard_items_au
+        AFTER UPDATE ON clipboard_items
+        WHEN old.content IS NOT new.content
+          OR old.ocr_text IS NOT new.ocr_text
+          OR old.source_app_name IS NOT new.source_app_name
+        BEGIN
+            INSERT INTO clipboard_fts(clipboard_fts, rowid, content, ocr_text, source_app_name)
+            VALUES ('delete', old.rowid, old.content, coalesce(old.ocr_text,''), coalesce(old.source_app_name,''));
+            INSERT INTO clipboard_fts(rowid, content, ocr_text, source_app_name)
+            VALUES (new.rowid, new.content, coalesce(new.ocr_text,''), coalesce(new.source_app_name,''));
+        END;
         """)
     ]
 
@@ -254,7 +270,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             .replacingOccurrences(of: "_", with: "\\_")
     }
 
-    private func sanitizeFTSQuery(_ raw: String) -> String {
+    static func sanitizeFTSQuery(_ raw: String) -> String {
         var cleaned = raw
         for ch: Character in "\"*()^:-+{}~," {
             cleaned = cleaned.replacingOccurrences(of: String(ch), with: " ")
@@ -262,13 +278,20 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         let reserved: Set<String> = ["AND", "OR", "NOT", "NEAR"]
         let tokens = cleaned
             .components(separatedBy: .whitespacesAndNewlines)
-            .filter { token in
-                !token.isEmpty
-                && !reserved.contains(token.uppercased())
-                && token.count >= 3
+            .compactMap { token -> String? in
+                guard !token.isEmpty, !reserved.contains(token.uppercased()) else { return nil }
+                if token.count >= 3 { return token }
+                if token.count == 2, token.unicodeScalars.allSatisfy({ $0.value > 0x2E7F }) {
+                    return "\"\(token)\""
+                }
+                return nil
             }
         guard !tokens.isEmpty else { return "" }
         return tokens.joined(separator: " ")
+    }
+
+    private func sanitizeFTSQuery(_ raw: String) -> String {
+        Self.sanitizeFTSQuery(raw)
     }
 
     func loadItems() throws -> [ClipboardItem] {
@@ -334,6 +357,43 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
     }
 
+    func loadItems(ids: [UUID]) throws -> [UUID: ClipboardItem] {
+        guard !ids.isEmpty else { return [:] }
+        return try withDatabaseLock {
+            try loadItemsByIdsLocked(ids)
+        }
+    }
+
+    private func loadItemsByIdsLocked(_ ids: [UUID]) throws -> [UUID: ClipboardItem] {
+        guard let db else { throw StoreError.databaseNotOpen }
+        var result: [UUID: ClipboardItem] = [:]
+        var missing: [UUID] = []
+        for id in ids {
+            if let cached = itemsLock.withLock({ lastKnownItems[id] }) {
+                result[id] = cached
+            } else {
+                missing.append(id)
+            }
+        }
+        guard !missing.isEmpty else { return result }
+        let placeholders = missing.map { _ in "?" }.joined(separator: ",")
+        let sql = "SELECT id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot FROM clipboard_items WHERE id IN (\(placeholders))"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+            throw StoreError.queryFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(stmt) }
+        for (offset, id) in missing.enumerated() {
+            sqlite3_bind_text(stmt, Int32(offset + 1), id.uuidString, -1, SQLITE_TRANSIENT_DESTRUCTOR)
+        }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let item = readRow(stmt) {
+                result[item.id] = item
+            }
+        }
+        return result
+    }
+
     private func loadItemsLocked(limit: Int?) throws -> [ClipboardItem] {
         guard let db else { throw StoreError.databaseNotOpen }
 
@@ -372,12 +432,13 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         itemsLock.withLock {
             for item in items {
                 lastKnownItems[item.id] = item
+                fingerprints[item.id] = Self.persistenceFingerprint(of: item)
             }
             if limit == nil {
                 lastKnownOrder = items.map(\.id)
             } else {
-                let loadedIDs = items.map(\.id)
-                var merged = loadedIDs
+                let loadedIDs = Set(items.map(\.id))
+                var merged = items.map(\.id)
                 for id in lastKnownOrder where !loadedIDs.contains(id) {
                     merged.append(id)
                 }
@@ -405,6 +466,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         guard let item = readRow(stmt!) else { return nil }
         itemsLock.withLock {
             lastKnownItems[item.id] = item
+            fingerprints[item.id] = Self.persistenceFingerprint(of: item)
         }
         return item
     }
@@ -420,15 +482,20 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         guard let db else { throw StoreError.databaseNotOpen }
 
         var newMap = [UUID: ClipboardItem](minimumCapacity: items.count)
+        var incomingFP = [UUID: Int](minimumCapacity: items.count)
         for item in items where newMap[item.id] == nil {
             newMap[item.id] = item
+            incomingFP[item.id] = Self.persistenceFingerprint(of: item)
         }
         let newIDs = Set(newMap.keys)
 
-        let currentItems = itemsLock.withLock { lastKnownItems }
-        let toInsert = newIDs.subtracting(currentItems.keys).subtracting(deletedIDs)
-        let toUpdate: [ClipboardItem] = newIDs.intersection(currentItems.keys).compactMap { id in
-            guard let incoming = newMap[id], let current = currentItems[id], incoming != current else { return nil }
+        let known = itemsLock.withLock { (lastKnownItems, fingerprints) }
+        let toInsert = newIDs.subtracting(known.0.keys).subtracting(deletedIDs)
+        let toUpdate: [ClipboardItem] = newIDs.intersection(known.0.keys).compactMap { id in
+            guard let incoming = newMap[id], let fp = incomingFP[id] else { return nil }
+            if let knownFP = known.1[id], knownFP == fp { return nil }
+            guard let current = known.0[id] else { return nil }
+            if incoming == current { return nil }
             var merged = incoming
             if current.useCount > merged.useCount { merged.useCount = current.useCount }
             if current.timestamp > merged.timestamp { merged.timestamp = current.timestamp }
@@ -448,17 +515,11 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         }
 
         exec("COMMIT")
-        var writtenItems = [UUID: ClipboardItem](minimumCapacity: toInsert.count + toUpdate.count)
-        for id in toInsert {
-            if let item = newMap[id] { writtenItems[id] = item }
-        }
-        for item in toUpdate {
-            writtenItems[item.id] = item
-        }
         itemsLock.withLock {
             for id in result.writtenIDs {
-                if let item = writtenItems[id] {
+                if let item = newMap[id] {
                     lastKnownItems[id] = item
+                    fingerprints[id] = Self.persistenceFingerprint(of: item)
                 }
             }
             var order = items.map(\.id)
@@ -480,6 +541,14 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private func trimUnpinnedLocked(to maxUnpinned: Int) throws -> Set<UUID> {
         guard let db else { throw StoreError.databaseNotOpen }
         let bounded = max(0, maxUnpinned)
+        var countStmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM clipboard_items WHERE is_pinned = 0", -1, &countStmt, nil) == SQLITE_OK, let countStmt else {
+            throw StoreError.queryFailed(String(cString: sqlite3_errmsg(db)))
+        }
+        defer { sqlite3_finalize(countStmt) }
+        guard sqlite3_step(countStmt) == SQLITE_ROW else { return [] }
+        let unpinnedCount = Int(sqlite3_column_int64(countStmt, 0))
+        guard unpinnedCount > bounded else { return [] }
         let sql = """
         SELECT id FROM clipboard_items
         WHERE is_pinned = 0
@@ -604,9 +673,11 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
     private func upsertItemLocked(_ item: ClipboardItem) throws -> Bool {
         guard db != nil else { throw StoreError.databaseNotOpen }
 
-        let current = itemsLock.withLock { lastKnownItems[item.id] }
-        guard current != item else { return false }
-        if current == nil && deletedIDs.contains(item.id) { return false }
+        let fp = Self.persistenceFingerprint(of: item)
+        let known = itemsLock.withLock { (lastKnownItems[item.id], fingerprints[item.id]) }
+        if let knownFP = known.1, knownFP == fp { return false }
+        if let current = known.0, current == item { return false }
+        if known.0 == nil && deletedIDs.contains(item.id) { return false }
 
         exec("BEGIN")
         let result = insertItemsPrepared([item])
@@ -616,7 +687,8 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             if result.writtenIDs.contains(item.id) {
                 itemsLock.withLock {
                     lastKnownItems[item.id] = item
-                    if current == nil {
+                    fingerprints[item.id] = fp
+                    if known.0 == nil {
                         lastKnownOrder.insert(item.id, at: 0)
                     }
                 }
@@ -654,6 +726,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         itemsLock.withLock {
             for id in ids {
                 lastKnownItems.removeValue(forKey: id)
+                fingerprints.removeValue(forKey: id)
             }
             lastKnownOrder.removeAll { ids.contains($0) }
         }
@@ -678,9 +751,8 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         guard db != nil else { throw StoreError.databaseNotOpen }
         guard !useCountsByID.isEmpty else { return false }
 
-        let currentItems = itemsLock.withLock { lastKnownItems }
         let changes = useCountsByID.compactMap { id, useCount -> (UUID, Int, ClipboardItem)? in
-            guard var item = currentItems[id], item.useCount != useCount else { return nil }
+            guard var item = itemsLock.withLock({ lastKnownItems[id] }), item.useCount != useCount else { return nil }
             item.useCount = useCount
             return (id, useCount, item)
         }
@@ -714,6 +786,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         itemsLock.withLock {
             for (id, _, item) in changes {
                 lastKnownItems[id] = item
+                fingerprints[id] = Self.persistenceFingerprint(of: item)
             }
         }
         return true
@@ -737,6 +810,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
         item.useCount = useCount
         itemsLock.withLock {
             lastKnownItems[id] = item
+            fingerprints[id] = Self.persistenceFingerprint(of: item)
         }
         return true
     }
@@ -769,10 +843,13 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             exec("COMMIT")
 
             var knownItems = [UUID: ClipboardItem](minimumCapacity: items.count)
+            var knownFingerprints = [UUID: Int](minimumCapacity: items.count)
             for item in items where knownItems[item.id] == nil {
                 knownItems[item.id] = item
+                knownFingerprints[item.id] = Self.persistenceFingerprint(of: item)
             }
             lastKnownItems = knownItems
+            fingerprints = knownFingerprints
             lastKnownOrder = items.map(\.id)
 
             let migratedURL = jsonURL.appendingPathExtension("migrated")
@@ -821,6 +898,7 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             logger.info("Running schema migration to version \(migration.version)")
             exec("BEGIN")
             if exec(migration.sql) {
+                if migration.version == 7 { backfillFingerprintsLocked() }
                 setUserVersion(migration.version)
                 exec("COMMIT")
                 logger.info("Migration v\(migration.version) committed")
@@ -831,6 +909,58 @@ final class SQLiteHistoryStore: ClipboardHistoryStore {
             }
         }
         logger.info("Database at schema version \(self.getUserVersion())")
+    }
+
+    static func persistenceFingerprint(of item: ClipboardItem) -> Int {
+        var hasher = Hasher()
+        hasher.combine(item.id)
+        hasher.combine(item.content)
+        hasher.combine(item.type)
+        hasher.combine(item.timestamp)
+        hasher.combine(item.isPinned)
+        hasher.combine(item.useCount)
+        hasher.combine(item.imageHash)
+        hasher.combine(item.imageFileName)
+        hasher.combine(item.ocrText)
+        hasher.combine(item.sourceBundleID)
+        hasher.combine(item.sourceAppName)
+        hasher.combine(item.isSensitive)
+        hasher.combine(item.expiresAt)
+        hasher.combine(item.isScreenshot)
+        hasher.combine(item.imageData?.count ?? -1)
+        hasher.combine(item.rtfData?.count ?? -1)
+        if let data = item.imageData { hasher.combine(data.prefix(64)) }
+        if let data = item.rtfData { hasher.combine(data.prefix(64)) }
+        return hasher.finalize()
+    }
+
+    private func backfillFingerprintsLocked() {
+        guard let db else { return }
+        let selectCols = "id, content, rtf_data, type, timestamp, is_pinned, use_count, image_hash, image_file_name, ocr_text, source_bundle_id, source_app_name, is_sensitive, expires_at, content_enc, rtf_enc, is_enc, is_screenshot"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT \(selectCols) FROM clipboard_items", -1, &stmt, nil) == SQLITE_OK, let stmt else { return }
+        var updates: [(String, Int)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let item = readRow(stmt) else { continue }
+            updates.append((item.id.uuidString, Self.persistenceFingerprint(of: item)))
+        }
+        sqlite3_finalize(stmt)
+        guard !updates.isEmpty else { return }
+        guard let updateStmt = cachedStatement("UPDATE clipboard_items SET fp = ? WHERE id = ?") else { return }
+        for (id, fingerprint) in updates {
+            sqlite3_bind_int64(updateStmt, 1, sqlite3_int64(fingerprint))
+            sqlite3_bind_text(updateStmt, 2, id, -1, SQLITE_TRANSIENT_DESTRUCTOR)
+            _ = sqlite3_step(updateStmt)
+            sqlite3_reset(updateStmt)
+            sqlite3_clear_bindings(updateStmt)
+        }
+        sqlite3_reset(updateStmt)
+        sqlite3_clear_bindings(updateStmt)
+        itemsLock.withLock {
+            for (id, fingerprint) in updates {
+                if let uuid = UUID(uuidString: id) { fingerprints[uuid] = fingerprint }
+            }
+        }
     }
 
     private func encryptLegacySensitiveRowsLocked() {

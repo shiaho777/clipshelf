@@ -34,4 +34,16 @@ final class ClipboardIngestPipeline {
         }
         tail = task
     }
+
+    func drain(timeout: TimeInterval = 2.0) async {
+        guard let pending = tail else { return }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { _ = await pending.value }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            }
+            _ = await group.next()
+            group.cancelAll()
+        }
+    }
 }

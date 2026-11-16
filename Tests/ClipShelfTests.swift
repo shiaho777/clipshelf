@@ -461,6 +461,7 @@ final class ClipboardManagerTests: XCTestCase {
         } + [coldExpired]
         historyStore.seed(seeded)
         let mgr = makeManager()
+        mgr.cleanupOldItems()
         XCTAssertFalse(mgr.items.contains(where: { $0.content == "cold-expired" }))
         XCTAssertNil(try historyStore.loadItem(id: coldExpired.id))
         XCTAssertEqual(try historyStore.itemCount(), seeded.count - 1)
@@ -482,6 +483,7 @@ final class ClipboardManagerTests: XCTestCase {
         } + [coldOld]
         historyStore.seed(seeded)
         let mgr = makeManager()
+        mgr.cleanupOldItems()
         XCTAssertEqual(mgr.autoCleanupInterval, 7)
         XCTAssertNil(try historyStore.loadItem(id: coldOld.id))
         XCTAssertEqual(try historyStore.itemCount(), seeded.count - 1)

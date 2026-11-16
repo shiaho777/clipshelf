@@ -25,8 +25,8 @@ final class ClipboardMonitor {
     enum Cadence {
         static let active: TimeInterval = 0.35
         static let normal: TimeInterval = 1.0
-        static let idle: TimeInterval = 5.0
-        static let deepIdle: TimeInterval = 12.0
+        static let idle: TimeInterval = 2.0
+        static let deepIdle: TimeInterval = 3.0
     }
 
     enum CheckOutcome {
@@ -109,7 +109,7 @@ final class ClipboardMonitor {
         let t = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.tick()
         }
-        t.tolerance = interval * 0.25
+        t.tolerance = interval * 0.1
         timer = t
     }
 
@@ -273,30 +273,15 @@ final class ClipboardMonitor {
             return .imageFile(data: heicData, fileExtension: "heic")
         }
         if let tiffData = pasteboard.data(forType: .tiff),
-           tiffData.count <= Self.maxImageBytes,
-           let cgImage = cgImage(from: tiffData) {
-            return pngData(from: cgImage).map { .imageFile(data: $0, fileExtension: "png") }
+           !tiffData.isEmpty, tiffData.count <= Self.maxImageBytes {
+            return .imageFile(data: tiffData, fileExtension: "tiff")
         }
         if let nsImage = NSImage(pasteboard: pasteboard),
-           let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            return pngData(from: cgImage).map { .imageFile(data: $0, fileExtension: "png") }
+           let tiffData = nsImage.tiffRepresentation,
+           !tiffData.isEmpty, tiffData.count <= Self.maxImageBytes {
+            return .imageFile(data: tiffData, fileExtension: "tiff")
         }
         return nil
-    }
-
-    private func cgImage(from data: Data) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
-    }
-
-    private func pngData(from cgImage: CGImage) -> Data? {
-        let mutableData = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(
-            mutableData, "public.png" as CFString, 1, nil
-        ) else { return nil }
-        CGImageDestinationAddImage(dest, cgImage, nil)
-        guard CGImageDestinationFinalize(dest) else { return nil }
-        return Data(referencing: mutableData)
     }
 
     private static func isScreenshotPath(_ path: String) -> Bool {

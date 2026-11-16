@@ -143,8 +143,12 @@
 "onboarding.step2.desc" = "Type to fuzzy-search your history. Use app: or type: prefixes for advanced filtering.";
 "onboarding.step3.title" = "Keyboard First";
 "onboarding.step3.desc" = "Arrows to navigate, Tab to cycle filters, Space to preview, Enter to paste.";
+"onboarding.step4.title" = "Grant Accessibility";
+"onboarding.step4.desc" = "ClipShelf needs Accessibility permission to paste into other apps. If you skipped the system prompt, enable it in System Settings → Privacy & Security → Accessibility.";
 "onboarding.next" = "Next";
 "onboarding.done" = "Get Started";
+"permission.banner.message" = "Accessibility permission is off — auto-paste won't work.";
+"permission.banner.openSettings" = "Open Settings";
 
 "list.loadMore" = "%d more";
 "list.loadMorePage" = "Load more";
@@ -168,6 +172,7 @@
 "snippet.openPrivacy" = "Open Settings";
 
 "settings.exportFormat" = "Export Format";
+"settings.exportFormat.compact" = "Compact Backup (.csb, LZMA)";
 "settings.exportFormat.zip" = "ZIP Backup (.clipbackup)";
 "settings.exportFormat.csv" = "CSV (.csv)";
 "settings.exportFormat.md" = "Markdown (.md)";
@@ -198,6 +203,15 @@
 "quickpaste.title" = "Quick Paste";
 "quickpaste.hint" = "1–9 paste · ↑↓ navigate · ↵ select · Esc close";
 "hotkey.quickPaste" = "Quick Paste Shortcut";
+
+"paste.failed.noTarget" = "No target app to paste into. Content is on the clipboard — press ⌘V manually.";
+"paste.failed.secureInput" = "A password field is active, so auto-paste is blocked. Content is copied — press ⌘V manually.";
+"paste.failed.activation" = "The target app did not come to the front in time. Content is copied — press ⌘V manually.";
+"paste.failed.keystroke" = "Cannot simulate keystrokes. Check Accessibility permission, then press ⌘V manually.";
+"paste.failed.copy" = "Could not write this item to the clipboard. Try again.";
+"biometric.failed" = "Authentication failed or was cancelled. The item stays locked.";
+"hotkey.conflict" = "Shortcut %@ is taken by another app. Change it in Settings.";
+"storage.sensitiveNotSaved" = "A sensitive item could not be encrypted and was NOT saved. Unlock your Mac and try again.";
 
 "filter.currentApp" = "Filter by current app";
 

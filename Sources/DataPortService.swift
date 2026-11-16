@@ -19,6 +19,111 @@ enum DataPortError: LocalizedError {
     }
 }
 
+enum CompactBackupCodec {
+    static let magic: [UInt8] = [0x43, 0x53, 0x42, 0x31]
+    static let maxUncompressedJSONBytes = 256 * 1024 * 1024
+    static let maxManifestBytes = 16 * 1024 * 1024
+    static let maxImageCount = 100_000
+
+    struct Manifest: Codable {
+        struct ImageEntry: Codable {
+            let name: String
+            let size: Int
+        }
+        let version: Int
+        let jsonSize: Int
+        let images: [ImageEntry]
+    }
+
+    static func isCompactBackup(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let head = try? handle.read(upToCount: 4), head.count == 4 else { return false }
+        return Array(head) == magic
+    }
+
+    static func encode(items: [ClipboardItem], imageProvider: (String) -> Data?) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let jsonData = try encoder.encode(items)
+        let compressedJSON = try DataCompression.compress(jsonData)
+
+        var images: [(name: String, data: Data)] = []
+        var seen = Set<String>()
+        for item in items {
+            guard let name = item.imageFileName,
+                  DataPortService.isSafeImageFileName(name),
+                  !seen.contains(name),
+                  let data = imageProvider(name) else { continue }
+            seen.insert(name)
+            images.append((name, data))
+        }
+
+        let manifest = Manifest(
+            version: 1,
+            jsonSize: jsonData.count,
+            images: images.map { Manifest.ImageEntry(name: $0.name, size: $0.data.count) }
+        )
+        let manifestData = try JSONEncoder().encode(manifest)
+        let compressedManifest = try DataCompression.compress(manifestData)
+
+        var out = Data()
+        out.append(contentsOf: magic)
+        appendU32(&out, manifestData.count)
+        appendU32(&out, compressedManifest.count)
+        out.append(compressedManifest)
+        appendU32(&out, compressedJSON.count)
+        out.append(compressedJSON)
+        for image in images {
+            out.append(image.data)
+        }
+        return out
+    }
+
+    static func decode(_ data: Data, imageSink: (String, Data) throws -> Void) throws -> [ClipboardItem] {
+        var cursor = 0
+        func require(_ count: Int) throws -> Data {
+            guard count >= 0, cursor + count <= data.count else { throw DataPortError.invalidArchive }
+            let slice = data.subdata(in: cursor..<(cursor + count))
+            cursor += count
+            return slice
+        }
+        func readU32() throws -> Int {
+            let bytes = try require(4)
+            return bytes.withUnsafeBytes { raw in
+                Int(UInt32(littleEndian: raw.load(as: UInt32.self)))
+            }
+        }
+
+        guard Array(try require(4)) == magic else { throw DataPortError.invalidArchive }
+        let manifestRawSize = try readU32()
+        guard manifestRawSize > 0, manifestRawSize <= maxManifestBytes else { throw DataPortError.invalidArchive }
+        let manifestCompressedSize = try readU32()
+        let manifest = try JSONDecoder().decode(Manifest.self, from: DataCompression.decompress(try require(manifestCompressedSize), expectedSize: manifestRawSize))
+        guard manifest.version == 1,
+              manifest.jsonSize > 0, manifest.jsonSize <= maxUncompressedJSONBytes,
+              manifest.images.count <= maxImageCount else { throw DataPortError.invalidArchive }
+
+        let jsonCompressedSize = try readU32()
+        let jsonData = try DataCompression.decompress(try require(jsonCompressedSize), expectedSize: manifest.jsonSize)
+        let items = try JSONDecoder().decode([ClipboardItem].self, from: jsonData)
+
+        for entry in manifest.images {
+            guard DataPortService.isSafeImageFileName(entry.name),
+                  entry.size >= 0, entry.size <= DataPortService.maxImportedImageBytes else { continue }
+            let imageData = try require(entry.size)
+            try imageSink(entry.name, imageData)
+        }
+        guard cursor == data.count else { throw DataPortError.invalidArchive }
+        return items
+    }
+
+    private static func appendU32(_ data: inout Data, _ value: Int) {
+        var little = UInt32(truncatingIfNeeded: value).littleEndian
+        withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
+    }
+}
+
 enum ImportMode {
     case merge
     case replace
@@ -44,7 +149,7 @@ final class DataPortService {
         self.imageStore = imageStore
     }
 
-    private static let maxImportedImageBytes = 64 * 1024 * 1024
+    static let maxImportedImageBytes = 64 * 1024 * 1024
 
     func exportBackup(to destinationURL: URL, items: [ClipboardItem]) throws {
         let items = items.filter { !$0.isSensitive }
@@ -76,7 +181,36 @@ final class DataPortService {
         }
     }
 
+    func exportCompactBackup(to destinationURL: URL, items: [ClipboardItem]) throws {
+        let exportable = items.filter { !$0.isSensitive }
+        let data = try CompactBackupCodec.encode(items: exportable) { [imageStore] name in
+            imageStore.imageData(for: name)
+        }
+        try data.write(to: destinationURL, options: .atomic)
+    }
+
     func importBackup(from sourceURL: URL, existingItems: [ClipboardItem], mode: ImportMode) throws -> [ClipboardItem] {
+        if CompactBackupCodec.isCompactBackup(sourceURL) {
+            let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
+            var importedItems = try CompactBackupCodec.decode(data) { [imageStore] name, imageData in
+                try imageStore.saveImageData(imageData, fileName: name)
+            }
+            var seenIDs = Set<UUID>()
+            importedItems = importedItems.compactMap { item in
+                guard seenIDs.insert(item.id).inserted else { return nil }
+                var item = item
+                if let name = item.imageFileName, !Self.isSafeImageFileName(name) {
+                    item.imageFileName = nil
+                }
+                return item
+            }
+            switch mode {
+            case .replace:
+                return importedItems
+            case .merge:
+                return mergeItems(existing: existingItems, imported: importedItems)
+            }
+        }
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("clipimport-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }

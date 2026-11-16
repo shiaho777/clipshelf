@@ -123,45 +123,88 @@ struct MenuBarView: View {
 
     private static let renderPageSize = 200
 
-    private func updateFilteredItems() {
-        defer { clipboardManager.prefetchThumbnails(for: Array(filteredItems.prefix(40))) }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        var page: [ClipboardItem] = []
-        page.reserveCapacity(visibleCount)
+    private struct FilteredPageResult {
+        let items: [ClipboardItem]
+        let hasMore: Bool
+        let totalCount: Int
+        let highlights: [UUID: Set<Int>]
+    }
 
+    private static func computeFilteredPage(
+        snapshot: ClipboardSearchService.Snapshot,
+        query: String,
+        filter: FilterType,
+        visibleCount: Int
+    ) -> FilteredPageResult {
         if query.isEmpty {
-            if filterType == .all {
-                totalMatchCount = clipboardManager.items.count
-                filteredItems = Array(clipboardManager.items.prefix(visibleCount))
-                hasMoreFilteredItems = clipboardManager.items.count > filteredItems.count
-                highlightMap = [:]
-                return
+            if filter == .all {
+                let items = snapshot.items
+                let page = Array(items.prefix(visibleCount))
+                return FilteredPageResult(
+                    items: page,
+                    hasMore: items.count > page.count,
+                    totalCount: items.count,
+                    highlights: [:]
+                )
             }
-            let result = ClipboardListPaginator.page(from: clipboardManager.items, visibleCount: visibleCount) { item in
-                filterType.matches(item)
+            let result = ClipboardListPaginator.page(from: snapshot.items, visibleCount: visibleCount) { item in
+                filter.matches(item)
             }
-            filteredItems = result.items
-            hasMoreFilteredItems = result.hasMore
-            totalMatchCount = hasMoreFilteredItems ? filteredItems.count + 1 : filteredItems.count
-            highlightMap = [:]
-            return
+            return FilteredPageResult(
+                items: result.items,
+                hasMore: result.hasMore,
+                totalCount: result.hasMore ? result.items.count + 1 : result.items.count,
+                highlights: [:]
+            )
         }
 
-        let searched = clipboardManager.search(query, limit: visibleCount + 1) { item in
-            filterType.matches(item)
-        }
-        hasMoreFilteredItems = searched.count > visibleCount
-        page.append(contentsOf: searched.prefix(visibleCount))
-        totalMatchCount = hasMoreFilteredItems ? page.count + 1 : page.count
-        filteredItems = page
+        let searched = ClipboardSearchService.search(query, limit: visibleCount + 1, where: { item in
+            filter.matches(item)
+        }, snapshot: snapshot)
+        let hasMore = searched.count > visibleCount
+        let page = Array(searched.prefix(visibleCount))
         var map: [UUID: Set<Int>] = [:]
-        for item in filteredItems {
+        for item in page {
             let displayText = item.type == .image ? (item.ocrText ?? "") : item.displayText
             if let indices = FuzzySearch.matchedIndices(query: query, in: displayText) {
                 map[item.id] = indices
             }
         }
-        highlightMap = map
+        return FilteredPageResult(
+            items: page,
+            hasMore: hasMore,
+            totalCount: hasMore ? page.count + 1 : page.count,
+            highlights: map
+        )
+    }
+
+    private func applyFilteredPage(_ result: FilteredPageResult) {
+        filteredItems = result.items
+        hasMoreFilteredItems = result.hasMore
+        totalMatchCount = result.totalCount
+        highlightMap = result.highlights
+        clipboardManager.prefetchThumbnails(for: Array(result.items.prefix(40)))
+    }
+
+    private func updateFilteredItems() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filter = filterType
+        let count = visibleCount
+        searchGeneration &+= 1
+        let generation = searchGeneration
+        let snapshot = clipboardManager.searchSnapshot()
+        if query.isEmpty {
+            let result = Self.computeFilteredPage(snapshot: snapshot, query: query, filter: filter, visibleCount: count)
+            applyFilteredPage(result)
+            return
+        }
+        Task { @MainActor in
+            let result = await Task.detached(priority: .userInitiated) {
+                Self.computeFilteredPage(snapshot: snapshot, query: query, filter: filter, visibleCount: count)
+            }.value
+            guard generation == searchGeneration else { return }
+            applyFilteredPage(result)
+        }
     }
 
     private func loadMoreItems() {
@@ -194,7 +237,9 @@ struct MenuBarView: View {
 
     private func pasteItem(_ item: ClipboardItem, asPlainText: Bool = false) {
         withItemUnlocked(item) {
-            clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
+            if !clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText) {
+                UserNotifier.shared.show(LanguageManager.shared.l("paste.failed.copy"), kind: .warning)
+            }
         }
     }
 
@@ -205,12 +250,13 @@ struct MenuBarView: View {
         }
         Task { @MainActor in
             do {
-                try await BiometricAuthService.shared.authenticate(
+                try await BiometricAuthService.shared.authenticateForSession(
                     reason: LanguageManager.shared.l("biometric.unlockSensitive")
                 )
                 unlockedItemIDs.insert(item.id)
                 action()
             } catch {
+                UserNotifier.shared.show(LanguageManager.shared.l("biometric.failed"), kind: .warning)
             }
         }
     }
@@ -223,12 +269,13 @@ struct MenuBarView: View {
         }
         Task { @MainActor in
             do {
-                try await BiometricAuthService.shared.authenticate(
+                try await BiometricAuthService.shared.authenticateForSession(
                     reason: LanguageManager.shared.l("biometric.unlockSensitive")
                 )
                 for item in locked { unlockedItemIDs.insert(item.id) }
                 action()
             } catch {
+                UserNotifier.shared.show(LanguageManager.shared.l("biometric.failed"), kind: .warning)
             }
         }
     }
@@ -321,7 +368,7 @@ struct MenuBarView: View {
             imageURL: imageURL,
             isFocused: isFocused,
             onCopy: { asPlainText in
-                clipboardManager.copyToClipboard(item, autoPaste: true, asPlainText: asPlainText)
+                pasteItem(item, asPlainText: asPlainText)
             },
             onPin: {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72)) {
@@ -371,6 +418,7 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
+                .onAppear { loadMoreItems() }
             }
         }
         .padding(.vertical, 4)
@@ -514,6 +562,9 @@ struct MenuBarView: View {
             .padding(.bottom, 6)
 
             Divider().opacity(0.3)
+
+            AccessibilityPermissionBanner()
+            NoticeBanner()
 
             if pasteQueue.isActive || pasteQueue.stackMode {
                 VStack(spacing: 0) {
@@ -709,6 +760,11 @@ struct MenuBarView: View {
                             .monospacedDigit()
                     }
                     Spacer()
+                    Text(HotKeyManager.shared.mainHotKey.displayString)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.quaternary)
+                        .help(lang.l("hotkey.main"))
+                        .padding(.trailing, 4)
                     HStack(spacing: 2) {
                         BottomBarButton(icon: pasteQueue.stackMode ? "square.stack.3d.up.fill" : "square.stack.3d.up", tint: pasteQueue.stackMode ? .accentColor : .secondary.opacity(0.7), label: lang.l("queue.stackMode")) {
                             if pasteQueue.stackMode && pasteQueue.remaining > 0 {
@@ -765,7 +821,9 @@ struct MenuBarView: View {
             filterType = .all
             filterByCurrentApp = false
             showAppFilters = false
-            unlockedItemIDs = []
+            if !BiometricAuthService.shared.isSessionUnlocked {
+                unlockedItemIDs = []
+            }
             cachedAppFilters = buildAppFilters(from: clipboardManager.items)
             updateFilteredItems()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {

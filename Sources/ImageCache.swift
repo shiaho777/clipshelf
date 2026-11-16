@@ -15,17 +15,26 @@ class ImageCache {
     private var thumbnailDiskCacheDirectory: URL?
     private var memoryPressureSource: DispatchSourceMemoryPressure?
     
+    static func memoryScaleFactor(physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Double {
+        let gigabytes = Double(physicalMemory) / 1_073_741_824
+        if gigabytes < 8 { return 0.25 }
+        if gigabytes < 16 { return 0.5 }
+        return 1.0
+    }
+
     init() {
+        let scale = Self.memoryScaleFactor()
+        func scaled(_ bytes: Int) -> Int { Int(Double(bytes) * scale) }
         itemCache.countLimit = 600
-        itemCache.totalCostLimit = 192 * 1024 * 1024
+        itemCache.totalCostLimit = scaled(192 * 1024 * 1024)
         sharedFileCache.countLimit = 600
-        sharedFileCache.totalCostLimit = 192 * 1024 * 1024
+        sharedFileCache.totalCostLimit = scaled(192 * 1024 * 1024)
         thumbnailCache.countLimit = 2_000
-        thumbnailCache.totalCostLimit = 128 * 1024 * 1024
+        thumbnailCache.totalCostLimit = scaled(128 * 1024 * 1024)
         thumbnailDataCache.countLimit = 2_000
-        thumbnailDataCache.totalCostLimit = 64 * 1024 * 1024
+        thumbnailDataCache.totalCostLimit = scaled(64 * 1024 * 1024)
         sharedDataCache.countLimit = 300
-        sharedDataCache.totalCostLimit = 128 * 1024 * 1024
+        sharedDataCache.totalCostLimit = scaled(128 * 1024 * 1024)
         
         memoryPressureSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
         memoryPressureSource?.setEventHandler { [weak self] in

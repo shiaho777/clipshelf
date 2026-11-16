@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - InMemoryClipboardHistoryStore
 
-final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
+final class InMemoryClipboardHistoryStore: ClipboardHistoryStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [ClipboardItem] = []
     private(set) var saveCallCount = 0
@@ -171,7 +171,7 @@ final class InMemoryClipboardHistoryStore: ClipboardHistoryStore {
 
 // MARK: - InMemoryClipboardImageStore
 
-final class InMemoryClipboardImageStore: ClipboardImageStore {
+final class InMemoryClipboardImageStore: ClipboardImageStore, @unchecked Sendable {
     private(set) var storage: [String: Data] = [:]
     private(set) var deletedFileNames: [String] = []
     private(set) var prunedOrphanFileNames: [String] = []

@@ -11,7 +11,25 @@ final class BiometricAuthService {
         category: "BiometricAuth"
     )
 
+    private var sessionUnlockExpiry: Date?
+    static let sessionUnlockDuration: TimeInterval = 300
+
     private init() {}
+
+    var isSessionUnlocked: Bool {
+        guard let expiry = sessionUnlockExpiry else { return false }
+        return Date() < expiry
+    }
+
+    func authenticateForSession(reason: String) async throws {
+        if isSessionUnlocked { return }
+        try await authenticate(reason: reason)
+        sessionUnlockExpiry = Date().addingTimeInterval(Self.sessionUnlockDuration)
+    }
+
+    func lockSession() {
+        sessionUnlockExpiry = nil
+    }
 
     func authenticate(reason: String) async throws {
         let context = LAContext()

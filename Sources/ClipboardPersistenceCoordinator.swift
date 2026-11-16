@@ -1,6 +1,14 @@
 import Foundation
 import os
 
+final class SensitiveFailureReporter {
+    var handler: (() -> Void)?
+
+    func report() {
+        DispatchQueue.main.async { [handler] in handler?() }
+    }
+}
+
 final class ClipboardPersistenceCoordinator {
     private let historyStore: ClipboardHistoryStore
     private let logger: Logger
@@ -10,6 +18,11 @@ final class ClipboardPersistenceCoordinator {
     private var pendingUseCountPersistByID: [UUID: Int] = [:]
     private var pendingUseCountFlushWork: DispatchWorkItem?
     private let useCountDebounce: TimeInterval
+    private let sensitiveFailureReporter = SensitiveFailureReporter()
+    var onSensitivePersistFailure: (() -> Void)? {
+        get { sensitiveFailureReporter.handler }
+        set { sensitiveFailureReporter.handler = newValue }
+    }
 
     init(
         historyStore: ClipboardHistoryStore,
@@ -25,9 +38,16 @@ final class ClipboardPersistenceCoordinator {
         self.incrementalQueue = DispatchQueue(label: "ClipShelf.incrementalPersistence", qos: .utility)
         let store = historyStore
         let log = logger
+        let reporter = sensitiveFailureReporter
         let persistBlock: ([ClipboardItem]) -> Void = { items in
-            do { _ = try store.saveItems(items) }
-            catch { log.error("Failed to save clipboard history: \(error.localizedDescription)") }
+            do {
+                _ = try store.saveItems(items)
+            } catch {
+                log.error("Failed to save clipboard history: \(error.localizedDescription)")
+                if items.contains(where: { $0.isSensitive }) {
+                    reporter.report()
+                }
+            }
         }
         self.snapshotScheduler = PersistenceScheduler(queue: queue, debounce: snapshotDebounce, persist: persistBlock)
         self.usageSnapshotScheduler = PersistenceScheduler(queue: queue, debounce: usageSnapshotDebounce, persist: persistBlock)
@@ -36,9 +56,16 @@ final class ClipboardPersistenceCoordinator {
     func upsert(_ item: ClipboardItem) {
         let store = historyStore
         let log = logger
+        let reporter = sensitiveFailureReporter
         incrementalQueue.async {
-            do { _ = try store.upsertItem(item) }
-            catch { log.error("Failed to upsert clipboard item: \(error.localizedDescription)") }
+            do {
+                _ = try store.upsertItem(item)
+            } catch {
+                log.error("Failed to upsert clipboard item: \(error.localizedDescription)")
+                if item.isSensitive {
+                    reporter.report()
+                }
+            }
         }
     }
 

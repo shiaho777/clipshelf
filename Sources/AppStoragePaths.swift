@@ -13,9 +13,19 @@ enum AppStoragePaths {
         fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
     }
 
+    static let storageDirectoryArgumentKey = "-ClipShelfStorageDirectory"
+
     static func defaultStorageDirectory(
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        arguments: [String] = ProcessInfo.processInfo.arguments
     ) -> URL {
+        if let index = arguments.firstIndex(of: storageDirectoryArgumentKey),
+           index + 1 < arguments.count {
+            let path = (arguments[index + 1] as NSString).expandingTildeInPath
+            if !path.isEmpty {
+                return URL(fileURLWithPath: path, isDirectory: true)
+            }
+        }
         let root = applicationSupportRoot(fileManager: fileManager)
         let destination = root.appendingPathComponent(productDirectoryName)
         if !migrationAlreadyResolved() {

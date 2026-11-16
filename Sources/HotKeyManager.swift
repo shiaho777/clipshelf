@@ -98,6 +98,7 @@ class HotKeyManager: ObservableObject {
     var onMainHotKey: (() -> Void)?
     var onQueueHotKey: (() -> Void)?
     var onQuickPasteHotKey: (() -> Void)?
+    var onRegistrationConflict: ((String) -> Void)?
     private let hotKeyStore: HotKeyStore
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ClipShelf", category: "HotKey")
 
@@ -141,6 +142,7 @@ class HotKeyManager: ObservableObject {
         isMainHotKeyRegistered = success
         if !success {
             logger.error("Failed to register main hotkey (status: \(status, privacy: .public), keyCode: \(self.mainHotKey.keyCode), modifiers: \(self.mainHotKey.modifiers))")
+            onRegistrationConflict?(mainHotKey.displayString)
         }
         return success
     }
@@ -165,6 +167,7 @@ class HotKeyManager: ObservableObject {
         isQueueHotKeyRegistered = success
         if !success {
             logger.error("Failed to register queue hotkey (status: \(status, privacy: .public))")
+            onRegistrationConflict?(queueHotKey.displayString)
         }
         return success
     }
@@ -189,6 +192,7 @@ class HotKeyManager: ObservableObject {
         isQuickPasteHotKeyRegistered = success
         if !success {
             logger.error("Failed to register quick-paste hotkey (status: \(status, privacy: .public))")
+            onRegistrationConflict?(quickPasteHotKey.displayString)
         }
         return success
     }

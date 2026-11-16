@@ -15,7 +15,7 @@ struct SettingsView: View {
     @State private var showExportSuccess = false
     @State private var showImportSuccess = false
     @State private var importExportError: String?
-    @AppStorage("settings.exportFormat") private var exportFormat = 0
+    @AppStorage("settings.exportFormat") private var exportFormat = 3
     @State private var accessibilityTrusted = AXIsProcessTrusted()
     var initialTab: Int = 0
     var showsOwnHeader: Bool = true
@@ -186,6 +186,7 @@ struct SettingsView: View {
         Form {
             Section {
                 Picker(lang.l("settings.exportFormat"), selection: $exportFormat) {
+                    Text(lang.l("settings.exportFormat.compact")).tag(3)
                     Text(lang.l("settings.exportFormat.zip")).tag(0)
                     Text(lang.l("settings.exportFormat.csv")).tag(1)
                     Text(lang.l("settings.exportFormat.md")).tag(2)
@@ -319,13 +320,23 @@ struct SettingsView: View {
                 showExportSuccess = true; importExportError = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showExportSuccess = false }
             } catch { importExportError = error.localizedDescription }
-        default:
+        case 0:
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.init(filenameExtension: "clipbackup") ?? .data]
             panel.nameFieldStringValue = "ClipboardBackup.clipbackup"
             guard panel.runModal() == .OK, let url = panel.url else { return }
             do {
                 try service.exportBackup(to: url, items: clipboardManager.exportableItems())
+                showExportSuccess = true; importExportError = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showExportSuccess = false }
+            } catch { importExportError = error.localizedDescription }
+        default:
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.init(filenameExtension: "csb") ?? .data]
+            panel.nameFieldStringValue = "ClipboardBackup.csb"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try service.exportCompactBackup(to: url, items: clipboardManager.exportableItems())
                 showExportSuccess = true; importExportError = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { showExportSuccess = false }
             } catch { importExportError = error.localizedDescription }
@@ -364,7 +375,7 @@ struct SettingsView: View {
 
     private func importData() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.init(filenameExtension: "clipbackup") ?? .data]
+        panel.allowedContentTypes = [.init(filenameExtension: "csb") ?? .data, .init(filenameExtension: "clipbackup") ?? .data]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let merged = try makeDataPortService().importBackup(from: url, existingItems: clipboardManager.items, mode: .merge)
